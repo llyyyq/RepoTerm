@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Small validation helpers used by the local runtime-readiness CLI."""
+
+from __future__ import annotations
 
 import hashlib
 import json

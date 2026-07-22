@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Shared path-normalization and secret-redaction helpers for Agent evidence."""
+
+from __future__ import annotations
 
 import os
 import re
