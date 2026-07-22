@@ -1,6 +1,6 @@
-from minicode.tui.renderer import _get_transcript_snapshot
-from minicode.tui.state import ScreenState
-from minicode.tui.tool_lifecycle import _push_transcript_entry
+from repoterm.tui.renderer import _get_transcript_snapshot
+from repoterm.tui.state import ScreenState
+from repoterm.tui.tool_lifecycle import _push_transcript_entry
 
 
 def test_transcript_snapshot_reuses_list_until_revision_changes() -> None:

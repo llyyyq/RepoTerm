@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-import minicode.mcp as mcp_module
-from minicode.mcp import StdioMcpClient, create_mcp_backed_tools
-from minicode.tooling import ToolContext
+import repoterm.mcp as mcp_module
+from repoterm.mcp import StdioMcpClient, create_mcp_backed_tools
+from repoterm.tooling import ToolContext
 
 
 def _fake_server_script() -> Path:
@@ -133,7 +133,7 @@ def test_client_reconnects_after_process_exit(tmp_path: Path) -> None:
 
 def test_validate_mcp_command_accepts_windows_cmd_wrappers() -> None:
     """npx/npm ship as .cmd wrappers on Windows and must pass the whitelist."""
-    from minicode.mcp import _validate_mcp_command
+    from repoterm.mcp import _validate_mcp_command
 
     # Bare name (as shipped in .mcp.json) must work out of the box.
     _validate_mcp_command("npx")

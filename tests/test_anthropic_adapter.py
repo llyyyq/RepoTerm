@@ -2,10 +2,10 @@ import json
 import urllib.error
 
 import pytest
-from minicode.anthropic_adapter import AnthropicModelAdapter, _messages_endpoint
-from minicode.openai_adapter import OpenAIModelAdapter
-from minicode.model_registry import create_model_adapter
-from minicode.tooling import ToolDefinition, ToolRegistry
+from repoterm.anthropic_adapter import AnthropicModelAdapter, _messages_endpoint
+from repoterm.openai_adapter import OpenAIModelAdapter
+from repoterm.model_registry import create_model_adapter
+from repoterm.tooling import ToolDefinition, ToolRegistry
 
 
 class DummyResponse:
@@ -110,7 +110,7 @@ def test_anthropic_adapter_surfaces_underlying_url_error(monkeypatch) -> None:
         "urllib.request.urlopen",
         lambda request, timeout=60: (_ for _ in ()).throw(urllib.error.URLError("connection refused")),
     )
-    monkeypatch.setenv("MINI_CODE_MAX_RETRIES", "0")
+    monkeypatch.setenv("REPOTERM_MAX_RETRIES", "0")
     adapter = AnthropicModelAdapter(
         {"model": "claude", "baseUrl": "https://proxy.example.com/v1", "authToken": "x"},
         _tool_registry(),

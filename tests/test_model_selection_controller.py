@@ -1,4 +1,4 @@
-from minicode.model_registry import (
+from repoterm.model_registry import (
     ModelSelectionController,
     ModelSelectionSignal,
     ReasoningEffort,

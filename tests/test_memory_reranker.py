@@ -5,8 +5,8 @@ import json
 
 import pytest
 
-from minicode.memory import MemoryEntry, MemoryScope
-from minicode.memory_reranker import (
+from repoterm.memory import MemoryEntry, MemoryScope
+from repoterm.memory_reranker import (
     MemoryReranker,
     RerankCandidate,
     RerankResult,

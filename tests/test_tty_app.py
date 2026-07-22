@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from minicode.tty_app import (
+from repoterm.tty_app import (
     _ThrottledRenderer,
     _apply_tool_result_visual_state,
     _format_history,
@@ -9,12 +9,12 @@ from minicode.tty_app import (
     summarize_tool_input,
     summarize_tool_output,
 )
-import minicode.tui.input_handler as input_handler_module
-from minicode.context_manager import ContextManager
-from minicode.memory import MemoryManager, MemoryScope
-from minicode.permissions import PermissionManager
-from minicode.prompt import build_system_prompt_bundle
-from minicode.session import (
+import repoterm.tui.input_handler as input_handler_module
+from repoterm.context_manager import ContextManager
+from repoterm.memory import MemoryManager, MemoryScope
+from repoterm.permissions import PermissionManager
+from repoterm.prompt import build_system_prompt_bundle
+from repoterm.session import (
     FileCheckpoint,
     SessionData,
     SessionMetadata,
@@ -22,19 +22,19 @@ from minicode.session import (
     create_new_session,
     rewind_session,
 )
-from minicode.tooling import ToolRegistry
-from minicode.tui.runtime_control import _ThrottledRenderer as RuntimeThrottledRenderer
-from minicode.tui.event_flow import _handle_event
-from minicode.tui.input_parser import KeyEvent
-from minicode.tui.renderer import _decorate_session_feed_body
-from minicode.tui.session_flow import (
+from repoterm.tooling import ToolRegistry
+from repoterm.tui.runtime_control import _ThrottledRenderer as RuntimeThrottledRenderer
+from repoterm.tui.event_flow import _handle_event
+from repoterm.tui.input_parser import KeyEvent
+from repoterm.tui.renderer import _decorate_session_feed_body
+from repoterm.tui.session_flow import (
     build_tty_runtime_state,
     finalize_tty_session,
     load_or_create_session,
 )
-from minicode.tui.state import ScreenState, TtyAppArgs
-from minicode.tui.transcript import format_runtime_summary_line, format_transcript_text
-from minicode.tui.types import TranscriptEntry
+from repoterm.tui.state import ScreenState, TtyAppArgs
+from repoterm.tui.transcript import format_runtime_summary_line, format_transcript_text
+from repoterm.tui.types import TranscriptEntry
 
 
 def test_tty_app_uses_runtime_control_throttled_renderer() -> None:
@@ -327,9 +327,9 @@ def test_finalize_tty_session_persists_runtime_metadata() -> None:
 def test_tty_resume_rehydrates_session_checkpoint_and_memory(tmp_path, monkeypatch) -> None:
     sessions_dir = tmp_path / "sessions"
     sessions_dir.mkdir()
-    monkeypatch.setattr("minicode.session.SESSIONS_DIR", sessions_dir)
-    monkeypatch.setattr("minicode.session.MINI_CODE_DIR", tmp_path)
-    monkeypatch.setattr("minicode.memory.MINI_CODE_DIR", tmp_path)
+    monkeypatch.setattr("repoterm.session.SESSIONS_DIR", sessions_dir)
+    monkeypatch.setattr("repoterm.session.REPOTERM_DIR", tmp_path)
+    monkeypatch.setattr("repoterm.memory.REPOTERM_DIR", tmp_path)
 
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -519,6 +519,37 @@ def test_tty_input_passes_and_persists_context_manager(tmp_path, monkeypatch) ->
     assert state.agent_result["messages"][-1] == {"role": "assistant", "content": "done"}
 
 
+def test_tty_tool_callbacks_record_start_and_result(tmp_path, monkeypatch) -> None:
+    def fake_run_agent_turn(**kwargs):
+        kwargs["on_tool_start"](
+            "write_file",
+            {"path": "demo.py", "content": "print('ok')\n"},
+        )
+        kwargs["on_tool_result"]("write_file", "Wrote demo.py", False)
+        return [*kwargs["messages"], {"role": "assistant", "content": "done"}]
+
+    monkeypatch.setattr(input_handler_module, "run_agent_turn", fake_run_agent_turn)
+    monkeypatch.setattr(input_handler_module, "save_history_entries", lambda _history: None)
+
+    state = ScreenState(input="Create demo.py", cursor_offset=14)
+    args = TtyAppArgs(
+        runtime={"model": "default"},
+        tools=ToolRegistry([]),
+        model=object(),
+        messages=[{"role": "system", "content": "sys"}],
+        cwd=str(tmp_path),
+        permissions=PermissionManager(str(tmp_path)),
+    )
+
+    assert input_handler_module._handle_input(args, state, lambda: None) is False
+    state.agent_thread.join(timeout=5)
+
+    assert state.agent_thread.is_alive() is False
+    assert state.agent_result["messages"][-1] == {"role": "assistant", "content": "done"}
+    assert state.tool_start_time is not None
+    assert state.recent_tools[-1] == {"name": "write_file x1", "status": "success"}
+
+
 def test_tty_session_command_uses_live_session_snapshot(tmp_path) -> None:
     session = SessionData(
         session_id="session-1234",
@@ -563,7 +594,7 @@ def test_tty_session_command_uses_live_session_snapshot(tmp_path) -> None:
 def test_tty_sessions_command_lists_workspace_history(tmp_path, monkeypatch) -> None:
     workspace = str(tmp_path.resolve())
     monkeypatch.setattr(
-        "minicode.cli_commands.list_sessions",
+        "repoterm.cli_commands.list_sessions",
         lambda: [
             SessionMetadata(
                 session_id="aaa111111111",
@@ -656,7 +687,7 @@ def test_tty_rewind_command_rewinds_active_session(tmp_path, monkeypatch) -> Non
         session_arg.update_metadata()
         return [checkpoint]
 
-    monkeypatch.setattr("minicode.cli_commands.rewind_session_data", fake_rewind)
+    monkeypatch.setattr("repoterm.cli_commands.rewind_session_data", fake_rewind)
 
     state = ScreenState(
         input="/rewind",
@@ -698,7 +729,7 @@ def test_tty_session_rewind_command_rewinds_saved_session(tmp_path, monkeypatch)
     session.checkpoints = [checkpoint]
     session.update_metadata()
     monkeypatch.setattr(
-        "minicode.cli_commands.get_latest_session",
+        "repoterm.cli_commands.get_latest_session",
         lambda workspace=None: session if workspace == str(tmp_path.resolve()) else None,
         raising=False,
     )
@@ -711,7 +742,7 @@ def test_tty_session_rewind_command_rewinds_saved_session(tmp_path, monkeypatch)
         session.update_metadata()
         return session, [checkpoint]
 
-    monkeypatch.setattr("minicode.cli_commands.rewind_session", fake_rewind)
+    monkeypatch.setattr("repoterm.cli_commands.rewind_session", fake_rewind)
 
     state = ScreenState(input="/session-rewind latest", cursor_offset=len("/session-rewind latest"))
     args = TtyAppArgs(
@@ -734,7 +765,7 @@ def test_tty_session_rewind_command_rewinds_saved_session(tmp_path, monkeypatch)
 def test_tty_session_replay_command_lists_saved_timeline(tmp_path, monkeypatch) -> None:
     workspace = str(tmp_path.resolve())
     monkeypatch.setattr(
-        "minicode.cli_commands.get_latest_session",
+        "repoterm.cli_commands.get_latest_session",
         lambda workspace=None: SessionData(
             session_id="aaa111111111",
             created_at=1.0,

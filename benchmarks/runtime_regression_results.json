@@ -1,0 +1,705 @@
+{
+  "schema_version": 1,
+  "report_type": "确定性Runtime回归",
+  "generated_at": "2026-07-21T13:19:12.690095+00:00",
+  "methodology": {
+    "model_mode_zh": "脚本化ScenarioModel，模型输出由测试预先设定",
+    "provider_called": false,
+    "test_file": "tests/test_agentops_scenarios.py",
+    "scenario_count": 20,
+    "round_count": 3,
+    "purpose_zh": "验证Agent控制逻辑、工具结果、权限边界、上下文和恢复链路，不代表真实LLM开放任务成功率。"
+  },
+  "metrics": {
+    "total_executions": 60,
+    "passed_executions": 60,
+    "failed_executions": 0,
+    "success_rate_pct": 100.0,
+    "average_round_duration_ms": 16837.67
+  },
+  "scenarios": [
+    {
+      "test_name": "test_agentops_repository_retrieval_returns_grounded_symbol_location",
+      "name_zh": "仓库检索返回真实符号位置",
+      "category_zh": "检索",
+      "scripted_model_zh": "先调用grep_files，再基于结果回答",
+      "asserted_tools": [
+        "grep_files"
+      ],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言源码位置、工具结果回传及最终回答",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_code_modification_requires_diff_and_creates_checkpoint",
+      "name_zh": "代码修改经过Diff审查并创建Checkpoint",
+      "category_zh": "安全写入",
+      "scripted_model_zh": "调用write_file后结束",
+      "asserted_tools": [
+        "write_file"
+      ],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言Diff、审批、文件内容、Checkpoint及持久化结果",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_test_failure_is_returned_to_the_next_model_step",
+      "name_zh": "测试失败返回下一轮模型决策",
+      "category_zh": "错误恢复",
+      "scripted_model_zh": "调用test_runner后解释失败",
+      "asserted_tools": [
+        "test_runner"
+      ],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言失败ToolResult进入下一轮消息并包含失败用例",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_permission_denial_preserves_file_and_returns_guidance",
+      "name_zh": "权限拒绝保留文件并返回用户反馈",
+      "category_zh": "权限",
+      "scripted_model_zh": "尝试write_file后根据拒绝反馈结束",
+      "asserted_tools": [
+        "write_file"
+      ],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言deny_with_feedback、文件不变且无Checkpoint",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_interrupted_turn_can_resume_and_rewind_from_checkpoint",
+      "name_zh": "中断后恢复并从Checkpoint回退",
+      "category_zh": "会话恢复",
+      "scripted_model_zh": "写入后中断；重载Session后read_file验证",
+      "asserted_tools": [
+        "write_file",
+        "read_file"
+      ],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言中断持久化、恢复读取和rewind恢复原文件",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_invalid_tool_arguments_become_validation_result",
+      "name_zh": "非法工具参数归一化为校验结果",
+      "category_zh": "工具契约",
+      "scripted_model_zh": "生成空检索pattern后读取错误",
+      "asserted_tools": [
+        "grep_files"
+      ],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言JSON/validator错误进入ToolResult而不崩溃",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_unknown_tool_is_normalized_without_crashing_turn",
+      "name_zh": "未知工具归一化且不中断Agent Turn",
+      "category_zh": "工具契约",
+      "scripted_model_zh": "调用不存在工具后选择其他方案",
+      "asserted_tools": [
+        "repository_magic"
+      ],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言Unknown tool被结构化返回并正常结束",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_tool_exception_is_normalized_and_returned_to_model",
+      "name_zh": "工具运行异常归一化并返回模型",
+      "category_zh": "工具契约",
+      "scripted_model_zh": "调用会抛出RuntimeError的parse_repository",
+      "asserted_tools": [
+        "parse_repository"
+      ],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言异常类型、工具名和错误消息进入ToolResult",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_large_tool_output_keeps_head_error_and_tail",
+      "name_zh": "大输出保留头部、错误行和尾部",
+      "category_zh": "上下文治理",
+      "scripted_model_zh": "调用返回超长日志的run_command",
+      "asserted_tools": [
+        "run_command"
+      ],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言输出被截断且关键头/错误/尾证据保留",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_workspace_escape_is_rejected_without_leaking_file",
+      "name_zh": "工作区越界读取被拒绝且不泄露内容",
+      "category_zh": "路径安全",
+      "scripted_model_zh": "尝试read_file读取工作区外文件",
+      "asserted_tools": [
+        "read_file"
+      ],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言越界错误结构化返回且秘密内容未泄露",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_dangerous_shell_command_is_denied_before_execution",
+      "name_zh": "危险Shell命令执行前被拒绝",
+      "category_zh": "命令安全",
+      "scripted_model_zh": "尝试run_command执行git reset --hard",
+      "asserted_tools": [
+        "run_command"
+      ],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言危险命令触发审批、被拒绝且本地文件不变",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_successful_test_run_is_returned_as_verification_evidence",
+      "name_zh": "成功测试作为验证证据进入停止事件",
+      "category_zh": "验证",
+      "scripted_model_zh": "调用test_runner后基于通过结果回答",
+      "asserted_tools": [
+        "test_runner"
+      ],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言Pytest通过且stop evidence_summary包含测试证据",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_rewind_removes_file_created_during_agent_turn",
+      "name_zh": "Rewind删除Agent新建文件",
+      "category_zh": "会话恢复",
+      "scripted_model_zh": "调用write_file创建文件后结束",
+      "asserted_tools": [
+        "write_file"
+      ],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言Checkpoint记录原文件不存在且rewind删除新文件",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_repeated_session_load_is_idempotent",
+      "name_zh": "重复加载Session保持幂等",
+      "category_zh": "会话恢复",
+      "scripted_model_zh": "不调用模型，重复读取同一Session",
+      "asserted_tools": [],
+      "asserted_stop_reason": "不适用",
+      "grader_zh": "断言消息、历史和持久化文件均无状态漂移",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_delta_resume_reconstructs_messages_without_duplicates",
+      "name_zh": "增量Delta恢复消息且不重复",
+      "category_zh": "会话恢复",
+      "scripted_model_zh": "不调用模型，保存全量快照后追加Delta",
+      "asserted_tools": [],
+      "asserted_stop_reason": "不适用",
+      "grader_zh": "断言消息顺序、Transcript ID和数量正确",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_max_step_budget_stops_repeating_tool_loop",
+      "name_zh": "最大步数终止重复工具循环",
+      "category_zh": "终止控制",
+      "scripted_model_zh": "连续两次调用inspect_repository",
+      "asserted_tools": [
+        "inspect_repository"
+      ],
+      "asserted_stop_reason": "max_steps",
+      "grader_zh": "断言模型调用次数、工具结果数和max_steps停止原因",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_empty_model_response_retries_then_completes",
+      "name_zh": "空模型响应重试后完成",
+      "category_zh": "异常恢复",
+      "scripted_model_zh": "先返回空assistant，再返回最终答案",
+      "asserted_tools": [],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言注入继续提示且第二次响应正常完成",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_recoverable_thinking_pause_resumes_next_model_step",
+      "name_zh": "可恢复thinking pause继续下一模型步骤",
+      "category_zh": "异常恢复",
+      "scripted_model_zh": "先返回pause_turn，再继续最终回答",
+      "asserted_tools": [],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言pause进度、恢复提示和最终回答",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_progress_message_does_not_terminate_turn",
+      "name_zh": "Progress消息不会提前终止Turn",
+      "category_zh": "响应协议",
+      "scripted_model_zh": "先返回progress，再返回final",
+      "asserted_tools": [],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言progress与final分流且仅final终止",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    },
+    {
+      "test_name": "test_agentops_stable_task_pack_carries_latest_tool_evidence",
+      "name_zh": "StableTaskPack保留最新工具证据",
+      "category_zh": "上下文治理",
+      "scripted_model_zh": "调用pytest_probe后根据证据完成",
+      "asserted_tools": [
+        "pytest_probe"
+      ],
+      "asserted_stop_reason": "done",
+      "grader_zh": "断言StableTaskPack包含任务证据、预算状态和stop evidence",
+      "round_statuses": [
+        "passed",
+        "passed",
+        "passed"
+      ],
+      "passed_count": 3,
+      "run_count": 3
+    }
+  ],
+  "rounds": [
+    {
+      "round": 1,
+      "exit_code": 0,
+      "duration_ms": 15561,
+      "collected_count": 20,
+      "passed_count": 20,
+      "results": [
+        {
+          "test_name": "test_agentops_repository_retrieval_returns_grounded_symbol_location",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_code_modification_requires_diff_and_creates_checkpoint",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_test_failure_is_returned_to_the_next_model_step",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_permission_denial_preserves_file_and_returns_guidance",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_interrupted_turn_can_resume_and_rewind_from_checkpoint",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_invalid_tool_arguments_become_validation_result",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_unknown_tool_is_normalized_without_crashing_turn",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_tool_exception_is_normalized_and_returned_to_model",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_large_tool_output_keeps_head_error_and_tail",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_workspace_escape_is_rejected_without_leaking_file",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_dangerous_shell_command_is_denied_before_execution",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_successful_test_run_is_returned_as_verification_evidence",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_rewind_removes_file_created_during_agent_turn",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_repeated_session_load_is_idempotent",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_delta_resume_reconstructs_messages_without_duplicates",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_max_step_budget_stops_repeating_tool_loop",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_empty_model_response_retries_then_completes",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_recoverable_thinking_pause_resumes_next_model_step",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_progress_message_does_not_terminate_turn",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_stable_task_pack_carries_latest_tool_evidence",
+          "status": "passed",
+          "passed": true
+        }
+      ],
+      "pytest_output_tail": "============================= test session starts =============================\nplatform win32 -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- D:\\Programfiles\\Anacondafiles\\envs\\agent-env\\python.exe\ncachedir: .pytest_cache\nhypothesis profile 'default'\nrootdir: D:\\Project\\python\\RepoTerm\nconfigfile: pyproject.toml\nplugins: anyio-4.14.1, hypothesis-6.157.2, langsmith-0.9.7\ncollecting ... collected 20 items\n\ntests/test_agentops_scenarios.py::test_agentops_repository_retrieval_returns_grounded_symbol_location PASSED [  5%]\ntests/test_agentops_scenarios.py::test_agentops_code_modification_requires_diff_and_creates_checkpoint PASSED [ 10%]\ntests/test_agentops_scenarios.py::test_agentops_test_failure_is_returned_to_the_next_model_step PASSED [ 15%]\ntests/test_agentops_scenarios.py::test_agentops_permission_denial_preserves_file_and_returns_guidance PASSED [ 20%]\ntests/test_agentops_scenarios.py::test_agentops_interrupted_turn_can_resume_and_rewind_from_checkpoint PASSED [ 25%]\ntests/test_agentops_scenarios.py::test_agentops_invalid_tool_arguments_become_validation_result PASSED [ 30%]\ntests/test_agentops_scenarios.py::test_agentops_unknown_tool_is_normalized_without_crashing_turn PASSED [ 35%]\ntests/test_agentops_scenarios.py::test_agentops_tool_exception_is_normalized_and_returned_to_model PASSED [ 40%]\ntests/test_agentops_scenarios.py::test_agentops_large_tool_output_keeps_head_error_and_tail PASSED [ 45%]\ntests/test_agentops_scenarios.py::test_agentops_workspace_escape_is_rejected_without_leaking_file PASSED [ 50%]\ntests/test_agentops_scenarios.py::test_agentops_dangerous_shell_command_is_denied_before_execution PASSED [ 55%]\ntests/test_agentops_scenarios.py::test_agentops_successful_test_run_is_returned_as_verification_evidence PASSED [ 60%]\ntests/test_agentops_scenarios.py::test_agentops_rewind_removes_file_created_during_agent_turn PASSED [ 65%]\ntests/test_agentops_scenarios.py::test_agentops_repeated_session_load_is_idempotent PASSED [ 70%]\ntests/test_agentops_scenarios.py::test_agentops_delta_resume_reconstructs_messages_without_duplicates PASSED [ 75%]\ntests/test_agentops_scenarios.py::test_agentops_max_step_budget_stops_repeating_tool_loop PASSED [ 80%]\ntests/test_agentops_scenarios.py::test_agentops_empty_model_response_retries_then_completes PASSED [ 85%]\ntests/test_agentops_scenarios.py::test_agentops_recoverable_thinking_pause_resumes_next_model_step PASSED [ 90%]\ntests/test_agentops_scenarios.py::test_agentops_progress_message_does_not_terminate_turn PASSED [ 95%]\ntests/test_agentops_scenarios.py::test_agentops_stable_task_pack_carries_latest_tool_evidence PASSED [100%]\n\n============================= 20 passed in 12.21s ============================="
+    },
+    {
+      "round": 2,
+      "exit_code": 0,
+      "duration_ms": 17719,
+      "collected_count": 20,
+      "passed_count": 20,
+      "results": [
+        {
+          "test_name": "test_agentops_repository_retrieval_returns_grounded_symbol_location",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_code_modification_requires_diff_and_creates_checkpoint",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_test_failure_is_returned_to_the_next_model_step",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_permission_denial_preserves_file_and_returns_guidance",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_interrupted_turn_can_resume_and_rewind_from_checkpoint",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_invalid_tool_arguments_become_validation_result",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_unknown_tool_is_normalized_without_crashing_turn",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_tool_exception_is_normalized_and_returned_to_model",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_large_tool_output_keeps_head_error_and_tail",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_workspace_escape_is_rejected_without_leaking_file",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_dangerous_shell_command_is_denied_before_execution",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_successful_test_run_is_returned_as_verification_evidence",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_rewind_removes_file_created_during_agent_turn",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_repeated_session_load_is_idempotent",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_delta_resume_reconstructs_messages_without_duplicates",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_max_step_budget_stops_repeating_tool_loop",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_empty_model_response_retries_then_completes",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_recoverable_thinking_pause_resumes_next_model_step",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_progress_message_does_not_terminate_turn",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_stable_task_pack_carries_latest_tool_evidence",
+          "status": "passed",
+          "passed": true
+        }
+      ],
+      "pytest_output_tail": "============================= test session starts =============================\nplatform win32 -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- D:\\Programfiles\\Anacondafiles\\envs\\agent-env\\python.exe\ncachedir: .pytest_cache\nhypothesis profile 'default'\nrootdir: D:\\Project\\python\\RepoTerm\nconfigfile: pyproject.toml\nplugins: anyio-4.14.1, hypothesis-6.157.2, langsmith-0.9.7\ncollecting ... collected 20 items\n\ntests/test_agentops_scenarios.py::test_agentops_repository_retrieval_returns_grounded_symbol_location PASSED [  5%]\ntests/test_agentops_scenarios.py::test_agentops_code_modification_requires_diff_and_creates_checkpoint PASSED [ 10%]\ntests/test_agentops_scenarios.py::test_agentops_test_failure_is_returned_to_the_next_model_step PASSED [ 15%]\ntests/test_agentops_scenarios.py::test_agentops_permission_denial_preserves_file_and_returns_guidance PASSED [ 20%]\ntests/test_agentops_scenarios.py::test_agentops_interrupted_turn_can_resume_and_rewind_from_checkpoint PASSED [ 25%]\ntests/test_agentops_scenarios.py::test_agentops_invalid_tool_arguments_become_validation_result PASSED [ 30%]\ntests/test_agentops_scenarios.py::test_agentops_unknown_tool_is_normalized_without_crashing_turn PASSED [ 35%]\ntests/test_agentops_scenarios.py::test_agentops_tool_exception_is_normalized_and_returned_to_model PASSED [ 40%]\ntests/test_agentops_scenarios.py::test_agentops_large_tool_output_keeps_head_error_and_tail PASSED [ 45%]\ntests/test_agentops_scenarios.py::test_agentops_workspace_escape_is_rejected_without_leaking_file PASSED [ 50%]\ntests/test_agentops_scenarios.py::test_agentops_dangerous_shell_command_is_denied_before_execution PASSED [ 55%]\ntests/test_agentops_scenarios.py::test_agentops_successful_test_run_is_returned_as_verification_evidence PASSED [ 60%]\ntests/test_agentops_scenarios.py::test_agentops_rewind_removes_file_created_during_agent_turn PASSED [ 65%]\ntests/test_agentops_scenarios.py::test_agentops_repeated_session_load_is_idempotent PASSED [ 70%]\ntests/test_agentops_scenarios.py::test_agentops_delta_resume_reconstructs_messages_without_duplicates PASSED [ 75%]\ntests/test_agentops_scenarios.py::test_agentops_max_step_budget_stops_repeating_tool_loop PASSED [ 80%]\ntests/test_agentops_scenarios.py::test_agentops_empty_model_response_retries_then_completes PASSED [ 85%]\ntests/test_agentops_scenarios.py::test_agentops_recoverable_thinking_pause_resumes_next_model_step PASSED [ 90%]\ntests/test_agentops_scenarios.py::test_agentops_progress_message_does_not_terminate_turn PASSED [ 95%]\ntests/test_agentops_scenarios.py::test_agentops_stable_task_pack_carries_latest_tool_evidence PASSED [100%]\n\n============================= 20 passed in 12.95s ============================="
+    },
+    {
+      "round": 3,
+      "exit_code": 0,
+      "duration_ms": 17233,
+      "collected_count": 20,
+      "passed_count": 20,
+      "results": [
+        {
+          "test_name": "test_agentops_repository_retrieval_returns_grounded_symbol_location",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_code_modification_requires_diff_and_creates_checkpoint",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_test_failure_is_returned_to_the_next_model_step",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_permission_denial_preserves_file_and_returns_guidance",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_interrupted_turn_can_resume_and_rewind_from_checkpoint",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_invalid_tool_arguments_become_validation_result",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_unknown_tool_is_normalized_without_crashing_turn",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_tool_exception_is_normalized_and_returned_to_model",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_large_tool_output_keeps_head_error_and_tail",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_workspace_escape_is_rejected_without_leaking_file",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_dangerous_shell_command_is_denied_before_execution",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_successful_test_run_is_returned_as_verification_evidence",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_rewind_removes_file_created_during_agent_turn",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_repeated_session_load_is_idempotent",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_delta_resume_reconstructs_messages_without_duplicates",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_max_step_budget_stops_repeating_tool_loop",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_empty_model_response_retries_then_completes",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_recoverable_thinking_pause_resumes_next_model_step",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_progress_message_does_not_terminate_turn",
+          "status": "passed",
+          "passed": true
+        },
+        {
+          "test_name": "test_agentops_stable_task_pack_carries_latest_tool_evidence",
+          "status": "passed",
+          "passed": true
+        }
+      ],
+      "pytest_output_tail": "============================= test session starts =============================\nplatform win32 -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- D:\\Programfiles\\Anacondafiles\\envs\\agent-env\\python.exe\ncachedir: .pytest_cache\nhypothesis profile 'default'\nrootdir: D:\\Project\\python\\RepoTerm\nconfigfile: pyproject.toml\nplugins: anyio-4.14.1, hypothesis-6.157.2, langsmith-0.9.7\ncollecting ... collected 20 items\n\ntests/test_agentops_scenarios.py::test_agentops_repository_retrieval_returns_grounded_symbol_location PASSED [  5%]\ntests/test_agentops_scenarios.py::test_agentops_code_modification_requires_diff_and_creates_checkpoint PASSED [ 10%]\ntests/test_agentops_scenarios.py::test_agentops_test_failure_is_returned_to_the_next_model_step PASSED [ 15%]\ntests/test_agentops_scenarios.py::test_agentops_permission_denial_preserves_file_and_returns_guidance PASSED [ 20%]\ntests/test_agentops_scenarios.py::test_agentops_interrupted_turn_can_resume_and_rewind_from_checkpoint PASSED [ 25%]\ntests/test_agentops_scenarios.py::test_agentops_invalid_tool_arguments_become_validation_result PASSED [ 30%]\ntests/test_agentops_scenarios.py::test_agentops_unknown_tool_is_normalized_without_crashing_turn PASSED [ 35%]\ntests/test_agentops_scenarios.py::test_agentops_tool_exception_is_normalized_and_returned_to_model PASSED [ 40%]\ntests/test_agentops_scenarios.py::test_agentops_large_tool_output_keeps_head_error_and_tail PASSED [ 45%]\ntests/test_agentops_scenarios.py::test_agentops_workspace_escape_is_rejected_without_leaking_file PASSED [ 50%]\ntests/test_agentops_scenarios.py::test_agentops_dangerous_shell_command_is_denied_before_execution PASSED [ 55%]\ntests/test_agentops_scenarios.py::test_agentops_successful_test_run_is_returned_as_verification_evidence PASSED [ 60%]\ntests/test_agentops_scenarios.py::test_agentops_rewind_removes_file_created_during_agent_turn PASSED [ 65%]\ntests/test_agentops_scenarios.py::test_agentops_repeated_session_load_is_idempotent PASSED [ 70%]\ntests/test_agentops_scenarios.py::test_agentops_delta_resume_reconstructs_messages_without_duplicates PASSED [ 75%]\ntests/test_agentops_scenarios.py::test_agentops_max_step_budget_stops_repeating_tool_loop PASSED [ 80%]\ntests/test_agentops_scenarios.py::test_agentops_empty_model_response_retries_then_completes PASSED [ 85%]\ntests/test_agentops_scenarios.py::test_agentops_recoverable_thinking_pause_resumes_next_model_step PASSED [ 90%]\ntests/test_agentops_scenarios.py::test_agentops_progress_message_does_not_terminate_turn PASSED [ 95%]\ntests/test_agentops_scenarios.py::test_agentops_stable_task_pack_carries_latest_tool_evidence PASSED [100%]\n\n============================= 20 passed in 12.89s ============================="
+    }
+  ]
+}

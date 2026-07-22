@@ -36,6 +36,7 @@ env/
 
 # Testing
 .pytest_cache/
+.hypothesis/
 .coverage
 htmlcov/
 
@@ -68,13 +69,20 @@ tmp_*.log
 
 # Local tool/runtime state
 .claude/settings.local.json
+.claude/
+.agents/
+.codex/
+.trae/
+.workbuddy/
 .omx/
 .playwright-mcp/
-.mini-code-memory/*.json
+.repoterm-memory/
+.repoterm-memory-local/
+.repoterm-session-memory/
 
-# MiniCode specific
-.mini-code/
-minicode_session/
+# RepoTerm specific
+.repoterm/
+repoterm_session/
 
 # Local caches / runtime tool state / dead backups (never commit)
 .qwen/
@@ -82,3 +90,5 @@ __pycache__/
 *.git.bak/
 .dead-modules-backup/
 .worktrees/
+outputs/
+test-permission-*.txt

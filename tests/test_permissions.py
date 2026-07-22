@@ -2,14 +2,14 @@ from pathlib import Path
 
 import pytest
 
-import minicode.permissions as permissions_module
-from minicode.permissions import PermissionManager, _classify_dangerous_command, _is_within_directory
+import repoterm.permissions as permissions_module
+from repoterm.permissions import PermissionManager, _classify_dangerous_command, _is_within_directory
 
 
 @pytest.fixture(autouse=True)
 def isolated_permission_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     store_path = tmp_path / "home" / "permissions.json"
-    monkeypatch.setattr(permissions_module, "MINI_CODE_PERMISSIONS_PATH", store_path)
+    monkeypatch.setattr(permissions_module, "REPOTERM_PERMISSIONS_PATH", store_path)
     permissions_module._normalize_path_cached.cache_clear()
     yield store_path
     permissions_module._normalize_path_cached.cache_clear()

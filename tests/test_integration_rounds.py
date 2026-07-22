@@ -14,19 +14,19 @@ from pathlib import Path
 
 import pytest
 
-from minicode.agent_loop import run_agent_turn
-from minicode.context_compactor import ToolResultBudgetManager
-from minicode.context_manager import ContextManager, compute_context_stats
-from minicode.headless import _make_auto_approve_prompt
-from minicode.memory import MemoryEntry, MemoryManager, MemoryScope
-from minicode.mcp import create_mcp_backed_tools
-from minicode.micro_compact import MicroCompactor, MicroCompactorConfig
-from minicode.permissions import PermissionManager
-from minicode.prompt import build_system_prompt_bundle
-from minicode.session import create_new_session, load_session, save_session
-from minicode.tools import create_default_tool_registry
-from minicode.tooling import ToolContext
-from minicode.types import AgentStep, ModelAdapter, ChatMessage
+from repoterm.agent_loop import run_agent_turn
+from repoterm.context_compactor import ToolResultBudgetManager
+from repoterm.context_manager import ContextManager, compute_context_stats
+from repoterm.headless import _make_auto_approve_prompt
+from repoterm.memory import MemoryEntry, MemoryManager, MemoryScope
+from repoterm.mcp import create_mcp_backed_tools
+from repoterm.micro_compact import MicroCompactor, MicroCompactorConfig
+from repoterm.permissions import PermissionManager
+from repoterm.prompt import build_system_prompt_bundle
+from repoterm.session import create_new_session, load_session, save_session
+from repoterm.tools import create_default_tool_registry
+from repoterm.tooling import ToolContext
+from repoterm.types import AgentStep, ModelAdapter, ChatMessage
 
 
 # ---------------------------------------------------------------------------

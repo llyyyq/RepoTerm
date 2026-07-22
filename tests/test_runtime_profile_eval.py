@@ -1,4 +1,4 @@
-from minicode.runtime_profile_eval import (
+from repoterm.runtime_profile_eval import (
     ProviderDiagnostic,
     RuntimeEvalCondition,
     RuntimeEvalScenario,
@@ -8,8 +8,8 @@ from minicode.runtime_profile_eval import (
     runtime_profile_eval_as_markdown,
     summarize_runtime_profile_eval,
 )
-from minicode.tooling import ToolRegistry
-from minicode.types import AgentStep, ChatMessage, ModelAdapter
+from repoterm.tooling import ToolRegistry
+from repoterm.types import AgentStep, ChatMessage, ModelAdapter
 
 
 class ScriptedModel(ModelAdapter):
@@ -269,7 +269,7 @@ def test_runtime_profile_eval_outputs_include_provider_diagnostics() -> None:
         ProviderDiagnostic(
             label="headless-smoke",
             outcome="provider_outage",
-            command="python -m minicode.headless \"Reply with exactly OK.\"",
+            command="python -m repoterm.headless \"Reply with exactly OK.\"",
             exit_code=1,
             summary="Provider availability failure: all viable fallback models were unavailable.",
             stdout="",

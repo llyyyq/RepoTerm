@@ -1,8 +1,9 @@
-from minicode.agent_loop import run_agent_turn
-from minicode.model_switcher import ModelSwitcher
-from minicode.state import create_app_store
-from minicode.tooling import ToolDefinition, ToolRegistry, ToolResult
-from minicode.types import (
+from copy import deepcopy
+from repoterm.agent_loop import STABLE_TASK_STATE_MARKER, run_agent_turn
+from repoterm.model_switcher import ModelSwitcher
+from repoterm.state import create_app_store
+from repoterm.tooling import ToolDefinition, ToolRegistry, ToolResult
+from repoterm.types import (
     AgentStep,
     ChatMessage,
     ModelAdapter,
@@ -16,8 +17,10 @@ class ScriptedModel(ModelAdapter):
     def __init__(self, steps: list[AgentStep]) -> None:
         self._steps = steps
         self.calls = 0
+        self.received_messages: list[list[ChatMessage]] = []
 
     def next(self, messages: list[ChatMessage], on_stream_chunk=None) -> AgentStep:
+        self.received_messages.append(deepcopy(messages))
         step = self._steps[self.calls]
         self.calls += 1
         return step
@@ -83,12 +86,79 @@ def test_agent_turn_executes_tool_and_returns_assistant() -> None:
     messages = run_agent_turn(
         model=model,
         tools=registry,
-        messages=[{"role": "system", "content": "sys"}],
+        messages=[
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "echo hi"},
+        ],
         cwd=".",
+        enable_work_chain=False,
     )
 
-    assert messages[-1] == {"role": "assistant", "content": "done"}
-    assert any(message["role"] == "tool_result" for message in messages)
+    assert model.calls == 2
+    def is_runtime_injection(message: ChatMessage) -> bool:
+        if message["role"] != "system":
+            return False
+        content = str(message.get("content", ""))
+        return content.startswith(STABLE_TASK_STATE_MARKER) or content.startswith(
+            "Runtime phase: "
+        )
+
+    first_model_messages = model.received_messages[0]
+    first_runtime_injections = [
+        message for message in first_model_messages if is_runtime_injection(message)
+    ]
+    assert len(first_runtime_injections) <= 2
+    assert [
+        message["role"]
+        for message in first_model_messages
+        if message not in first_runtime_injections
+    ] == [
+        "system",
+        "user",
+    ]
+
+    second_model_messages = model.received_messages[1]
+    stable_state_messages = [
+        message
+        for message in second_model_messages
+        if message["role"] == "system"
+        and str(message.get("content", "")).startswith(STABLE_TASK_STATE_MARKER)
+    ]
+    assert len(stable_state_messages) == 1
+    assert "Latest tool result: echo: echo:hi" in stable_state_messages[0]["content"]
+
+    def without_runtime_injections(items: list[ChatMessage]) -> list[ChatMessage]:
+        return [message for message in items if not is_runtime_injection(message)]
+
+    second_core_messages = without_runtime_injections(second_model_messages)
+    final_core_messages = without_runtime_injections(messages)
+    assert [message["role"] for message in second_core_messages] == [
+        "system",
+        "user",
+        "assistant_tool_call",
+        "tool_result",
+    ]
+    assert [message["role"] for message in final_core_messages] == [
+        "system",
+        "user",
+        "assistant_tool_call",
+        "tool_result",
+        "assistant",
+    ]
+    assert final_core_messages[2] == {
+        "role": "assistant_tool_call",
+        "toolUseId": "1",
+        "toolName": "echo",
+        "input": {"text": "hi"},
+    }
+    assert final_core_messages[3] == {
+        "role": "tool_result",
+        "toolUseId": "1",
+        "toolName": "echo",
+        "content": "echo:hi",
+        "isError": False,
+    }
+    assert final_core_messages[-1] == {"role": "assistant", "content": "done"}
 
 
 def test_agent_turn_emits_callbacks() -> None:
@@ -124,6 +194,7 @@ def test_agent_turn_emits_callbacks() -> None:
         on_tool_result=lambda name, _output, _error: events.append(("result", name)),
         on_assistant_message=lambda content: events.append(("assistant", content)),
         on_progress_message=lambda content: events.append(("progress", content)),
+        enable_work_chain=False,
     )
 
     assert ("progress", "working") in events
@@ -146,6 +217,7 @@ def test_agent_turn_retries_empty_response_then_continues() -> None:
         tools=registry,
         messages=[{"role": "system", "content": "sys"}],
         cwd=".",
+        enable_work_chain=False,
     )
 
     assert messages[-1] == {"role": "assistant", "content": "done"}
@@ -175,6 +247,7 @@ def test_agent_turn_handles_recoverable_pause_turn() -> None:
         messages=[{"role": "system", "content": "sys"}],
         cwd=".",
         on_progress_message=progress_events.append,
+        enable_work_chain=False,
     )
 
     assert messages[-1] == {"role": "assistant", "content": "done"}
@@ -459,10 +532,10 @@ def test_agent_turn_switches_to_fallback_model_on_provider_channel_error(monkeyp
 
     monkeypatch.setenv("ANTHROPIC_MODEL_FALLBACKS", "qwen3.6-plus")
     monkeypatch.setattr(
-        "minicode.model_switcher.build_provider_config",
+        "repoterm.model_switcher.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(api_key="test-key"),
     )
-    monkeypatch.setattr("minicode.model_switcher.create_model_adapter", _fake_create_model_adapter)
+    monkeypatch.setattr("repoterm.model_switcher.create_model_adapter", _fake_create_model_adapter)
 
     messages = run_agent_turn(
         model=ProviderUnavailableModel(),
@@ -489,10 +562,10 @@ def test_agent_turn_does_not_bounce_between_failed_provider_fallback_models(monk
 
     monkeypatch.setenv("ANTHROPIC_MODEL_FALLBACKS", "claude-haiku-3-20240307")
     monkeypatch.setattr(
-        "minicode.model_switcher.build_provider_config",
+        "repoterm.model_switcher.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(api_key="test-key"),
     )
-    monkeypatch.setattr("minicode.model_switcher.create_model_adapter", _failing_create_model_adapter)
+    monkeypatch.setattr("repoterm.model_switcher.create_model_adapter", _failing_create_model_adapter)
 
     messages = run_agent_turn(
         model=NamedProviderUnavailableModel("deepseek-v4-pro[1m]"),
@@ -527,14 +600,14 @@ def test_agent_turn_respects_runtime_anthropic_family_model_overrides(monkeypatc
 
     monkeypatch.delenv("ANTHROPIC_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "minicode.model_switcher.build_provider_config",
+        "repoterm.model_switcher.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="test-key"
             if model.startswith("claude") or model == "deepseek-v4-pro[1m]"
             else ""
         ),
     )
-    monkeypatch.setattr("minicode.model_switcher.create_model_adapter", _failing_create_model_adapter)
+    monkeypatch.setattr("repoterm.model_switcher.create_model_adapter", _failing_create_model_adapter)
 
     messages = run_agent_turn(
         model=NamedProviderUnavailableModel("deepseek-v4-pro[1m]"),
@@ -563,7 +636,7 @@ def test_model_switcher_uses_snapshotted_anthropic_family_overrides_when_runtime
 
     monkeypatch.delenv("ANTHROPIC_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "minicode.model_switcher.build_provider_config",
+        "repoterm.model_switcher.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="test-key"
             if model.startswith("claude") or model == "deepseek-v4-pro[1m]"
@@ -591,7 +664,7 @@ def test_model_switcher_defaults_blank_anthropic_family_overrides_to_current_non
 
     monkeypatch.delenv("ANTHROPIC_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "minicode.model_switcher.build_provider_config",
+        "repoterm.model_switcher.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="test-key"
             if model.startswith("claude") or model == "deepseek-v4-pro[1m]"
@@ -619,14 +692,14 @@ def test_agent_turn_infers_active_runtime_model_when_adapter_has_no_model_id(mon
 
     monkeypatch.delenv("ANTHROPIC_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "minicode.model_switcher.build_provider_config",
+        "repoterm.model_switcher.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="test-key"
             if model.startswith("claude") or model == "deepseek-v4-pro[1m]"
             else ""
         ),
     )
-    monkeypatch.setattr("minicode.model_switcher.create_model_adapter", _failing_create_model_adapter)
+    monkeypatch.setattr("repoterm.model_switcher.create_model_adapter", _failing_create_model_adapter)
 
     messages = run_agent_turn(
         model=UnnamedProviderUnavailableModel("deepseek-v4-pro[1m]"),
@@ -649,16 +722,16 @@ def test_model_switcher_prefers_runtime_configured_fallback_models(monkeypatch) 
     }
     created_models: list[str] = []
 
-    monkeypatch.delenv("MINI_CODE_MODEL_FALLBACKS", raising=False)
+    monkeypatch.delenv("REPOTERM_MODEL_FALLBACKS", raising=False)
     monkeypatch.delenv("OPENAI_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "minicode.model_switcher.build_provider_config",
+        "repoterm.model_switcher.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="test-key" if model == "gpt-4o" else ""
         ),
     )
     monkeypatch.setattr(
-        "minicode.model_switcher.create_model_adapter",
+        "repoterm.model_switcher.create_model_adapter",
         lambda model, tools, runtime=None, force_mock=False: created_models.append(model) or object(),
     )
 
@@ -686,15 +759,15 @@ def test_agent_turn_uses_default_runtime_fallback_chain_without_explicit_configu
         fallback_model.model_id = model
         return fallback_model
 
-    monkeypatch.delenv("MINI_CODE_MODEL_FALLBACKS", raising=False)
+    monkeypatch.delenv("REPOTERM_MODEL_FALLBACKS", raising=False)
     monkeypatch.delenv("ANTHROPIC_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "minicode.model_switcher.build_provider_config",
+        "repoterm.model_switcher.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="test-key" if model in {"gpt-4o", "gpt-4o-mini", "deepseek-v4-pro[1m]"} else ""
         ),
     )
-    monkeypatch.setattr("minicode.model_switcher.create_model_adapter", _fake_create_model_adapter)
+    monkeypatch.setattr("repoterm.model_switcher.create_model_adapter", _fake_create_model_adapter)
 
     messages = run_agent_turn(
         model=ProviderUnavailableModel(),
@@ -722,10 +795,10 @@ def test_model_switcher_bounds_custom_openai_host_fallbacks(monkeypatch) -> None
         "_openaiExposedModels": ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
     }
 
-    monkeypatch.delenv("MINI_CODE_MODEL_FALLBACKS", raising=False)
+    monkeypatch.delenv("REPOTERM_MODEL_FALLBACKS", raising=False)
     monkeypatch.delenv("OPENAI_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "minicode.model_switcher.build_provider_config",
+        "repoterm.model_switcher.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="openai-key",
             base_url="https://www.cctq.ai",
@@ -751,10 +824,10 @@ def test_model_switcher_probes_provider_exposed_models_on_custom_openai_host(mon
     }
     probed: list[bool] = []
 
-    monkeypatch.delenv("MINI_CODE_MODEL_FALLBACKS", raising=False)
+    monkeypatch.delenv("REPOTERM_MODEL_FALLBACKS", raising=False)
     monkeypatch.delenv("OPENAI_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "minicode.model_switcher.build_provider_config",
+        "repoterm.model_switcher.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="openai-key",
             base_url="https://www.cctq.ai",
@@ -774,7 +847,7 @@ def test_model_switcher_probes_provider_exposed_models_on_custom_openai_host(mon
             "gpt-4o-audio-preview",
         )
 
-    monkeypatch.setattr("minicode.model_switcher.probe_openai_exposed_models", _fake_probe)
+    monkeypatch.setattr("repoterm.model_switcher.probe_openai_exposed_models", _fake_probe)
 
     switcher = ModelSwitcher(
         current_model="gpt5.5",
@@ -790,17 +863,17 @@ def test_model_switcher_probes_provider_exposed_models_on_custom_openai_host(mon
 def test_agent_turn_provider_outage_guidance_prefers_provider_exposed_models_when_default_openai_failover_exists(monkeypatch) -> None:
     registry = ToolRegistry([])
 
-    monkeypatch.delenv("MINI_CODE_MODEL_FALLBACKS", raising=False)
+    monkeypatch.delenv("REPOTERM_MODEL_FALLBACKS", raising=False)
     monkeypatch.delenv("OPENAI_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "minicode.model_switcher.build_provider_config",
+        "repoterm.model_switcher.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="openai-key",
             base_url="https://www.cctq.ai",
         ),
     )
     monkeypatch.setattr(
-        "minicode.model_switcher.create_model_adapter",
+        "repoterm.model_switcher.create_model_adapter",
         lambda model, tools, runtime=None, force_mock=False: NamedProviderUnavailableModel(model),
     )
 
@@ -835,10 +908,10 @@ def test_model_switcher_bounds_custom_openai_host_fallbacks_with_legacy_api_base
         "_openaiExposedModels": ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
     }
 
-    monkeypatch.delenv("MINI_CODE_MODEL_FALLBACKS", raising=False)
+    monkeypatch.delenv("REPOTERM_MODEL_FALLBACKS", raising=False)
     monkeypatch.delenv("OPENAI_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "minicode.model_switcher.build_provider_config",
+        "repoterm.model_switcher.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="openai-key",
             api_base_url="https://www.cctq.ai",

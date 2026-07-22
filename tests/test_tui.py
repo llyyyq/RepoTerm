@@ -1,7 +1,7 @@
 import pytest
 
-from minicode.tui import render_banner, render_panel, render_permission_prompt, render_transcript
-from minicode.tui.types import TranscriptEntry
+from repoterm.tui import render_banner, render_panel, render_permission_prompt, render_transcript
+from repoterm.tui.types import TranscriptEntry
 
 
 def test_render_panel_contains_title() -> None:
@@ -95,7 +95,7 @@ def test_is_dumb_terminal_false_on_windows_with_empty_term(
     Otherwise every redraw frame accumulates in the scrollback and shows as
     stacked/garbled frames when scrolling up (GitHub issue #7, point 2).
     """
-    from minicode.tui import screen
+    from repoterm.tui import screen
 
     monkeypatch.setattr(screen.sys, "platform", "win32")
     monkeypatch.setattr(screen.sys.stdout, "isatty", lambda: True)
@@ -107,7 +107,7 @@ def test_is_dumb_terminal_false_on_windows_with_empty_term(
 def test_is_dumb_terminal_true_when_output_is_piped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from minicode.tui import screen
+    from repoterm.tui import screen
 
     monkeypatch.setattr(screen.sys.stdout, "isatty", lambda: False)
 
@@ -117,7 +117,7 @@ def test_is_dumb_terminal_true_when_output_is_piped(
 def test_is_dumb_terminal_true_for_explicitly_limited_terms(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from minicode.tui import screen
+    from repoterm.tui import screen
 
     for term in ("dumb", "linux"):
         monkeypatch.setattr(screen.sys.stdout, "isatty", lambda: True)
@@ -133,11 +133,11 @@ def test_is_dumb_terminal_true_for_explicitly_limited_terms(
 def test_collapse_command_collapses_tool_entries(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
-    import minicode.tui.input_handler as input_handler_module
-    from minicode.permissions import PermissionManager
-    from minicode.tui.state import ScreenState, TtyAppArgs
-    from minicode.tui.types import TranscriptEntry
-    from minicode.tooling import ToolRegistry
+    import repoterm.tui.input_handler as input_handler_module
+    from repoterm.permissions import PermissionManager
+    from repoterm.tui.state import ScreenState, TtyAppArgs
+    from repoterm.tui.types import TranscriptEntry
+    from repoterm.tooling import ToolRegistry
 
     # Avoid touching the real on-disk history file during this unit test.
     monkeypatch.setattr(input_handler_module, "save_history_entries", lambda hist: None)

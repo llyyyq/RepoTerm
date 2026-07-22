@@ -1,13 +1,13 @@
-from minicode.cybernetic_supervisor import (
+from repoterm.cybernetic_supervisor import (
     ControlSnapshot,
     CyberneticSupervisor,
     SupervisorRisk,
     load_supervisor_report,
     save_supervisor_report,
 )
-from minicode.intent_parser import ActionType, IntentType, ParsedIntent
-from minicode.pipeline_engine import get_pipeline_engine
-from minicode.task_object import TaskObject
+from repoterm.intent_parser import ActionType, IntentType, ParsedIntent
+from repoterm.pipeline_engine import get_pipeline_engine
+from repoterm.task_object import TaskObject
 
 
 class TestCyberneticSupervisor:
@@ -62,7 +62,7 @@ class TestCyberneticSupervisor:
         assert "risk_level" in summary
 
     def test_report_persistence_roundtrip(self, tmp_path, monkeypatch):
-        import minicode.cybernetic_supervisor as supervisor_module
+        import repoterm.cybernetic_supervisor as supervisor_module
 
         monkeypatch.setattr(
             supervisor_module,

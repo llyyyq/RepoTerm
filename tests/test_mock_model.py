@@ -1,4 +1,4 @@
-from minicode.mock_model import MockModelAdapter
+from repoterm.mock_model import MockModelAdapter
 
 
 def test_mock_model_turns_ls_into_tool_call() -> None:
@@ -29,4 +29,4 @@ def test_mock_model_default_message_is_readable() -> None:
     step = adapter.next([{"role": "user", "content": "hello"}])
 
     assert step.type == "assistant"
-    assert "minimal MiniCode Python shell" in step.content
+    assert "minimal RepoTerm shell" in step.content

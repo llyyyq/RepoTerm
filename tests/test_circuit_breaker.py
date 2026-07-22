@@ -1,4 +1,4 @@
-"""Tests for minicode.circuit_breaker — compaction failure protection."""
+"""Tests for repoterm.circuit_breaker — compaction failure protection."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from minicode.circuit_breaker import (
+from repoterm.circuit_breaker import (
     CircuitBreakerConfig,
     CompactionCircuitBreaker,
     get_compaction_circuit_breaker,

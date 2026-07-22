@@ -6,22 +6,23 @@ import zipfile
 
 import pytest
 
-import minicode.tools.test_runner as test_runner_module
-import minicode.tools.run_command as run_command_module
-from minicode.permissions import PermissionManager
-from minicode.session import create_new_session, load_session
-from minicode.tools.batch_ops import batch_copy_tool, batch_move_tool
-from minicode.tools.code_nav import find_references_tool, find_symbols_tool, get_ast_info_tool
-from minicode.tools.code_review import code_review_tool
-from minicode.tools.file_tree import file_tree_tool
-from minicode.tools.run_command import _build_execution_command, split_command_line
-from minicode.tools.patch_file import patch_file_tool
-from minicode.tools.archive_utils import tar_extract_tool, zip_extract_tool
-from minicode.tools.run_command import run_command_tool
-from minicode.tools.test_runner import test_runner_tool
-from minicode.tools.write_file import write_file_tool
-from minicode.tooling import ToolContext
-from minicode.tools import create_default_tool_registry
+import repoterm.tools.test_runner as test_runner_module
+import repoterm.tools.run_command as run_command_module
+import repoterm.session as session_module
+from repoterm.permissions import PermissionManager
+from repoterm.session import create_new_session, load_session
+from repoterm.tools.batch_ops import batch_copy_tool, batch_move_tool
+from repoterm.tools.code_nav import find_references_tool, find_symbols_tool, get_ast_info_tool
+from repoterm.tools.code_review import code_review_tool
+from repoterm.tools.file_tree import file_tree_tool
+from repoterm.tools.run_command import _build_execution_command, split_command_line
+from repoterm.tools.patch_file import patch_file_tool
+from repoterm.tools.archive_utils import tar_extract_tool, zip_extract_tool
+from repoterm.tools.run_command import run_command_tool
+from repoterm.tools.test_runner import test_runner_tool
+from repoterm.tools.write_file import write_file_tool
+from repoterm.tooling import ToolContext
+from repoterm.tools import create_default_tool_registry
 
 
 def test_split_command_line_supports_quotes() -> None:
@@ -48,7 +49,13 @@ def test_write_file_tool_writes_after_review(tmp_path: Path) -> None:
     assert (tmp_path / "demo.txt").read_text(encoding="utf-8") == "hello"
 
 
-def test_write_file_tool_records_checkpoint_when_session_present(tmp_path: Path) -> None:
+def test_write_file_tool_records_checkpoint_when_session_present(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime_root = tmp_path / ".runtime"
+    monkeypatch.setattr(session_module, "REPOTERM_DIR", runtime_root)
+    monkeypatch.setattr(session_module, "SESSIONS_DIR", runtime_root / "sessions")
     permissions = PermissionManager(str(tmp_path), prompt=lambda request: {"decision": "allow_once"})
     target = tmp_path / "demo.txt"
     target.write_text("before", encoding="utf-8")
@@ -298,14 +305,14 @@ def test_code_analysis_tools_reject_paths_that_escape_workspace(
 
 def test_core_tool_registry_does_not_import_utility_modules(tmp_path: Path) -> None:
     utility_modules = [
-        "minicode.tools.archive_utils",
-        "minicode.tools.crypto_utils",
-        "minicode.tools.csv_utils",
-        "minicode.tools.encoding_utils",
-        "minicode.tools.http_utils",
-        "minicode.tools.json_utils",
-        "minicode.tools.regex_utils",
-        "minicode.tools.text_utils",
+        "repoterm.tools.archive_utils",
+        "repoterm.tools.crypto_utils",
+        "repoterm.tools.csv_utils",
+        "repoterm.tools.encoding_utils",
+        "repoterm.tools.http_utils",
+        "repoterm.tools.json_utils",
+        "repoterm.tools.regex_utils",
+        "repoterm.tools.text_utils",
     ]
     for module_name in utility_modules:
         sys.modules.pop(module_name, None)

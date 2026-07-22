@@ -1,10 +1,10 @@
-# MiniCode 代码百科 (CODE_WIKI)
+# RepoTerm 代码百科 (CODE_WIKI)
 
-> MiniCode —— 轻量、开源、多语言实现的 AI 编码代理（Agent），灵感源自 Claude Code。
+> RepoTerm —— 轻量、开源、多语言实现的 AI 编码代理（Agent），灵感源自 Claude Code。
 
-> ⚠️ **部分内容过时（2026-06-16）**：本文档的部分目录树与模块清单描述的是早期 `py-src/minicode/` 镜像，该镜像及其 `gateway.py`/`protocol.py`/`safe_execution.py`/`cron_runner.py`/`agent_protocol.py`/`context_isolation.py` 已在产品化中移除。**当前规范实现是仓库根目录的 `minicode/` 包，准确结构见 [`STRUCTURE.md`](STRUCTURE.md)。** 本文档保留作历史参考，不再逐行同步。
+> ⚠️ **部分内容过时（2026-06-16）**：本文档的部分目录树与模块清单描述的是早期 `py-src/repoterm/` 镜像，该镜像及其 `gateway.py`/`protocol.py`/`safe_execution.py`/`cron_runner.py`/`agent_protocol.py`/`context_isolation.py` 已在产品化中移除。**当前规范实现是仓库根目录的 `repoterm/` 包，准确结构见[当前产品边界](engineering/repoterm-app-projection.md)。** 本文档保留作历史参考，不再逐行同步。
 >
-> `ts-src/`、`MiniCode-fork/`、`MiniCode-main-work/` 等比较材料的当前保留/退休边界以 [`engineering/material-inventory.json`](engineering/material-inventory.json) 和 `engineering/material-burndown/` 为准；本文中的相关路径只作为历史参考索引。
+> `ts-src/`、`RepoTerm-fork/`、`RepoTerm-main-work/` 等比较材料的当前保留/退休边界以 [`engineering/material-inventory.json`](engineering/material-inventory.json) 和 `engineering/material-burndown/` 为准；本文中的相关路径只作为历史参考索引。
 
 ---
 
@@ -12,7 +12,7 @@
 
 ### 1.1 项目定位
 
-**MiniCode** 是一个开源的 AI 编码代理（AI Coding Agent），能够在终端中与开发者进行交互式的对话式编程。它支持多种 LLM 后端（Anthropic Claude、OpenAI 兼容模型等），能够理解代码库、执行文件操作、运行命令、搜索代码，并通过工具调用（Tool Use）完成实际开发任务。
+**RepoTerm** 是一个开源的 AI 编码代理（AI Coding Agent），能够在终端中与开发者进行交互式的对话式编程。它支持多种 LLM 后端（Anthropic Claude、OpenAI 兼容模型等），能够理解代码库、执行文件操作、运行命令、搜索代码，并通过工具调用（Tool Use）完成实际开发任务。
 
 ### 1.2 核心目标
 
@@ -111,7 +111,7 @@ Session ──▶ State ──▶ Memory
 | **运行时** | Node.js (ESM 模块) |
 | **包管理** | npm, package.json |
 | **编译** | TypeScript (tsconfig.json) |
-| **入口** | `src/index.ts` → `bin/minicode` |
+| **入口** | `src/index.ts` → `bin/repoterm` |
 | **TUI 框架** | 自研终端渲染（ink 模式） |
 | **优势** | 类型安全、与 Claude Code 生态兼容、异步性能优秀 |
 
@@ -122,7 +122,7 @@ Session ──▶ State ──▶ Memory
 | **运行时** | Python 3.10+ |
 | **包管理** | pip/pyproject.toml |
 | **安装** | `pip install -e .` |
-| **入口** | `minicode/main.py` |
+| **入口** | `repoterm/main.py` |
 | **TUI 框架** | Rich / 自研终端渲染 |
 | **优势** | 开发效率高、AI/ML 生态丰富、易于原型开发 |
 
@@ -152,7 +152,7 @@ Session ──▶ State ──▶ Memory
 ## 4. 项目目录结构 (Directory Structure)
 
 ```
-minicode/
+repoterm/
 ├── ts-src/                          # TypeScript 主版本
 │   ├── src/                         # 源代码
 │   │   ├── index.ts                 # 入口文件
@@ -204,9 +204,9 @@ minicode/
 │   │       ├── errors.ts
 │   │       └── web.ts
 │   ├── bin/                         # 可执行脚本
-│   │   ├── minicode
-│   │   ├── minicode.cmd
-│   │   └── minicode.ps1
+│   │   ├── repoterm
+│   │   ├── repoterm.cmd
+│   │   └── repoterm.ps1
 │   ├── package.json
 │   ├── tsconfig.json
 │   ├── ARCHITECTURE.md              # 架构文档
@@ -215,7 +215,7 @@ minicode/
 │   └── README.zh-CN.md
 │
 ├── py-src/                          # Python 版本
-│   ├── minicode/                    # 核心包
+│   ├── repoterm/                    # 核心包
 │   │   ├── __init__.py
 │   │   ├── main.py                  # 入口文件
 │   │   ├── agent_loop.py            # Agent 循环引擎
@@ -328,8 +328,6 @@ minicode/
 │   │   ├── test_tui.py
 │   │   └── ...（更多测试）
 │   ├── pyproject.toml
-│   ├── Dockerfile
-│   ├── docker-compose.yml
 │   └── README.md
 │
 ├── superpowers-zh/                  # 中文 Superpowers 插件
@@ -360,7 +358,7 @@ minicode/
 ├── claude-code-src/                 # Claude Code 参考源码
 │   └── claude-code/src/             # Claude Code 原始实现（参考用）
 │
-├── MiniCode-fork/                   # MiniCode 上游 fork（参考用）
+├── RepoTerm-fork/                   # RepoTerm 上游 fork（参考用）
 │
 ├── .mcp.json                        # 项目级 MCP 配置
 │
@@ -390,7 +388,7 @@ minicode/
     └── 空响应 → 重试或结束
 ```
 
-**关键特性**（TypeScript 版本 [agent-loop.ts](file:///d:/Desktop/minicode/ts-src/src/agent-loop.ts)）：
+**关键特性**（历史 TypeScript 版本的 `ts-src/src/agent-loop.ts` 已在仓库清理中归档删除）：
 
 - **最大步骤限制**：默认 `maxSteps = 50`，防止无限循环
 - **空响应重试**：最多重试 2 次空响应
@@ -399,7 +397,7 @@ minicode/
 - **回调机制**：`onToolStart`、`onToolResult`、`onAssistantMessage`、`onProgressMessage`
 - **错误计数**：跟踪工具错误次数，影响错误恢复策略
 
-**Python 版本**（[agent_loop.py](file:///d:/Desktop/minicode/minicode/agent_loop.py)）：
+**Python 版本**（[agent_loop.py](../../repoterm/agent_loop.py)）：
 
 - 与 TS 版本逻辑对等，使用 Python 异步编程模式
 - 额外支持：成本追踪、工作记忆集成、上下文压缩
@@ -481,9 +479,9 @@ TTY App
 **配置层级**（从低到高优先级）：
 
 1. 默认配置（代码内置）
-2. 系统级配置（`~/.minicode/config.json`）
-3. 项目级配置（`.minicode/config.json`）
-4. 环境变量（`MINICODE_*`）
+2. 系统级配置（`~/.repoterm/config.json`）
+3. 项目级配置（`.repoterm/config.json`）
+4. 环境变量（`REPOTERM_*`）
 5. CLI 参数
 
 **核心配置项**：
@@ -594,7 +592,7 @@ description: 头脑风暴和创意生成
 
 **职责**：管理多种 LLM 后端，提供统一的调用接口。
 
-**模型注册表**（Python [model_registry.py](file:///d:/Desktop/minicode/minicode/model_registry.py)）：
+**模型注册表**（Python [model_registry.py](../../repoterm/model_registry.py)）：
 
 ```python
 ModelRegistry:
@@ -629,7 +627,7 @@ ModelAdapter:
 
 - **上下文窗口管理**：跟踪当前上下文大小，接近限制时触发压缩
 - **上下文压缩**：保留关键信息，压缩历史消息
-- **上下文隔离**（[context_isolation.py](file:///d:/Desktop/minicode/minicode/context_isolation.py)）：不同会话/任务的上下文隔离
+- **上下文隔离**：由当前上下文管理与会话边界实现不同任务的数据隔离；历史独立文件 `context_isolation.py` 已并入现有运行时
 
 ### 5.10 Memory System (memory.py)
 
@@ -638,7 +636,7 @@ ModelAdapter:
 **存储结构**：
 
 ```
-.mini-code-memory/
+.repoterm-memory/
   └── advanced_memory.json      # 高级记忆数据
 ```
 
@@ -648,7 +646,7 @@ ModelAdapter:
 |------|------|----------|
 | 工作记忆 | 当前会话的短期上下文 | `working_memory.py` |
 | 长期记忆 | 跨会话持久化的重要信息 | `memory.py` |
-| 会话记忆 | 会话级记忆 | `.mini-code-session-memory/` |
+| 会话记忆 | 会话级记忆 | `.repoterm-session-memory/` |
 
 ### 5.11 State Management (state.py)
 
@@ -1094,7 +1092,7 @@ npm run build
 
 ```bash
 # 通过 bin 脚本
-./bin/minicode
+./bin/repoterm
 
 # 或直接运行
 npx tsx src/index.ts
@@ -1108,17 +1106,17 @@ export ANTHROPIC_API_KEY="sk-..."
 
 # 或使用 OpenAI 兼容模型
 export OPENAI_API_KEY="sk-..."
-export MINICODE_MODEL="gpt-4o"
+export REPOTERM_MODEL="gpt-4o"
 ```
 
 **常用命令**：
 
 | 命令 | 说明 |
 |------|------|
-| `minicode` | 启动交互式 TUI |
-| `minicode --model <model>` | 指定模型 |
-| `minicode --auto` | 自动模式 |
-| `minicode --help` | 帮助信息 |
+| `repoterm` | 启动交互式 TUI |
+| `repoterm --model <model>` | 指定模型 |
+| `repoterm --auto` | 自动模式 |
+| `repoterm --help` | 帮助信息 |
 
 ### 12.2 Python 版本
 
@@ -1133,10 +1131,10 @@ pip install -e .
 
 ```bash
 # 启动交互式 TUI
-minicode
+repoterm
 
 # 或直接运行
-python -m minicode.main
+python -m repoterm.main
 ```
 
 **配置**：
@@ -1150,21 +1148,15 @@ cp .env.example .env
 # 编辑 .env 填入 API 密钥
 ```
 
-**Docker 运行**：
-
-```bash
-docker-compose up
-```
-
 **常用命令**：
 
 | 命令 | 说明 |
 |------|------|
-| `minicode` | 启动交互式 TUI |
-| `minicode --auto "修改xxx"` | 自动执行任务 |
-| `minicode --headless` | 无头模式 |
-| `minicode --model <model>` | 指定模型 |
-| `minicode --version` | 版本信息 |
+| `repoterm` | 启动交互式 TUI |
+| `repoterm --auto "修改xxx"` | 自动执行任务 |
+| `repoterm --headless` | 无头模式 |
+| `repoterm --model <model>` | 指定模型 |
+| `repoterm --version` | 版本信息 |
 
 ### 12.3 测试命令
 
@@ -1186,28 +1178,27 @@ npm test
 
 | 测试文件 | 测试内容 |
 |----------|----------|
-| [test_agent_loop.py](file:///d:/Desktop/minicode/py-src/tests/test_agent_loop.py) | Agent 循环逻辑 |
-| [test_anthropic_adapter.py](file:///d:/Desktop/minicode/py-src/tests/test_anthropic_adapter.py) | Anthropic 适配器 |
-| [test_cli_commands.py](file:///d:/Desktop/minicode/py-src/tests/test_cli_commands.py) | CLI 命令 |
-| [test_config.py](file:///d:/Desktop/minicode/py-src/tests/test_config.py) | 配置加载 |
-| [test_integration.py](file:///d:/Desktop/minicode/py-src/tests/test_integration.py) | 集成测试 |
-| [test_mcp.py](file:///d:/Desktop/minicode/py-src/tests/test_mcp.py) | MCP 连接 |
-| [test_mock_model.py](file:///d:/Desktop/minicode/py-src/tests/test_mock_model.py) | 模拟模型 |
-| [test_permissions.py](file:///d:/Desktop/minicode/py-src/tests/test_permissions.py) | 权限系统 |
-| [test_prompt.py](file:///d:/Desktop/minicode/py-src/tests/test_prompt.py) | 提示词构建 |
-| [test_session.py](file:///d:/Desktop/minicode/py-src/tests/test_session.py) | 会话管理 |
-| [test_skills.py](file:///d:/Desktop/minicode/py-src/tests/test_skills.py) | 技能系统 |
-| [test_tools.py](file:///d:/Desktop/minicode/py-src/tests/test_tools.py) | 工具执行 |
-| [test_tty_app.py](file:///d:/Desktop/minicode/py-src/tests/test_tty_app.py) | TTY 应用 |
-| [test_tui.py](file:///d:/Desktop/minicode/py-src/tests/test_tui.py) | TUI 渲染 |
-| [test_functional_completeness.py](file:///d:/Desktop/minicode/py-src/tests/test_functional_completeness.py) | 功能完整性 |
-| [test_packaging.py](file:///d:/Desktop/minicode/py-src/tests/test_packaging.py) | 打包测试 |
-| [test_renderer_performance.py](file:///d:/Desktop/minicode/py-src/tests/test_renderer_performance.py) | 渲染性能 |
-| [test_transcript_layout.py](file:///d:/Desktop/minicode/py-src/tests/test_transcript_layout.py) | Transcript 布局 |
+| [test_agent_loop.py](../../tests/test_agent_loop.py) | Agent 循环逻辑 |
+| [test_anthropic_adapter.py](../../tests/test_anthropic_adapter.py) | Anthropic 适配器 |
+| [test_cli_commands.py](../../tests/test_cli_commands.py) | CLI 命令 |
+| [test_config.py](../../tests/test_config.py) | 配置加载 |
+| [test_integration.py](../../tests/test_integration.py) | 集成测试 |
+| [test_mcp.py](../../tests/test_mcp.py) | MCP 连接 |
+| [test_mock_model.py](../../tests/test_mock_model.py) | 模拟模型 |
+| [test_permissions.py](../../tests/test_permissions.py) | 权限系统 |
+| [test_prompt.py](../../tests/test_prompt.py) | 提示词构建 |
+| [test_session.py](../../tests/test_session.py) | 会话管理 |
+| [test_skills.py](../../tests/test_skills.py) | 技能系统 |
+| [test_tools.py](../../tests/test_tools.py) | 工具执行 |
+| [test_tty_app.py](../../tests/test_tty_app.py) | TTY 应用 |
+| [test_tui.py](../../tests/test_tui.py) | TUI 渲染 |
+| [test_functional_completeness.py](../../tests/test_functional_completeness.py) | 功能完整性 |
+| [test_renderer_performance.py](../../tests/test_renderer_performance.py) | 渲染性能 |
+| [test_transcript_layout.py](../../tests/test_transcript_layout.py) | Transcript 布局 |
 
 ### 13.2 测试夹具
 
-- [fake_mcp_server.py](file:///d:/Desktop/minicode/py-src/tests/fixtures/fake_mcp_server.py)：模拟 MCP Server，用于 MCP 相关测试
+- [fake_mcp_server.py](../../tests/fixtures/fake_mcp_server.py)：模拟 MCP Server，用于 MCP 相关测试
 
 ### 13.3 测试方法
 
@@ -1221,8 +1212,8 @@ npm test
 
 | 文件 | 内容 |
 |------|------|
-| [performance_benchmark.py](file:///d:/Desktop/minicode/py-src/benchmarks/performance_benchmark.py) | 性能基准测试 |
-| [multi_round_stress_test.py](file:///d:/Desktop/minicode/py-src/benchmarks/multi_round_stress_test.py) | 多轮压力测试 |
+| [runtime_regression_eval.py](../../benchmarks/runtime_regression_eval.py) | 确定性 Runtime 回归评测 |
+| [llm_e2e_eval.py](../../benchmarks/llm_e2e_eval.py) | 真实模型端到端评测 |
 
 ---
 
@@ -1268,7 +1259,7 @@ npm test
 
 **配置钩子**：
 
-在 `.minicode/hooks.json` 中配置：
+在 `.repoterm/hooks.json` 中配置：
 
 ```json
 {
@@ -1322,7 +1313,7 @@ Claude Code、Cursor、Codex、OpenCode、Qwen、Gemini CLI、Windsurf、VS Code
 **用途**：
 
 - 理解 Claude Code 的设计模式和架构
-- 对比 MiniCode 的实现差异
+- 对比 RepoTerm 的实现差异
 - 学习终端 TUI 的高级实现技巧
 
 **核心模块**：
@@ -1337,14 +1328,14 @@ Claude Code、Cursor、Codex、OpenCode、Qwen、Gemini CLI、Windsurf、VS Code
 | `commands/` | 内置命令 |
 | `utils/` | 工具函数库 |
 
-### 15.3 MiniCode-fork 上游 fork
+### 15.3 RepoTerm-fork 上游 fork
 
-**定位**：MiniCode 项目的上游参考版本。
+**定位**：RepoTerm 项目的上游参考版本。
 
 **内容**：
 
 - 与 ts-src 结构相似
-- 包含 Python 子模块（`external/MiniCode-Python/`）
+- 包含 Python 子模块（`external/RepoTerm/`）
 - 提供架构文档（ARCHITECTURE.md、ROADMAP.md 等）
 
 ---
@@ -1393,24 +1384,17 @@ interface ModelResponse {
 
 | 文件 | 路径 |
 |------|------|
-| TS 入口 | [ts-src/src/index.ts](file:///d:/Desktop/minicode/ts-src/src/index.ts) |
-| TS Agent Loop | [ts-src/src/agent-loop.ts](file:///d:/Desktop/minicode/ts-src/src/agent-loop.ts) |
-| TS 工具 | [ts-src/src/tools/](file:///d:/Desktop/minicode/ts-src/src/tools/) |
-| TS TUI | [ts-src/src/tty-app.ts](file:///d:/Desktop/minicode/ts-src/src/tty-app.ts) |
-| Python 入口 | [minicode/main.py](file:///d:/Desktop/minicode/minicode/main.py) |
-| Python Agent Loop | [minicode/agent_loop.py](file:///d:/Desktop/minicode/minicode/agent_loop.py) |
-| Python 工具 | [minicode/tools/](file:///d:/Desktop/minicode/minicode/tools/) |
-| Python TUI | [minicode/tty_app.py](file:///d:/Desktop/minicode/minicode/tty_app.py) |
-| 插件 | [superpowers-zh/](file:///d:/Desktop/minicode/superpowers-zh/) |
-| MCP 配置 | [.mcp.json](file:///d:/Desktop/minicode/.mcp.json) |
+| 历史 TS 实现 | `ts-src/`（已完成归档删除，清单见 `engineering/material-burndown/ts-src.json`） |
+| Python 入口 | [repoterm/main.py](../../repoterm/main.py) |
+| Python Agent Loop | [repoterm/agent_loop.py](../../repoterm/agent_loop.py) |
+| Python 工具 | [repoterm/tools/](../../repoterm/tools/) |
+| Python TUI | [repoterm/tty_app.py](../../repoterm/tty_app.py) |
+| MCP 配置 | [.mcp.json](../../.mcp.json) |
 
 ### E. 相关报告
 
 | 报告 | 内容 |
 |------|------|
-| [SECURITY_AND_COMPATIBILITY_AUDIT.md](file:///d:/Desktop/minicode/SECURITY_AND_COMPATIBILITY_AUDIT.md) | 安全性和兼容性审计 |
-| [SECURITY_FIXES_REPORT.md](file:///d:/Desktop/minicode/SECURITY_FIXES_REPORT.md) | 安全修复报告 |
-| [SECURITY_TESTS.md](file:///d:/Desktop/minicode/SECURITY_TESTS.md) | 安全测试 |
-| [DEEP_OPTIMIZATION_REPORT.md](file:///d:/Desktop/minicode/DEEP_OPTIMIZATION_REPORT.md) | 深度优化报告 |
-| [FINAL_VERIFICATION_REPORT.md](file:///d:/Desktop/minicode/FINAL_VERIFICATION_REPORT.md) | 最终验证报告 |
-| [ROBUSTNESS_OPTIMIZATION_REPORT.md](file:///d:/Desktop/minicode/ROBUSTNESS_OPTIMIZATION_REPORT.md) | 健壮性优化报告 |
+| [评测方法说明](../../benchmarks/eval-methodology.md) | 两层评测范围、判分规则与统计口径 |
+| [确定性 Runtime 报告](../../benchmarks/runtime_regression_results.md) | 20 个脚本化场景的回归结果 |
+| [真实模型端到端报告](../../benchmarks/llm_e2e_results.md) | 5 类真实模型任务的运行结果 |

@@ -2,54 +2,45 @@
   "schemaVersion": 2,
   "auditedAt": "2026-06-29",
   "remoteBaseline": {
-    "repository": "QUSETIONS/MiniCode-Python",
+    "repository": "RepoTerm",
     "branch": "main",
     "commit": "54d47f3dc2bca02fefe5a86aa3ae4d8c510e760f"
   },
   "currentProductApp": {
-    "logicalBoundary": "product/app/minicode_frontline",
-    "currentSourceRoot": "minicode",
+    "logicalBoundary": "product/app/repoterm_frontline",
+    "currentSourceRoot": "repoterm",
     "status": "active",
     "entrySurfaces": [
       {
         "name": "interactive-cli",
-        "path": "minicode/main.py",
-        "script": "minicode-py",
+        "path": "repoterm/main.py",
+        "script": "repoterm",
         "result": "interactive terminal coding session"
       },
       {
         "name": "headless-runner",
-        "path": "minicode/headless.py",
-        "script": "minicode-headless",
+        "path": "repoterm/headless.py",
+        "script": "repoterm-headless",
         "result": "single prompt automation run"
       },
       {
         "name": "local-command-surface",
-        "path": "minicode/cli_commands.py",
+        "path": "repoterm/cli_commands.py",
         "result": "slash-command entry surface for session, replay, rewind, readiness, and extensions"
       },
       {
         "name": "product-surfaces",
-        "path": "minicode/product_surfaces.py",
+        "path": "repoterm/product_surfaces.py",
         "result": "instruction, hook, delegation, extension, and readiness snapshot"
       },
       {
         "name": "readiness-gate",
-        "path": "minicode/readiness.py",
-        "script": "minicode-readiness",
+        "path": "repoterm/readiness.py",
+        "script": "repoterm-readiness",
         "result": "standalone provider/runtime readiness gate with warning and blocked thresholds"
-      },
-      {
-        "name": "release-readiness",
-        "path": "minicode/release_readiness.py",
-        "result": "compile, test, smoke, runtime-profile, and provider diagnostics summary"
       }
     ],
     "coverageEvidence": [
-      {
-        "path": "tests/test_packaging.py",
-        "reason": "console entry points and package wiring are exercised"
-      },
       {
         "path": "tests/test_cli_commands.py",
         "reason": "product slash-command surfaces are verified"
@@ -59,11 +50,7 @@
         "reason": "instruction, extension, and readiness snapshot surfaces are verified"
       },
       {
-        "path": "tests/test_release_integration.py",
-        "reason": "readiness CLI and direct main readiness entry points are verified as black-box product surfaces"
-      },
-      {
-        "path": "Docs/Documentation/engineering/minicode-app-projection.md",
+        "path": "Docs/Documentation/engineering/repoterm-app-projection.md",
         "reason": "active engineering projection records the current product-app boundary"
       }
     ]
@@ -71,18 +58,15 @@
   "materials": [
     {
       "path": "ts-src/py-src",
+      "presencePolicy": "optional-workspace-material",
       "historicalAliases": [
         "py-src"
       ],
       "identity": "legacy-python-source-material",
-      "status": "inventory-recorded-legacy-only-modules-retired",
+      "status": "archive-approved-legacy-python-material-deleted",
       "burndownManifest": "Docs/Documentation/engineering/material-burndown/ts-src-py-src.json",
       "callerSummary": "No runtime caller in the active product app; historical docs still refer to the old py-src root.",
       "currentCallers": [
-        {
-          "path": "Docs/Documentation/STRUCTURE.md",
-          "reason": "structure guide now records the historical alias while pointing active runtime ownership at minicode/"
-        },
         {
           "path": "Docs/Documentation/CODE_WIKI.md",
           "reason": "historical wiki retains py-src-era layout references for audit purposes"
@@ -111,7 +95,7 @@
           "reason": "legacy-only module closure is tracked capability-by-capability and current-code name residues are cleared"
         },
         {
-          "path": "Docs/Documentation/engineering/minicode-app-projection.md",
+          "path": "Docs/Documentation/engineering/repoterm-app-projection.md",
           "reason": "material root is classified and linked to retirement criteria"
         },
         {
@@ -119,14 +103,15 @@
           "reason": "inventory schema and path coverage are enforced"
         }
       ],
-      "replacementTarget": "minicode",
-      "retirementCondition": "Module-level burn-down is closed: all 11 legacy-only modules are retired unless a current product caller, documented product surface, and focused tests are added in minicode/."
+      "replacementTarget": "repoterm",
+      "retirementCondition": "Module-level burn-down is closed: all 11 legacy-only modules are retired unless a current product caller, documented product surface, and focused tests are added in repoterm/."
     },
     {
       "path": "ts-src",
+      "presencePolicy": "optional-workspace-material",
       "historicalAliases": [],
       "identity": "legacy-typescript-material",
-      "status": "archive-approved-reference-only-retained-in-place",
+      "status": "archive-approved-reference-only-deleted",
       "burndownManifest": "Docs/Documentation/engineering/material-burndown/ts-src.json",
       "callerSummary": "Docs-only and comparison-only material; no active product entry resolves through ts-src.",
       "currentCallers": [],
@@ -159,7 +144,7 @@
           "reason": "TypeScript package, launcher, entry, docs, and nested py-src delegation are tracked as reference material"
         },
         {
-          "path": "Docs/Documentation/engineering/minicode-app-projection.md",
+          "path": "Docs/Documentation/engineering/repoterm-app-projection.md",
           "reason": "material root is classified as retained comparison/reference material"
         },
         {
@@ -171,12 +156,12 @@
       "retirementCondition": "Archive approval recorded; physical deletion can proceed after inventory gates pass and dirty-worktree handling is explicit."
     },
     {
-      "path": "MiniCode-fork",
+      "path": "RepoTerm-fork",
       "presencePolicy": "optional-workspace-material",
       "historicalAliases": [],
       "identity": "comparison-material",
       "status": "archive-approved-comparison-only-retained-in-place",
-      "burndownManifest": "Docs/Documentation/engineering/material-burndown/minicode-fork.json",
+      "burndownManifest": "Docs/Documentation/engineering/material-burndown/repoterm-fork.json",
       "callerSummary": "No product caller; retained for manual comparison and fork-diff inspection.",
       "currentCallers": [],
       "historicalReferences": [
@@ -188,27 +173,27 @@
       "observedEntries": [
         {
           "name": "fork-readme",
-          "path": "MiniCode-fork/README.md",
+          "path": "RepoTerm-fork/README.md",
           "result": "fork narrative and product description"
         },
         {
           "name": "fork-package",
-          "path": "MiniCode-fork/package.json",
+          "path": "RepoTerm-fork/package.json",
           "result": "forked TypeScript package manifest"
         },
         {
           "name": "fork-entry",
-          "path": "MiniCode-fork/src/index.ts",
+          "path": "RepoTerm-fork/src/index.ts",
           "result": "fork CLI entry surface"
         }
       ],
       "coverageEvidence": [
         {
-          "path": "Docs/Documentation/engineering/material-burndown/minicode-fork.json",
+          "path": "Docs/Documentation/engineering/material-burndown/repoterm-fork.json",
           "reason": "fork package, entry, docs site, and nested external copy are tracked as comparison material"
         },
         {
-          "path": "Docs/Documentation/engineering/minicode-app-projection.md",
+          "path": "Docs/Documentation/engineering/repoterm-app-projection.md",
           "reason": "material root is tracked as comparison-only and deletion-blocked"
         },
         {
@@ -220,43 +205,43 @@
       "retirementCondition": "Archive approval recorded; physical deletion can proceed after inventory gates pass and dirty-worktree handling is explicit."
     },
     {
-      "path": "MiniCode-main-work",
+      "path": "RepoTerm-main-work",
       "presencePolicy": "optional-workspace-material",
       "historicalAliases": [],
       "identity": "comparison-material-workspace",
       "status": "archive-approved-parity-provenance-migrated-retained-in-place",
-      "burndownManifest": "Docs/Documentation/engineering/material-burndown/minicode-main-work.json",
+      "burndownManifest": "Docs/Documentation/engineering/material-burndown/repoterm-main-work.json",
       "callerSummary": "No product caller; TypeScript parity provenance has moved to Docs/Documentation/engineering/ts-parity-provenance.json.",
       "currentCallers": [],
       "observedEntries": [
         {
           "name": "main-work-readme",
-          "path": "MiniCode-main-work/README.md",
+          "path": "RepoTerm-main-work/README.md",
           "result": "current-looking TypeScript workspace narrative"
         },
         {
           "name": "main-work-package",
-          "path": "MiniCode-main-work/package.json",
+          "path": "RepoTerm-main-work/package.json",
           "result": "current-looking Node workspace manifest"
         },
         {
           "name": "main-work-entry",
-          "path": "MiniCode-main-work/src/index.ts",
+          "path": "RepoTerm-main-work/src/index.ts",
           "result": "current-looking TypeScript CLI entry"
         },
         {
           "name": "main-work-test-source",
-          "path": "MiniCode-main-work/test/input-parser.test.ts",
+          "path": "RepoTerm-main-work/test/input-parser.test.ts",
           "result": "source test used for Python parity porting"
         }
       ],
       "coverageEvidence": [
         {
-          "path": "Docs/Documentation/engineering/material-burndown/minicode-main-work.json",
+          "path": "Docs/Documentation/engineering/material-burndown/repoterm-main-work.json",
           "reason": "main-work package, entry, parity source tests, test runner, and nested external copy are tracked"
         },
         {
-          "path": "Docs/Documentation/engineering/minicode-app-projection.md",
+          "path": "Docs/Documentation/engineering/repoterm-app-projection.md",
           "reason": "material root is tracked as comparison workspace with explicit retirement condition"
         },
         {
@@ -307,7 +292,7 @@
       ],
       "coverageEvidence": [
         {
-          "path": "Docs/Documentation/engineering/minicode-app-projection.md",
+          "path": "Docs/Documentation/engineering/repoterm-app-projection.md",
           "reason": "vendor identity and retirement condition are recorded"
         },
         {
@@ -327,7 +312,7 @@
       "callerSummary": "Prompt surfaces still point users at superpowers-zh installation; docs also retain it as support material.",
       "currentCallers": [
         {
-          "path": "minicode/prompt.py",
+          "path": "repoterm/prompt.py",
           "reason": "product prompt suggests installing skills via npx superpowers-zh"
         },
         {
@@ -354,7 +339,7 @@
       ],
       "coverageEvidence": [
         {
-          "path": "Docs/Documentation/engineering/minicode-app-projection.md",
+          "path": "Docs/Documentation/engineering/repoterm-app-projection.md",
           "reason": "vendor identity and support role are recorded"
         },
         {
@@ -374,7 +359,7 @@
       "callerSummary": "No runtime caller; retained only as audit evidence for removed modules.",
       "currentCallers": [
         {
-          "path": "Docs/Documentation/engineering/minicode-app-projection.md",
+          "path": "Docs/Documentation/engineering/repoterm-app-projection.md",
           "reason": "documents the backup as retained audit evidence for removed gateway/cron/protocol modules"
         }
       ],
@@ -397,7 +382,7 @@
       ],
       "coverageEvidence": [
         {
-          "path": "Docs/Documentation/engineering/minicode-app-projection.md",
+          "path": "Docs/Documentation/engineering/repoterm-app-projection.md",
           "reason": "backup is explicitly tied to removed-module audit value"
         },
         {
@@ -410,23 +395,14 @@
     },
     {
       "path": "experiments",
+      "presencePolicy": "optional-workspace-material",
       "historicalAliases": [
         "paper_experiments"
       ],
       "identity": "research-material-or-tool-app",
-      "status": "inventory-recorded-burndown-started",
-      "burndownManifest": "Docs/Documentation/engineering/material-burndown/experiments.json",
-      "callerSummary": "No product caller; retained as a research evidence root while the executable retrieval-probe path is now rebound to benchmark and test support files.",
-      "currentCallers": [
-        {
-          "path": "benchmarks/paper_a_retrieval_probe_eval.py",
-          "reason": "current research benchmark entry regenerates the reproducible retrieval-probe artifacts"
-        },
-        {
-          "path": "tests/test_paper_a_retrieval_probe_eval.py",
-          "reason": "focused pytest gate keeps the research benchmark surface executable"
-        }
-      ],
+      "status": "archive-approved-research-material-deleted",
+      "callerSummary": "No product caller; historical research artifacts were removed from the product repository after their AgentOps replacement evidence was published.",
+      "currentCallers": [],
       "observedEntries": [
         {
           "name": "retrieval-probe-command",
@@ -446,38 +422,25 @@
       ],
       "coverageEvidence": [
         {
-          "path": "Docs/Documentation/engineering/material-burndown/experiments.json",
-          "reason": "research entry, executable rebound, and residual artifact-backed risk are tracked capability-by-capability"
-        },
-        {
-          "path": "Docs/Documentation/engineering/minicode-app-projection.md",
-          "reason": "research root is classified and linked to a remaining boundary decision"
+          "path": "Docs/Documentation/engineering/repoterm-app-projection.md",
+          "reason": "research root deletion is recorded against the current product boundary"
         },
         {
           "path": "tests/test_engineering_inventory.py",
           "reason": "inventory schema and path coverage are enforced"
         }
       ],
-      "replacementTarget": "tool/app research boundary or external research workspace",
-      "retirementCondition": "Research entry is explicitly modeled as its own tool/app, or moved out of the product workspace with updated evidence links."
+      "replacementTarget": "benchmarks/eval-methodology.md and benchmarks/traces",
+      "retirementCondition": "Completed: obsolete paper research artifacts were removed; current AgentOps evidence remains reproducible."
     },
     {
       "path": "outputs",
       "presencePolicy": "optional-workspace-material",
       "historicalAliases": [],
       "identity": "generated-evidence-archive",
-      "status": "evidence-archive",
-      "callerSummary": "Generated evidence archive for paper and smoke results; consumed by reports rather than by the live product runtime.",
-      "currentCallers": [
-        {
-          "path": "Docs/Documentation/superpowers/reports/2026-06-06-study-code-mas-architecture-verify.md",
-          "reason": "verification report cites outputs artifacts"
-        },
-        {
-          "path": "openspec/changes/study-code-mas-architecture/smoke-failure-annotation-and-blocker-note.md",
-          "reason": "study notes cite concrete outputs manifests and result files"
-        }
-      ],
+      "status": "generated-evidence-archive-cleaned",
+      "callerSummary": "Generated paper artifacts were removed; current evaluation reports live under benchmarks and are reproducible from checked-in runners.",
+      "currentCallers": [],
       "observedEntries": [
         {
           "name": "paper-a-external-projection-provider-preflight",
@@ -497,7 +460,7 @@
       ],
       "coverageEvidence": [
         {
-          "path": "Docs/Documentation/engineering/minicode-app-projection.md",
+          "path": "Docs/Documentation/engineering/repoterm-app-projection.md",
           "reason": "outputs root is recorded as generated evidence archive"
         },
         {
@@ -505,105 +468,30 @@
           "reason": "inventory schema and path coverage are enforced"
         }
       ],
-      "replacementTarget": "linked reports or reproducible gates",
-      "retirementCondition": "Artifacts are linked from reports or can be regenerated from current gates without losing evidence continuity."
+      "replacementTarget": "benchmarks reports and reproducible gates",
+      "retirementCondition": "Completed for obsolete paper outputs; current reports remain linked and reproducible."
     }
   ],
   "focusedGates": [
     {
       "name": "compileall",
-      "command": "python -m compileall -q minicode tests benchmarks Main Package",
-      "portableFallback": "python3 -m compileall -q minicode tests benchmarks Main Package"
+      "command": "python -m compileall -q repoterm tests benchmarks Main Package",
+      "portableFallback": "python3 -m compileall -q repoterm tests benchmarks Main Package"
     },
     {
       "name": "product-entry-gates",
-      "command": "python -m pytest -q --import-mode=importlib Main/MinicodeFrontline/Test/Application/Dto/AppProjection.Test.py Main/MinicodeFrontline/Test/Application/Entry/MiniCodeFrontline.Test.py Main/MinicodeFrontline/Test/Application/Entry/LocalCommandSurface.Test.py Main/MinicodeFrontline/Test/Application/Entry/RuntimeLifecycleSurface.Test.py Main/MinicodeFrontline/Test/Application/Query/CurrentRuntimeProjection.Test.py Main/MinicodeFrontline/Test/Application/Query/RuntimeCapabilityInventory.Test.py Package/EngineeringStructure/Test/Application/Query/ProductRootProjection.Test.py Package/EngineeringStructure/Test/Application/Query/StructureCompliance.Test.py tests/test_packaging.py tests/test_cli_commands.py tests/test_engineering_inventory.py tests/test_engineering_structure.py",
-      "portableFallback": "python3 -m pytest -q --import-mode=importlib Main/MinicodeFrontline/Test/Application/Dto/AppProjection.Test.py Main/MinicodeFrontline/Test/Application/Entry/MiniCodeFrontline.Test.py Main/MinicodeFrontline/Test/Application/Entry/LocalCommandSurface.Test.py Main/MinicodeFrontline/Test/Application/Entry/RuntimeLifecycleSurface.Test.py Main/MinicodeFrontline/Test/Application/Query/CurrentRuntimeProjection.Test.py Main/MinicodeFrontline/Test/Application/Query/RuntimeCapabilityInventory.Test.py Package/EngineeringStructure/Test/Application/Query/ProductRootProjection.Test.py Package/EngineeringStructure/Test/Application/Query/StructureCompliance.Test.py tests/test_packaging.py tests/test_cli_commands.py tests/test_engineering_inventory.py tests/test_engineering_structure.py"
+      "command": "python -m pytest -q --import-mode=importlib Main/RepoTermFrontline/Test/Application/Dto/AppProjection.Test.py Main/RepoTermFrontline/Test/Application/Entry/RepoTermFrontline.Test.py Main/RepoTermFrontline/Test/Application/Entry/LocalCommandSurface.Test.py Main/RepoTermFrontline/Test/Application/Entry/RuntimeLifecycleSurface.Test.py Main/RepoTermFrontline/Test/Application/Query/CurrentRuntimeProjection.Test.py Main/RepoTermFrontline/Test/Application/Query/RuntimeCapabilityInventory.Test.py Package/EngineeringStructure/Test/Application/Query/ProductRootProjection.Test.py Package/EngineeringStructure/Test/Application/Query/StructureCompliance.Test.py tests/test_cli_commands.py tests/test_engineering_inventory.py tests/test_engineering_structure.py",
+      "portableFallback": "python3 -m pytest -q --import-mode=importlib Main/RepoTermFrontline/Test/Application/Dto/AppProjection.Test.py Main/RepoTermFrontline/Test/Application/Entry/RepoTermFrontline.Test.py Main/RepoTermFrontline/Test/Application/Entry/LocalCommandSurface.Test.py Main/RepoTermFrontline/Test/Application/Entry/RuntimeLifecycleSurface.Test.py Main/RepoTermFrontline/Test/Application/Query/CurrentRuntimeProjection.Test.py Main/RepoTermFrontline/Test/Application/Query/RuntimeCapabilityInventory.Test.py Package/EngineeringStructure/Test/Application/Query/ProductRootProjection.Test.py Package/EngineeringStructure/Test/Application/Query/StructureCompliance.Test.py tests/test_cli_commands.py tests/test_engineering_inventory.py tests/test_engineering_structure.py"
     },
     {
       "name": "structure-compliance",
-      "command": "python -m minicode.structure_check --root . --hotspots 5 --max-dependency-upstream 4 --check-material-inventory --report .temp/structure-compliance.json",
-      "portableFallback": "python3 -m minicode.structure_check --root . --hotspots 5 --max-dependency-upstream 4 --check-material-inventory --report .temp/structure-compliance.json"
-    },
-    {
-      "name": "structure-compliance-artifact",
-      "command": "python -m minicode.release_readiness --check-structure-compliance-artifact .temp/structure-compliance.json",
-      "portableFallback": "python3 -m minicode.release_readiness --check-structure-compliance-artifact .temp/structure-compliance.json"
+      "command": "python -m repoterm.structure_check --root . --hotspots 5 --max-dependency-upstream 4 --check-material-inventory --report .temp/structure-compliance.json",
+      "portableFallback": "python3 -m repoterm.structure_check --root . --hotspots 5 --max-dependency-upstream 4 --check-material-inventory --report .temp/structure-compliance.json"
     },
     {
       "name": "readiness-gate",
-      "command": "python -m minicode.readiness --json --fail-on blocked",
-      "portableFallback": "python3 -m minicode.readiness --json --fail-on blocked"
-    },
-    {
-      "name": "readiness-fallback-examples",
-      "command": "python -m minicode.readiness --examples-out .temp/readiness-fallback-examples.json --fail-on blocked",
-      "portableFallback": "python3 -m minicode.readiness --examples-out .temp/readiness-fallback-examples.json --fail-on blocked"
-    },
-    {
-      "name": "readiness-doctor",
-      "command": "python -m minicode.readiness --doctor-out .temp/readiness-doctor.md --fail-on blocked",
-      "portableFallback": "python3 -m minicode.readiness --doctor-out .temp/readiness-doctor.md --fail-on blocked"
-    },
-    {
-      "name": "readiness-repair-plan",
-      "command": "python -m minicode.readiness --repair-plan-out .temp/readiness-repair-plan.json --fail-on blocked",
-      "portableFallback": "python3 -m minicode.readiness --repair-plan-out .temp/readiness-repair-plan.json --fail-on blocked"
-    },
-    {
-      "name": "readiness-patch-preview",
-      "command": "python -m minicode.readiness --patch-preview-out .temp/readiness-fallback-patch-preview.json --fail-on blocked",
-      "portableFallback": "python3 -m minicode.readiness --patch-preview-out .temp/readiness-fallback-patch-preview.json --fail-on blocked"
-    },
-    {
-      "name": "readiness-bundle",
-      "command": "python -m minicode.readiness --bundle-out .temp/readiness-bundle --fail-on blocked",
-      "portableFallback": "python3 -m minicode.readiness --bundle-out .temp/readiness-bundle --fail-on blocked"
-    },
-    {
-      "name": "readiness-artifact-manifest",
-      "command": "python -m minicode.release_readiness --check-artifact-manifest .temp/readiness-artifact-manifest.json",
-      "portableFallback": "python3 -m minicode.release_readiness --check-artifact-manifest .temp/readiness-artifact-manifest.json"
-    },
-    {
-      "name": "readiness-patch-preview-gate",
-      "command": "python -m minicode.release_readiness --check-fallback-patch-preview .temp/readiness-fallback-patch-preview.json",
-      "portableFallback": "python3 -m minicode.release_readiness --check-fallback-patch-preview .temp/readiness-fallback-patch-preview.json"
-    },
-    {
-      "name": "readiness-fallback-simulation-gate",
-      "command": "python -m minicode.release_readiness --check-fallback-simulation .temp/readiness-bundle/readiness-fallback-simulations.json",
-      "portableFallback": "python3 -m minicode.release_readiness --check-fallback-simulation .temp/readiness-bundle/readiness-fallback-simulations.json"
-    },
-    {
-      "name": "fallback-switch-smoke",
-      "command": "python -m minicode.release_readiness --check-fallback-switch-smoke",
-      "portableFallback": "python3 -m minicode.release_readiness --check-fallback-switch-smoke"
-    },
-    {
-      "name": "readiness-bundle-gate",
-      "command": "python -m minicode.release_readiness --check-readiness-bundle .temp/readiness-bundle",
-      "portableFallback": "python3 -m minicode.release_readiness --check-readiness-bundle .temp/readiness-bundle"
-    },
-    {
-      "name": "release-fallback-evidence-gate",
-      "command": "python -m minicode.release_readiness --check-fallback-evidence benchmarks/release_readiness_results.json",
-      "portableFallback": "python3 -m minicode.release_readiness --check-fallback-evidence benchmarks/release_readiness_results.json"
-    },
-    {
-      "name": "release-report-gate",
-      "command": "python -m minicode.release_readiness --check-release-report benchmarks/release_readiness_results.json",
-      "portableFallback": "python3 -m minicode.release_readiness --check-release-report benchmarks/release_readiness_results.json"
-    },
-    {
-      "name": "release-markdown-report-gate",
-      "command": "python -m minicode.release_readiness --check-release-markdown benchmarks/release_readiness_results.md --release-json benchmarks/release_readiness_results.json",
-      "portableFallback": "python3 -m minicode.release_readiness --check-release-markdown benchmarks/release_readiness_results.md --release-json benchmarks/release_readiness_results.json"
-    },
-    {
-      "name": "paper-a-retrieval-probe-gate",
-      "command": "python -m pytest -q tests/test_paper_a_retrieval_probe_eval.py",
-      "portableFallback": "python3 -m pytest -q tests/test_paper_a_retrieval_probe_eval.py"
+      "command": "python -m repoterm.readiness --json --fail-on blocked",
+      "portableFallback": "python3 -m repoterm.readiness --json --fail-on blocked"
     }
   ]
 }

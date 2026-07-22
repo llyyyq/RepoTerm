@@ -1,4 +1,4 @@
-# MiniCode Python - 使用指南
+# RepoTerm - 使用指南
 
 > 版本: v0.2.0
 > 更新时间: 2026-04-05
@@ -11,7 +11,7 @@
 
 ```bash
 # 运行交互式安装向导
-python -m minicode.main --install
+python -m repoterm.main --install
 ```
 
 安装向导会要求输入：
@@ -19,17 +19,17 @@ python -m minicode.main --install
 - **ANTHROPIC_BASE_URL**: API 地址（默认 `https://api.anthropic.com`）
 - **ANTHROPIC_AUTH_TOKEN**: API 密钥
 
-配置会保存到 `~/.mini-code/settings.json`
+配置会保存到 `~/.repoterm/settings.json`
 
 ### 2. 启动
 
 ```bash
 # 正常启动
-python -m minicode.main
+python -m repoterm.main
 
 # 或使用 mock 模式（无需 API，用于测试）
-set MINI_CODE_MODEL_MODE=mock
-python -m minicode.main
+set REPOTERM_MODEL_MODE=mock
+python -m repoterm.main
 ```
 
 ### 3. 基本使用
@@ -38,11 +38,11 @@ python -m minicode.main
 
 ```
 ╭──────────────────────────────────────────────────────────────╮
-│ MiniCode                  │ provider                         │
+│ RepoTerm                  │ provider                         │
 │                                                                  │
-│ Terminal coding assistant for MiniCode.                        │
+│ Terminal coding assistant for RepoTerm.                        │
 │                                                                  │
-│ minicode                  │ .../Desktop/minicode/py-src        │
+│ repoterm                  │ .../Desktop/repoterm/py-src        │
 │ [provider] offline  [model] mock  [msgs] 0  [events] 0        │
 │ cwd: ...                                                           │
 ╰──────────────────────────────────────────────────────────────╯
@@ -70,30 +70,30 @@ tools on | skills on
 
 ```bash
 # 列出所有保存的会话
-python -m minicode.main --list-sessions
+python -m repoterm.main --list-sessions
 
 # 恢复最近的会话
-python -m minicode.main --resume
+python -m repoterm.main --resume
 
 # 恢复特定会话
-python -m minicode.main --resume abc123def456
+python -m repoterm.main --resume abc123def456
 
 # 使用特定会话 ID 启动
-python -m minicode.main --session abc123def456
+python -m repoterm.main --session abc123def456
 ```
 
 ### 安装
 
 ```bash
 # 运行交互式安装
-python -m minicode.main --install
+python -m repoterm.main --install
 ```
 
 ### 帮助
 
 ```bash
 # 显示帮助信息
-python -m minicode.main --help
+python -m repoterm.main --help
 ```
 
 ---
@@ -178,14 +178,14 @@ python -m minicode.main --help
 ### 自动保存
 
 - 每 30 秒自动保存当前会话
-- 保存位置：`~/.mini-code/sessions/`
+- 保存位置：`~/.repoterm/sessions/`
 - 包含：消息历史、transcript、权限状态、skills、MCP 配置
 
 ### 手动恢复
 
 ```bash
 # 查看所有会话
-python -m minicode.main --list-sessions
+python -m repoterm.main --list-sessions
 
 # 输出示例：
 # Saved sessions:
@@ -199,13 +199,13 @@ python -m minicode.main --list-sessions
 # Total: 2 session(s)
 
 # 恢复会话
-python -m minicode.main --resume abc123de
+python -m repoterm.main --resume abc123de
 ```
 
 ### 会话文件结构
 
 ```
-~/.mini-code/
+~/.repoterm/
 ├── settings.json          # 用户设置
 ├── history.json           # 输入历史（最近 200 条）
 ├── permissions.json       # 权限规则
@@ -224,29 +224,29 @@ python -m minicode.main --resume abc123de
 
 ```bash
 # 列出所有 MCP 服务器
-python -m minicode.main mcp list
+python -m repoterm.main mcp list
 
 # 添加用户级服务器
-python -m minicode.main mcp add myserver -- uvx my-mcp-server
+python -m repoterm.main mcp add myserver -- uvx my-mcp-server
 
 # 添加项目级服务器
-python -m minicode.main mcp add filesystem --project -- npx -y @modelcontextprotocol/server-filesystem .
+python -m repoterm.main mcp add filesystem --project -- npx -y @modelcontextprotocol/server-filesystem .
 
 # 移除服务器
-python -m minicode.main mcp remove myserver
+python -m repoterm.main mcp remove myserver
 ```
 
 ### Skills
 
 ```bash
 # 列出所有技能
-python -m minicode.main skills list
+python -m repoterm.main skills list
 
 # 添加技能
-python -m minicode.main skills add ~/skills/frontend-dev --name frontend-dev
+python -m repoterm.main skills add ~/skills/frontend-dev --name frontend-dev
 
 # 移除技能
-python -m minicode.main skills remove frontend-dev
+python -m repoterm.main skills remove frontend-dev
 ```
 
 ---
@@ -284,7 +284,7 @@ assistant
 
 Action Required              │ Permission
 ───────────────────────────────────────────
-mini-code wants to apply a file modification
+repoterm wants to apply a file modification
 
 target: D:\project\main.py
 
@@ -310,14 +310,14 @@ target: D:\project\main.py
 
 ### 配置文件优先级
 
-1. `~/.mini-code/settings.json` - 用户级设置
-2. `~/.mini-code/mcp.json` - 用户级 MCP 配置
+1. `~/.repoterm/settings.json` - 用户级设置
+2. `~/.repoterm/mcp.json` - 用户级 MCP 配置
 3. `.mcp.json` - 项目级 MCP 配置
 4. 环境变量
 
 ### 示例配置
 
-`~/.mini-code/settings.json`:
+`~/.repoterm/settings.json`:
 
 ```json
 {
@@ -340,12 +340,12 @@ target: D:\project\main.py
 
 ```bash
 # Windows
-set MINI_CODE_MODEL_MODE=mock
-python -m minicode.main
+set REPOTERM_MODEL_MODE=mock
+python -m repoterm.main
 
 # Unix/Linux/macOS
-export MINI_CODE_MODEL_MODE=mock
-python -m minicode.main
+export REPOTERM_MODEL_MODE=mock
+python -m repoterm.main
 ```
 
 Mock 模式会：
@@ -384,10 +384,10 @@ tools on | skills on
 **解决**: 运行安装向导或手动配置：
 
 ```bash
-python -m minicode.main --install
+python -m repoterm.main --install
 ```
 
-或创建 `~/.mini-code/settings.json`：
+或创建 `~/.repoterm/settings.json`：
 
 ```json
 {
@@ -411,16 +411,15 @@ python -m minicode.main --install
 **解决**: 检查会话文件：
 
 ```bash
-ls ~/.mini-code/sessions/
-cat ~/.mini-code/sessions_index.json
+ls ~/.repoterm/sessions/
+cat ~/.repoterm/sessions_index.json
 ```
 
 ---
 
 ## 📚 更多资源
 
-- [当前包结构](STRUCTURE.md)
-- [当前产品边界](engineering/minicode-app-projection.md)
+- [当前产品边界](engineering/repoterm-app-projection.md)
 - [工程材料清单](engineering/material-inventory.json)
 - [历史参考索引](CODE_WIKI.md)
 
@@ -428,7 +427,7 @@ cat ~/.mini-code/sessions_index.json
 
 ## 🎉 享受使用！
 
-MiniCode Python 是一个轻量级但功能完整的终端编码助手。
+RepoTerm 是一个轻量级但功能完整的终端编码助手。
 
 **主要特性**:
 - ✅ 完整的 Agent Loop

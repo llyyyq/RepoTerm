@@ -1,9 +1,9 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "minicode-py"
+name = "repoterm"
 version = "0.1.0"
 description = "A lightweight terminal coding assistant for local development workflows."
 readme = "README.md"
@@ -14,10 +14,10 @@ dependencies = []
 dev = ["pytest>=8.0.0", "hypothesis>=6.0.0", "setuptools>=68"]
 
 [project.scripts]
-minicode-py = "minicode.main:main"
-minicode-headless = "minicode.headless:main"
-minicode-readiness = "minicode.readiness:main"
-minicode-structure-check = "minicode.structure_check:main"
+repoterm = "repoterm.main:main"
+repoterm-headless = "repoterm.headless:main"
+repoterm-readiness = "repoterm.readiness:main"
+repoterm-structure-check = "repoterm.structure_check:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
@@ -28,7 +28,7 @@ package-dir = {"" = "."}
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["minicode*", "Main*", "Package*"]
+include = ["repoterm*", "Main*", "Package*"]
 namespaces = true
 
 

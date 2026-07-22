@@ -1,4 +1,4 @@
-"""End-to-end integration tests for MiniCode Python.
+"""End-to-end integration tests for RepoTerm.
 
 Tests the full pipeline: agent loop → model → tool execution → message flow,
 using the MockModelAdapter (no API key needed).
@@ -23,17 +23,17 @@ import pytest
 # Ensure py-src is on path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from minicode.agent_loop import run_agent_turn
-from minicode.mock_model import MockModelAdapter
-from minicode.permissions import PermissionManager
-from minicode.tooling import ToolContext, ToolRegistry, ToolDefinition, ToolResult
-from minicode.tools import create_default_tool_registry
-from minicode.types import AgentStep, ChatMessage
-from minicode.context_manager import ContextManager
-from minicode.session import SessionData, save_session, load_session, list_sessions
-from minicode.config import load_effective_settings, MINI_CODE_DIR
-from minicode.prompt import build_system_prompt
-from minicode.tui.types import TranscriptEntry, _create_transcript_entry, _recycle_transcript_entry
+from repoterm.agent_loop import run_agent_turn
+from repoterm.mock_model import MockModelAdapter
+from repoterm.permissions import PermissionManager
+from repoterm.tooling import ToolContext, ToolRegistry, ToolDefinition, ToolResult
+from repoterm.tools import create_default_tool_registry
+from repoterm.types import AgentStep, ChatMessage
+from repoterm.context_manager import ContextManager
+from repoterm.session import SessionData, save_session, load_session, list_sessions
+from repoterm.config import load_effective_settings, REPOTERM_DIR
+from repoterm.prompt import build_system_prompt
+from repoterm.tui.types import TranscriptEntry, _create_transcript_entry, _recycle_transcript_entry
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +52,7 @@ def tmp_workspace(tmp_path: Path) -> Path:
                 return f"Hello, {name}!"
 
             if __name__ == "__main__":
-                print(greet("MiniCode"))
+                print(greet("RepoTerm"))
         """),
         encoding="utf-8",
     )
@@ -208,7 +208,7 @@ class TestAgentLoopIntegration:
         """Agent receives /edit → calls edit_file tool → file is modified."""
         system_messages.append({
             "role": "user",
-            "content": "/edit hello.txt::Hello, world!::Hello, MiniCode!",
+            "content": "/edit hello.txt::Hello, world!::Hello, RepoTerm!",
         })
 
         result = run_agent_turn(
@@ -220,7 +220,7 @@ class TestAgentLoopIntegration:
         )
 
         content = (tmp_workspace / "hello.txt").read_text(encoding="utf-8")
-        assert "Hello, MiniCode!" in content
+        assert "Hello, RepoTerm!" in content
         assert "Hello, world!" not in content
 
     def test_grep_files_via_agent(
@@ -499,7 +499,7 @@ class TestSessionIntegration:
         assert loaded.workspace == str(tmp_workspace)
 
         # Cleanup
-        session_path = MINI_CODE_DIR / "sessions" / "test-integration-001.json"
+        session_path = REPOTERM_DIR / "sessions" / "test-integration-001.json"
         if session_path.exists():
             session_path.unlink()
 
@@ -522,7 +522,7 @@ class TestSessionIntegration:
 
         # Cleanup
         for i in range(3):
-            path = MINI_CODE_DIR / "sessions" / f"test-list-{i:03d}.json"
+            path = REPOTERM_DIR / "sessions" / f"test-list-{i:03d}.json"
             if path.exists():
                 path.unlink()
 
@@ -719,7 +719,7 @@ class TestLiveAPI:
 
     def test_simple_question(self, tools, tmp_workspace, auto_allow_permissions):
         """Send a simple question to the real API and verify response."""
-        from minicode.anthropic_adapter import AnthropicModelAdapter
+        from repoterm.anthropic_adapter import AnthropicModelAdapter
 
         runtime = {
             "model": os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
@@ -750,7 +750,7 @@ class TestLiveAPI:
 
     def test_tool_use_via_api(self, tools, tmp_workspace, auto_allow_permissions):
         """Real API triggers tool use (list_files) and processes result."""
-        from minicode.anthropic_adapter import AnthropicModelAdapter
+        from repoterm.anthropic_adapter import AnthropicModelAdapter
 
         runtime = {
             "model": os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
@@ -801,7 +801,7 @@ class TestMCPIntegration:
 
     def test_mcp_import_and_create(self):
         """MCP module imports and creates empty tool set."""
-        from minicode.mcp import create_mcp_backed_tools
+        from repoterm.mcp import create_mcp_backed_tools
 
         result = create_mcp_backed_tools(cwd=".", mcp_servers={})
         assert isinstance(result, dict)

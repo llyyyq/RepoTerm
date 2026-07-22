@@ -5,7 +5,7 @@ import tempfile
 import threading
 import time
 
-from minicode.memory import MemoryEntry, MemoryFile, MemoryManager, MemoryScope, MemoryTier
+from repoterm.memory import MemoryEntry, MemoryFile, MemoryManager, MemoryScope, MemoryTier
 
 
 class TestMemoryStressLargeVolume:
@@ -171,7 +171,7 @@ class TestMemoryStressPipeline:
     """Full pipeline stress: rapid read/write/maintain cycles."""
 
     def test_rapid_pipeline_cycles(self):
-        from minicode.memory_pipeline import MemoryPipeline
+        from repoterm.memory_pipeline import MemoryPipeline
 
         with tempfile.TemporaryDirectory() as tmp:
             mgr = MemoryManager(project_root=tmp)

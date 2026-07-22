@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from minicode.agent_loop import run_agent_turn
-from minicode.context_manager import ContextManager
-from minicode.mock_model import MockModelAdapter
-from minicode.permissions import PermissionManager
-from minicode.tools import create_default_tool_registry
+from repoterm.agent_loop import run_agent_turn
+from repoterm.context_manager import ContextManager
+from repoterm.mock_model import MockModelAdapter
+from repoterm.permissions import PermissionManager
+from repoterm.tools import create_default_tool_registry
 
 
 @pytest.fixture

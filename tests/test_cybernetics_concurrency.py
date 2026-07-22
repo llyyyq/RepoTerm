@@ -11,9 +11,9 @@ import time
 
 import pytest
 
-from minicode.feedback_controller import FeedbackController, PIDController, SystemState
-from minicode.state_observer import KalmanFilter, MeasurementVector, StateObserver
-from minicode.context_cybernetics import ContextPIDController
+from repoterm.feedback_controller import FeedbackController, PIDController, SystemState
+from repoterm.state_observer import KalmanFilter, MeasurementVector, StateObserver
+from repoterm.context_cybernetics import ContextPIDController
 
 
 # ── CONCURRENT STRESS ────────────────────────────────────────────────

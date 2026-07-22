@@ -10,7 +10,7 @@ import sys
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from minicode.runtime_profile_eval import (
+from repoterm.runtime_profile_eval import (
     ProviderDiagnostic,
     RuntimeEvalCondition,
     RuntimeEvalScenario,
@@ -20,13 +20,13 @@ from minicode.runtime_profile_eval import (
     runtime_profile_eval_as_dict,
     runtime_profile_eval_as_markdown,
 )
-from minicode.release_readiness import (
+from repoterm.evidence_safety import (
     normalize_evidence_paths,
     redact_sensitive_payload,
     redact_sensitive_text,
 )
-from minicode.tooling import ToolRegistry
-from minicode.types import AgentStep, ChatMessage, ModelAdapter
+from repoterm.tooling import ToolRegistry
+from repoterm.types import AgentStep, ChatMessage, ModelAdapter
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -150,7 +150,7 @@ def _classify_provider_diagnostic(
         risk_scope = "external-provider"
         guidance = [
             "Check upstream provider availability and retry the headless provider smoke.",
-            "Configure fallbackModels or provider-specific fallback models before relying on live-provider release evidence.",
+            "Configure fallbackModels or provider-specific fallback models before relying on real-provider evaluation evidence.",
         ]
     elif any(
         marker in combined
@@ -226,7 +226,7 @@ def _classify_provider_diagnostic(
 
 
 def collect_provider_diagnostics() -> list[ProviderDiagnostic]:
-    command = [sys.executable, "-m", "minicode.headless", "Reply with exactly OK."]
+    command = [sys.executable, "-m", "repoterm.headless", "Reply with exactly OK."]
     trace_artifact = REPO_ROOT / ".temp" / "headless-provider-smoke-trace.json"
     trace_artifact.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -234,7 +234,7 @@ def collect_provider_diagnostics() -> list[ProviderDiagnostic]:
     except FileNotFoundError:
         pass
     env = dict(os.environ)
-    env["MINI_CODE_HEADLESS_MESSAGES_OUT"] = str(trace_artifact)
+    env["REPOTERM_HEADLESS_MESSAGES_OUT"] = str(trace_artifact)
     try:
         completed = subprocess.run(
             command,

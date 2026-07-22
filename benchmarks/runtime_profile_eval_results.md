@@ -27,7 +27,7 @@
 
 | label | outcome | category | retryable | ownership | recovery_action | risk_scope | readiness | repair_steps | trace | error_code | request_id | exit_code | summary |
 | --- | --- | --- | --- | --- | --- | --- | --- | ---: | --- | --- | --- | ---: | --- |
-| headless-smoke | provider_channel_unavailable | configuration | no | local-configuration | Repair model-to-provider channel configuration. | provider-config | blocked | 6 | .temp/headless-provider-smoke-trace.json | - | - | 1 | 2026-07-17 14:57:56,583 [WARNING] minicode.config: Project .mcp.json found at .mcp.json but NOT loaded (security: use --... |
+| headless-smoke | provider_channel_unavailable | configuration | no | local-configuration | Repair model-to-provider channel configuration. | provider-config | blocked | 6 | .temp/headless-provider-smoke-trace.json | - | - | 1 | 2026-07-17 14:57:56,583 [WARNING] repoterm.config: Project .mcp.json found at .mcp.json but NOT loaded (security: use --... |
 
 Guidance for `headless-smoke`:
 - Verify the selected model group and provider channel configuration.

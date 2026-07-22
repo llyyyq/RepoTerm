@@ -8,7 +8,7 @@
     "approvedAt": "2026-06-29",
     "approvedBy": "workspace owner via chat",
     "approvedAction": "archival deletion allowed after inventory gates pass",
-    "retainedInPlace": true
+    "retainedInPlace": false
   },
   "summary": {
     "fileCountExcludingNestedPySrcAndNodeModules": 67,
@@ -19,12 +19,12 @@
     "docsReferenceCallerCount": 1,
     "delegatedNestedMaterialCount": 1
   },
-  "dispositionPolicy": "Archive-approved reference material. CODE_WIKI links are explicitly historical and current product-facing docs no longer link into ts-src.",
+  "dispositionPolicy": "Archive-approved reference material was removed from the product repository. CODE_WIKI links are explicitly historical and current product-facing docs no longer link into ts-src.",
   "entries": [
     {
       "path": "ts-src/package.json",
       "status": "legacy-node-package-no-product-caller",
-      "disposition": "retained-reference",
+      "disposition": "archived-deleted",
       "currentReferences": [
         {
           "path": "Docs/Documentation/CODE_WIKI.md",
@@ -37,16 +37,16 @@
           "reason": "Current product package and console entry points are Python-owned."
         },
         {
-          "path": "minicode/main.py",
+          "path": "repoterm/main.py",
           "reason": "Current interactive product lifecycle enters through the Python CLI."
         }
       ],
       "nextAction": "Do not treat the Node package as a product launcher unless a current product owner restores a TypeScript app boundary."
     },
     {
-      "path": "ts-src/bin/minicode",
+      "path": "ts-src/bin/repoterm",
       "status": "legacy-launcher-no-product-caller",
-      "disposition": "retained-reference",
+      "disposition": "archived-deleted",
       "currentReferences": [
         {
           "path": "Docs/Documentation/CODE_WIKI.md",
@@ -64,7 +64,7 @@
     {
       "path": "ts-src/src/index.ts",
       "status": "legacy-cli-entry-no-product-caller",
-      "disposition": "retained-reference",
+      "disposition": "archived-deleted",
       "currentReferences": [
         {
           "path": "Docs/Documentation/CODE_WIKI.md",
@@ -73,11 +73,11 @@
       ],
       "replacementEvidence": [
         {
-          "path": "minicode/main.py",
+          "path": "repoterm/main.py",
           "reason": "Current interactive CLI lifecycle is owned by the Python app."
         },
         {
-          "path": "minicode/headless.py",
+          "path": "repoterm/headless.py",
           "reason": "Current non-interactive automation lifecycle is owned by the Python app."
         }
       ],
@@ -86,12 +86,12 @@
     {
       "path": "ts-src/docs/index.html",
       "status": "legacy-docs-site-reference",
-      "disposition": "retained-reference",
+      "disposition": "archived-deleted",
       "currentReferences": [],
       "replacementEvidence": [
         {
-          "path": "Docs/Documentation/assets/readme/minicode-terminal-hero.html",
-          "reason": "Current product-facing README asset work lives under Docs/Documentation/assets."
+          "path": "README.md",
+          "reason": "The current product-facing overview and evidence entry live in the root README."
         }
       ],
       "nextAction": "Migrate any still-useful user-facing site asset into Docs/Documentation/assets before deleting the TypeScript docs site."
@@ -99,15 +99,15 @@
     {
       "path": "ts-src/ARCHITECTURE_ZH.md",
       "status": "legacy-reference-doc-linked",
-      "disposition": "retained-reference",
+      "disposition": "archived-deleted",
       "currentReferences": [],
       "replacementEvidence": [
         {
-          "path": "Docs/Documentation/STRUCTURE.md",
-          "reason": "Current package structure is documented from the Python app source."
+          "path": "Docs/Documentation/engineering/repoterm-app-projection.md",
+          "reason": "Current package structure and product boundary are documented from the Python app source."
         },
         {
-          "path": "Docs/Documentation/engineering/minicode-app-projection.md",
+          "path": "Docs/Documentation/engineering/repoterm-app-projection.md",
           "reason": "Current product boundary and material classification are documented there."
         }
       ],
@@ -116,7 +116,7 @@
     {
       "path": "ts-src/py-src",
       "status": "delegated-nested-material",
-      "disposition": "delegated",
+      "disposition": "archived-deleted",
       "currentReferences": [
         {
           "path": "Docs/Documentation/engineering/material-burndown/ts-src-py-src.json",

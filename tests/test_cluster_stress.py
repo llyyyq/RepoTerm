@@ -1,4 +1,4 @@
-"""Cluster/concurrent stress tests for MiniCode.
+"""Cluster/concurrent stress tests for RepoTerm.
 
 Tests multiple agent loops running concurrently to verify thread safety,
 performance, and resource limit enforcement under load.
@@ -18,13 +18,13 @@ try:
 except ImportError:
     pytest = None
 
-from minicode.agent_intelligence import ErrorClassifier
-from minicode.agent_loop import run_agent_turn
-from minicode.agent_metrics import AgentMetricsCollector
-from minicode.context_manager import ContextManager
-from minicode.memory import MemoryManager, MemoryScope
-from minicode.tooling import ToolContext, ToolDefinition, ToolRegistry, ToolResult
-from minicode.types import AgentStep, ChatMessage, ModelAdapter
+from repoterm.agent_intelligence import ErrorClassifier
+from repoterm.agent_loop import run_agent_turn
+from repoterm.agent_metrics import AgentMetricsCollector
+from repoterm.context_manager import ContextManager
+from repoterm.memory import MemoryManager, MemoryScope
+from repoterm.tooling import ToolContext, ToolDefinition, ToolRegistry, ToolResult
+from repoterm.types import AgentStep, ChatMessage, ModelAdapter
 
 
 class DelayedModel(ModelAdapter):
@@ -56,7 +56,7 @@ class ConcurrentToolRegistry:
         self._concurrent_max = 0
         self._current_executions = 0
         
-        from minicode.tooling import ToolMetadata, ToolCapability
+        from repoterm.tooling import ToolMetadata, ToolCapability
         
         tools = []
         for i in range(num_tools):

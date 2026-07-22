@@ -1,4 +1,4 @@
-"""End-to-end workflow tests for the MiniCode memory system.
+"""End-to-end workflow tests for the RepoTerm memory system.
 
 Covers full agent loops with memory retrieval, multi-turn accumulation,
 cross-session recovery, context-driven behavior, Chinese language support,
@@ -17,20 +17,20 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from minicode.memory import (
+from repoterm.memory import (
     MemoryEntry,
     MemoryManager,
     MemoryScope,
     inject_memory_into_prompt,
     _tokenize,
 )
-from minicode.agent_loop import run_agent_turn
-from minicode.mock_model import MockModelAdapter
-from minicode.permissions import PermissionManager
-from minicode.tools import create_default_tool_registry
-from minicode.prompt import build_system_prompt
-from minicode.context_manager import ContextManager
-from minicode.types import AgentStep
+from repoterm.agent_loop import run_agent_turn
+from repoterm.mock_model import MockModelAdapter
+from repoterm.permissions import PermissionManager
+from repoterm.tools import create_default_tool_registry
+from repoterm.prompt import build_system_prompt
+from repoterm.context_manager import ContextManager
+from repoterm.types import AgentStep
 
 
 # ---------------------------------------------------------------------------
@@ -343,7 +343,7 @@ class TestMultiTurnMemoryAccumulation:
                 permissions=auto_allow_permissions,
             )
 
-        memory_json = tmp_workspace / ".mini-code-memory" / "memory.json"
+        memory_json = tmp_workspace / ".repoterm-memory" / "memory.json"
         assert memory_json.exists()
 
         data = json.loads(memory_json.read_text(encoding="utf-8"))
@@ -853,7 +853,7 @@ class TestMemoryCorruptionRecoveryE2E:
         project_entries_before = mm1.memories[MemoryScope.PROJECT].entries
         assert len(project_entries_before) == 3
 
-        memory_json = tmp_workspace / ".mini-code-memory" / "memory.json"
+        memory_json = tmp_workspace / ".repoterm-memory" / "memory.json"
         corrupted_data = {
             "scope": "project",
             "entries": [
@@ -881,7 +881,7 @@ class TestMemoryCorruptionRecoveryE2E:
     def test_totally_corrupt_json_recovers_gracefully(
         self, tmp_workspace,
     ):
-        memory_dir = tmp_workspace / ".mini-code-memory"
+        memory_dir = tmp_workspace / ".repoterm-memory"
         memory_dir.mkdir()
         memory_json = memory_dir / "memory.json"
 
@@ -904,7 +904,7 @@ class TestMemoryCorruptionRecoveryE2E:
     def test_empty_json_file_recovers_gracefully(
         self, tmp_workspace,
     ):
-        memory_dir = tmp_workspace / ".mini-code-memory"
+        memory_dir = tmp_workspace / ".repoterm-memory"
         memory_dir.mkdir()
         memory_json = memory_dir / "memory.json"
 
@@ -917,7 +917,7 @@ class TestMemoryCorruptionRecoveryE2E:
     def test_partial_json_with_valid_entries_recovers(
         self, tmp_workspace,
     ):
-        memory_dir = tmp_workspace / ".mini-code-memory"
+        memory_dir = tmp_workspace / ".repoterm-memory"
         memory_dir.mkdir()
         memory_json = memory_dir / "memory.json"
 
@@ -954,7 +954,7 @@ class TestMemoryCorruptionRecoveryE2E:
             "Local entry before corruption",
         )
 
-        local_json = tmp_workspace / ".mini-code-memory-local" / "memory.json"
+        local_json = tmp_workspace / ".repoterm-memory-local" / "memory.json"
         local_json.write_text("corrupted data here", encoding="utf-8")
 
         mm2 = MemoryManager(project_root=tmp_workspace)
@@ -973,7 +973,7 @@ class TestMemoryCorruptionRecoveryE2E:
             "Valid architecture entry",
         )
 
-        memory_json = tmp_workspace / ".mini-code-memory" / "memory.json"
+        memory_json = tmp_workspace / ".repoterm-memory" / "memory.json"
 
         corrupted = {
             "scope": "project",

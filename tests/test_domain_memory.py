@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import time
 
-from minicode.agent_reflection import ReflectionEngine, ReflectionResult
-from minicode.domain_classifier import (
+from repoterm.agent_reflection import ReflectionEngine, ReflectionResult
+from repoterm.domain_classifier import (
     DomainType,
     classify,
     get_active_domain_values,
 )
-from minicode.memory import MemoryEntry, MemoryFile, MemoryManager, MemoryScope
+from repoterm.memory import MemoryEntry, MemoryFile, MemoryManager, MemoryScope
 
 
 # ── Domain Classifier ───────────────────────────────────────────────
@@ -75,32 +75,32 @@ class TestDomainClassifier:
 
 class TestDomainQueryExpansion:
     def test_frontend_expansion(self):
-        from minicode.memory import _expand_query_terms
+        from repoterm.memory import _expand_query_terms
         terms = _expand_query_terms(["component"], active_domains=["frontend"])
         assert "widget" in terms or "组件" in terms
 
     def test_backend_expansion(self):
-        from minicode.memory import _expand_query_terms
+        from repoterm.memory import _expand_query_terms
         terms = _expand_query_terms(["api"], active_domains=["backend"])
         assert "endpoint" in terms or "端点" in terms
 
     def test_database_expansion(self):
-        from minicode.memory import _expand_query_terms
+        from repoterm.memory import _expand_query_terms
         terms = _expand_query_terms(["migration"], active_domains=["database"])
         assert "alembic" in terms or "迁移" in terms
 
     def test_devops_expansion(self):
-        from minicode.memory import _expand_query_terms
+        from repoterm.memory import _expand_query_terms
         terms = _expand_query_terms(["deploy"], active_domains=["devops"])
         assert "部署" in terms or "release" in terms
 
     def test_base_expansion_still_works(self):
-        from minicode.memory import _expand_query_terms
+        from repoterm.memory import _expand_query_terms
         terms = _expand_query_terms(["function"])
         assert "func" in terms
 
     def test_no_domains_no_domain_expansion(self):
-        from minicode.memory import _expand_query_terms
+        from repoterm.memory import _expand_query_terms
         with_domains = _expand_query_terms(["component"], active_domains=["frontend"])
         without = _expand_query_terms(["component"])
         assert len(with_domains) > len(without)

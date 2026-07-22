@@ -9,18 +9,18 @@ from __future__ import annotations
 
 import time
 
-from minicode.adaptive_pid_tuner import AdaptivePIDTuner
-from minicode.context_cybernetics import ContextCyberneticsOrchestrator
-from minicode.context_compactor import ContextCompactor, AutoCompactConfig
-from minicode.cost_control import CostControlLoop
-from minicode.cybernetic_supervisor import CyberneticSupervisor
-from minicode.feedback_controller import (
+from repoterm.adaptive_pid_tuner import AdaptivePIDTuner
+from repoterm.context_cybernetics import ContextCyberneticsOrchestrator
+from repoterm.context_compactor import ContextCompactor, AutoCompactConfig
+from repoterm.cost_control import CostControlLoop
+from repoterm.cybernetic_supervisor import CyberneticSupervisor
+from repoterm.feedback_controller import (
     ControlSignal,
     FeedbackController,
     SystemState,
 )
-from minicode.self_healing_engine import SelfHealingEngine
-from minicode.state_observer import MeasurementVector, StateObserver
+from repoterm.self_healing_engine import SelfHealingEngine
+from repoterm.state_observer import MeasurementVector, StateObserver
 
 
 class TestTunerToPIDChain:
@@ -35,7 +35,7 @@ class TestTunerToPIDChain:
 
     def test_tuner_params_can_be_applied(self):
         tuner = AdaptivePIDTuner()
-        from minicode.context_cybernetics import ContextPIDController
+        from repoterm.context_cybernetics import ContextPIDController
         pid = ContextPIDController()
         params = tuner.tune(error=0.15, dt=1.0, performance_score=0.6)
         pid.kp = params.kp
@@ -139,7 +139,7 @@ class TestSupervisorAggregation:
 
     def test_mixed_snapshots(self):
         supervisor = CyberneticSupervisor()
-        from minicode.cybernetic_supervisor import ControlSnapshot
+        from repoterm.cybernetic_supervisor import ControlSnapshot
 
         snapshots = [
             ControlSnapshot(

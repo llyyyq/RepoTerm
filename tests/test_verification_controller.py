@@ -1,7 +1,7 @@
-from minicode.intent_parser import ActionType, IntentType, ParsedIntent
-from minicode.pipeline_engine import Step, StepExecutor, StepType
-from minicode.task_object import ConstraintType, TaskObject
-from minicode.verification_controller import (
+from repoterm.intent_parser import ActionType, IntentType, ParsedIntent
+from repoterm.pipeline_engine import Step, StepExecutor, StepType
+from repoterm.task_object import ConstraintType, TaskObject
+from repoterm.verification_controller import (
     VerificationController,
     VerificationMode,
     VerificationRisk,
@@ -44,7 +44,7 @@ class TestVerificationController:
         controller = VerificationController()
         plan = controller.plan(
             VerificationSignal(
-                changed_files=["minicode/context_cybernetics.py"],
+                changed_files=["repoterm/context_cybernetics.py"],
                 intent_type="code",
                 action_type="update",
                 requires_tests=True,
@@ -61,7 +61,7 @@ class TestVerificationController:
         controller = VerificationController()
         plan = controller.plan(
             VerificationSignal(
-                changed_files=["minicode/agent_loop.py", "tests/test_agent_loop.py"],
+                changed_files=["repoterm/agent_loop.py", "tests/test_agent_loop.py"],
                 intent_type="debug",
                 action_type="update",
                 requires_tests=True,
@@ -88,7 +88,7 @@ class TestVerificationController:
     def test_feedback_signal_marks_failed_plan_for_escalation(self):
         controller = VerificationController()
         plan = controller.plan(
-            VerificationSignal(changed_files=["minicode/model_registry.py"], intent_type="code")
+            VerificationSignal(changed_files=["repoterm/model_registry.py"], intent_type="code")
         )
         feedback = controller.update_from_result(plan, passed=False)
         assert feedback.previous_verification_failed is True
@@ -99,7 +99,7 @@ class TestVerificationController:
 class TestVerificationPipelineIntegration:
     def test_pipeline_verify_step_returns_risk_adaptive_plan(self):
         executor = StepExecutor()
-        task = _task(files=["minicode/context_cybernetics.py"])
+        task = _task(files=["repoterm/context_cybernetics.py"])
         step = Step(
             id="verify",
             type=StepType.VERIFY,

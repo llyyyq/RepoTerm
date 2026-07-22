@@ -16,27 +16,27 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class _BlockCybernetic:
-    """Context manager that makes all minicode.cybernetic_* modules unimportable."""
+    """Context manager that makes all repoterm.cybernetic_* modules unimportable."""
 
     CYBERNETIC_PREFIXES = (
-        "minicode.cybernetic_",
-        "minicode.feedback_controller",
-        "minicode.feedforward_controller",
-        "minicode.predictive_controller",
-        "minicode.decoupling_controller",
-        "minicode.adaptive_pid_tuner",
-        "minicode.state_observer",
-        "minicode.progress_controller",
-        "minicode.stability_monitor",
-        "minicode.self_healing_engine",
-        "minicode.verification_controller",
-        "minicode.decision_audit",
+        "repoterm.cybernetic_",
+        "repoterm.feedback_controller",
+        "repoterm.feedforward_controller",
+        "repoterm.predictive_controller",
+        "repoterm.decoupling_controller",
+        "repoterm.adaptive_pid_tuner",
+        "repoterm.state_observer",
+        "repoterm.progress_controller",
+        "repoterm.stability_monitor",
+        "repoterm.self_healing_engine",
+        "repoterm.verification_controller",
+        "repoterm.decision_audit",
     )
 
     # Non-cybernetic modules that lazy-import cybernetic — must be cleared too
     CASCADE_MODULES = (
-        "minicode.agent_loop",
-        "minicode.tty_app",
+        "repoterm.agent_loop",
+        "repoterm.tty_app",
     )
 
     def __init__(self):
@@ -61,7 +61,7 @@ class _BlockCybernetic:
         # from the snapshot: tests in this context manager re-import them under
         # isolation, and writing the stale pre-isolation module object back into
         # sys.modules can split the module identity (sys.modules holds one
-        # object while later ``import minicode.agent_loop`` resolves another),
+        # object while later ``import repoterm.agent_loop`` resolves another),
         # which silently breaks subsequent monkeypatch.setattr() calls in other
         # test files. The robust fix is to drop every cached reference and let
         # the import machinery rebuild a single canonical module on next access.
@@ -84,23 +84,23 @@ def test_core_agent_loop_imports_without_cybernetic():
     """Agent loop must be importable even when cybernetic modules are absent."""
     with _BlockCybernetic():
         # Force re-import
-        if "minicode.agent_loop" in sys.modules:
-            del sys.modules["minicode.agent_loop"]
+        if "repoterm.agent_loop" in sys.modules:
+            del sys.modules["repoterm.agent_loop"]
         # Should not raise
-        from minicode.agent_loop import run_agent_turn  # noqa: F401
+        from repoterm.agent_loop import run_agent_turn  # noqa: F401
         assert True  # reached = success
 
 
 def test_core_tooling_works_without_cybernetic():
     """ToolResult must work without any cybernetic imports."""
-    from minicode.tooling import ToolResult
+    from repoterm.tooling import ToolResult
     result = ToolResult(ok=True, output="test ok")
     assert result.ok is True
 
 
 def test_core_session_works_without_cybernetic(tmp_path):
     """Session persistence must work without cybernetic modules."""
-    from minicode.session import SessionData, save_session
+    from repoterm.session import SessionData, save_session
     sd = SessionData(session_id="test", created_at=0.0, updated_at=0.0, workspace=str(tmp_path))
     save_session(sd)
     assert sd.session_id == "test"
@@ -108,7 +108,7 @@ def test_core_session_works_without_cybernetic(tmp_path):
 
 def test_core_context_manager_without_cybernetic():
     """ContextManager + token estimation must work without cybernetic."""
-    from minicode.context_manager import estimate_message_tokens
+    from repoterm.context_manager import estimate_message_tokens
     tokens = estimate_message_tokens({"role": "user", "content": "Hello world"})
     assert isinstance(tokens, int)
     assert tokens > 0
@@ -118,14 +118,14 @@ def test_core_config_without_cybernetic(monkeypatch):
     """Config loading must work without cybernetic."""
     monkeypatch.setenv("ANTHROPIC_MODEL", "claude-haiku-3-20240307")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    from minicode.config import load_runtime_config
+    from repoterm.config import load_runtime_config
     config = load_runtime_config(".", trust_project_mcp=False)
     assert isinstance(config, dict)
 
 
 def test_core_memory_without_cybernetic(tmp_path):
     """MemoryManager must work without cybernetic."""
-    from minicode.memory import MemoryManager, MemoryScope
+    from repoterm.memory import MemoryManager, MemoryScope
     mgr = MemoryManager(project_root=tmp_path)
     mgr.add_entry(MemoryScope.PROJECT, "test", "hello", ["tag"])
     results = mgr.search("hello")

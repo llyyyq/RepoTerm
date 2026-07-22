@@ -3,7 +3,7 @@
 Runs a complete agent turn with the mock model and checks that every
 major controller in the Sense→Control→Act pipeline was invoked.
 
-This is the definitive "MiniCode is working" test.
+This is the definitive "RepoTerm is working" test.
 """
 from __future__ import annotations
 
@@ -12,12 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from minicode.agent_loop import run_agent_turn
-from minicode.context_manager import ContextManager
-from minicode.mock_model import MockModelAdapter
-from minicode.permissions import PermissionManager
-from minicode.tooling import ToolRegistry
-from minicode.tools import create_default_tool_registry
+from repoterm.agent_loop import run_agent_turn
+from repoterm.context_manager import ContextManager
+from repoterm.mock_model import MockModelAdapter
+from repoterm.permissions import PermissionManager
+from repoterm.tooling import ToolRegistry
+from repoterm.tools import create_default_tool_registry
 
 
 @pytest.fixture
@@ -125,7 +125,7 @@ class TestAgentFlowCybernetics:
         self, monkeypatch, mock_model, tools, messages, workspace, permissions
     ):
         """The agent loop should drive the unified orchestrator lifecycle."""
-        from minicode.cybernetic_orchestrator import CyberneticOrchestrator
+        from repoterm.cybernetic_orchestrator import CyberneticOrchestrator
 
         calls: list[str] = []
 
@@ -180,7 +180,7 @@ class TestAgentMemoryPipeline:
     ):
         """Memory pipeline (domain classify → BM25 → reranker → inject) must work."""
         # Create some memories first to have something to search
-        from minicode.memory import MemoryManager, MemoryScope
+        from repoterm.memory import MemoryManager, MemoryScope
         mgr = MemoryManager(project_root=str(workspace))
         mgr.add_entry(
             scope=MemoryScope.PROJECT, category="pattern",

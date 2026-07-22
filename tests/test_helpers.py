@@ -1,8 +1,8 @@
-"""Test helper utilities for MiniCode tests."""
+"""Test helper utilities for RepoTerm tests."""
 import json
 from pathlib import Path
 from typing import Any
-from minicode.memory import MemoryEntry, MemoryManager, MemoryScope
+from repoterm.memory import MemoryEntry, MemoryManager, MemoryScope
 
 
 def create_memory_entries(manager: MemoryManager, count: int, scope: MemoryScope = MemoryScope.PROJECT) -> list[MemoryEntry]:

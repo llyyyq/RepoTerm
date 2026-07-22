@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from minicode.context_manager import ContextManager
-from minicode.model_switcher import ModelSwitcher, SwitchResult
+from repoterm.context_manager import ContextManager
+from repoterm.model_switcher import ModelSwitcher, SwitchResult
 
 
 # ---------------------------------------------------------------------------
@@ -57,12 +57,12 @@ def test_context_manager_window_changes_on_switch():
 
 
 def test_model_command_persists_override(monkeypatch, tmp_path):
-    import minicode.cli_commands as cli_commands
-    import minicode.config as config
+    import repoterm.cli_commands as cli_commands
+    import repoterm.config as config
 
     settings_path = tmp_path / "settings.json"
-    monkeypatch.setattr(cli_commands, "MINI_CODE_SETTINGS_PATH", settings_path)
-    monkeypatch.setattr(config, "MINI_CODE_SETTINGS_PATH", settings_path)
+    monkeypatch.setattr(cli_commands, "REPOTERM_SETTINGS_PATH", settings_path)
+    monkeypatch.setattr(config, "REPOTERM_SETTINGS_PATH", settings_path)
 
     result = cli_commands.try_handle_local_command("/model claude-opus-4-6")
 
@@ -74,10 +74,10 @@ def test_model_command_persists_override(monkeypatch, tmp_path):
 
 
 def test_model_command_show_current(monkeypatch):
-    import minicode.cli_commands as cli_commands
+    import repoterm.cli_commands as cli_commands
 
     monkeypatch.setattr(
-        "minicode.cli_commands.load_runtime_config",
+        "repoterm.cli_commands.load_runtime_config",
         lambda: {"model": "deepseek-chat", "baseUrl": "https://x", "authToken": "t"},
     )
     result = cli_commands.try_handle_local_command("/model")
@@ -101,7 +101,7 @@ def test_switch_to_succeeds_and_updates_runtime(monkeypatch):
         built["model"] = model
         return _FakeAdapter()
 
-    monkeypatch.setattr("minicode.model_switcher.create_model_adapter", _fake_create)
+    monkeypatch.setattr("repoterm.model_switcher.create_model_adapter", _fake_create)
 
     runtime = {"model": "claude-sonnet-4-6", "baseUrl": "https://x", "authToken": "t"}
     switcher = ModelSwitcher(
@@ -137,7 +137,7 @@ def test_switch_to_failure_does_not_crash_or_mutate(monkeypatch):
     def _boom(*, model, tools, runtime):
         raise RuntimeError("no channel for model")
 
-    monkeypatch.setattr("minicode.model_switcher.create_model_adapter", _boom)
+    monkeypatch.setattr("repoterm.model_switcher.create_model_adapter", _boom)
 
     runtime = {"model": "claude-sonnet-4-6", "authToken": "t"}
     switcher = ModelSwitcher("claude-sonnet-4-6", runtime, object())
@@ -151,7 +151,7 @@ def test_switch_to_failure_does_not_crash_or_mutate(monkeypatch):
 
 def test_fallback_candidates_exclude_models_without_tool_support(monkeypatch):
     monkeypatch.setattr(
-        "minicode.model_switcher.build_provider_config",
+        "repoterm.model_switcher.build_provider_config",
         lambda model, runtime=None: type("Provider", (), {"api_key": "test-key"})(),
     )
 

@@ -1,17 +1,17 @@
 from pathlib import Path
 
-from minicode.skills import discover_skills, load_skill
+from repoterm.skills import discover_skills, load_skill
 
 
 def test_discover_skills_prefers_project_root(tmp_path: Path, monkeypatch) -> None:
-    project_skill = tmp_path / ".mini-code" / "skills" / "demo" / "SKILL.md"
+    project_skill = tmp_path / ".repoterm" / "skills" / "demo" / "SKILL.md"
     project_skill.parent.mkdir(parents=True)
     project_skill.write_text("# Demo\n\nProject description\n", encoding="utf-8")
 
     user_home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(user_home))
     monkeypatch.setenv("USERPROFILE", str(user_home))
-    user_skill = user_home / ".mini-code" / "skills" / "demo" / "SKILL.md"
+    user_skill = user_home / ".repoterm" / "skills" / "demo" / "SKILL.md"
     user_skill.parent.mkdir(parents=True)
     user_skill.write_text("# Demo\n\nUser description\n", encoding="utf-8")
 

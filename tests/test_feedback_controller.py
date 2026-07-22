@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 
-from minicode.feedback_controller import (
+from repoterm.feedback_controller import (
     ControlSignal,
     FeedbackController,
     FeedbackMode,

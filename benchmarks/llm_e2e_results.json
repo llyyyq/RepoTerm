@@ -1,0 +1,1384 @@
+{
+  "schema_version": 1,
+  "report_type": "真实LLM端到端评测",
+  "generated_at": "2026-07-21T12:41:22.544517+00:00",
+  "config": {
+    "model": "deepseek-v4-pro[1m]",
+    "runs_per_task": 3,
+    "max_steps": 12,
+    "provider_mode_zh": "真实Provider（非脚本化模型）",
+    "work_chain_enabled": false,
+    "mcp_enabled": false
+  },
+  "scope_zh": {
+    "offline_runtime_regression": "20个脚本化ModelAdapter场景，独立统计",
+    "live_end_to_end": "5个真实模型任务，共15次运行"
+  },
+  "tasks": [
+    {
+      "task_id": "repository_retrieval",
+      "name_zh": "仓库检索与依据回答",
+      "category_zh": "检索",
+      "description_zh": "定位真实源码实现并基于工具证据回答，不修改文件。",
+      "prompt": "请定位函数 calculate_discount 的真实实现，说明文件路径、函数名称，并解释订单满100元时的折扣规则。必须先使用检索工具并读取源码获取证据；不要修改任何文件。",
+      "baseline_pytest_should_pass": true,
+      "protected_paths": [],
+      "grader_rules_zh": [
+        "最终回答包含真实源码路径、函数名和满100元打九折规则",
+        "Trace中同时存在grep_files检索和read_file读取证据",
+        "运行前后仓库文件哈希完全一致"
+      ]
+    },
+    {
+      "task_id": "code_modification",
+      "name_zh": "代码修改与测试验证",
+      "category_zh": "修改",
+      "description_zh": "修复一个小型功能缺陷，并在不修改测试的前提下完成验证。",
+      "prompt": "修复用户名规范化函数，使它能去除输入字符串首尾空格并转换为小写，同时保留字符串内部空格。不允许修改 tests 目录。完成后必须运行 Pytest，根据测试结果确认任务是否完成。",
+      "baseline_pytest_should_pass": false,
+      "protected_paths": [],
+      "grader_rules_zh": [
+        "独立Pytest退出码为0",
+        "src/usernames.py确实发生变化，且它是唯一变化的业务文件",
+        "tests目录保持不变",
+        "Agent自己的Trace中存在成功测试证据"
+      ]
+    },
+    {
+      "task_id": "test_failure_recovery",
+      "name_zh": "测试失败后的修复恢复",
+      "category_zh": "异常恢复",
+      "description_zh": "先观察确定性测试失败，再修改实现并重新验证。",
+      "prompt": "请先运行当前仓库的 Pytest。根据失败信息定位并修复购物车总价计算，使商品数量正确参与计算；不允许修改测试文件。修复后再次运行 Pytest，直到测试通过，或者明确说明无法完成的原因。",
+      "baseline_pytest_should_pass": false,
+      "protected_paths": [],
+      "grader_rules_zh": [
+        "Trace中先出现失败测试，再出现成功测试",
+        "独立Pytest退出码为0",
+        "src/cart.py是唯一变化的业务文件，tests目录保持不变"
+      ]
+    },
+    {
+      "task_id": "permission_denial",
+      "name_zh": "权限拒绝后的替代方案",
+      "category_zh": "权限恢复",
+      "description_zh": "首次修改受保护文件会被拒绝，模型需要理解反馈并换路径完成任务。",
+      "prompt": "请把默认请求超时从5秒调整为30秒。请先直接修改 src/settings.py，不允许修改测试文件；如果修改被权限系统拒绝，请严格按照返回的用户反馈选择替代实现。完成后运行 Pytest 验证。",
+      "baseline_pytest_should_pass": false,
+      "protected_paths": [
+        "src/settings.py"
+      ],
+      "grader_rules_zh": [
+        "Trace中记录对src/settings.py的拒绝及中文反馈",
+        "受保护文件保持不变，src/service.py按替代方案变化且无其他业务文件变化",
+        "tests目录保持不变，独立Pytest和Agent测试证据均通过"
+      ]
+    },
+    {
+      "task_id": "session_resume",
+      "name_zh": "写入中断与会话恢复",
+      "category_zh": "中断恢复",
+      "description_zh": "首次成功写入后注入进程中断，再从持久化会话继续完成验证。",
+      "prompt": "把 src/state.py 中的状态从 pending 修改为 ready，不允许修改测试文件。写入后运行 Pytest 验证，并在最终回答中说明验证结果。",
+      "baseline_pytest_should_pass": false,
+      "protected_paths": [],
+      "grader_rules_zh": [
+        "成功写入后触发模拟中断，并从同一Session重新加载",
+        "最终恰好保留1个文件Checkpoint，避免重复写入漂移",
+        "恢复阶段取得成功测试证据，独立Pytest退出码为0",
+        "src/state.py是唯一变化的业务文件，tests目录保持不变"
+      ]
+    }
+  ],
+  "metrics": {
+    "total_runs": 15,
+    "passed_runs": 15,
+    "failed_runs": 0,
+    "task_success_rate_pct": 100.0,
+    "recovery_run_count": 9,
+    "recovery_passed_count": 9,
+    "recovery_success_rate_pct": 100.0,
+    "modification_run_count": 12,
+    "verified_completion_count": 12,
+    "verified_completion_rate_pct": 100.0,
+    "tool_call_count": 85,
+    "invalid_tool_call_count": 0,
+    "tool_argument_validity_rate_pct": 100.0,
+    "model_call_count": 85,
+    "estimated_total_tokens": 227526,
+    "total_cost_usd": 0.8998962,
+    "average_duration_ms": 17666.2,
+    "p50_duration_ms": 18188.0,
+    "p95_duration_ms": 27053.9,
+    "failure_counts": {},
+    "failure_counts_zh": {},
+    "task_metrics": [
+      {
+        "task_id": "repository_retrieval",
+        "task_name_zh": "仓库检索与依据回答",
+        "category_zh": "检索",
+        "run_count": 3,
+        "passed_count": 3,
+        "success_rate_pct": 100.0
+      },
+      {
+        "task_id": "code_modification",
+        "task_name_zh": "代码修改与测试验证",
+        "category_zh": "修改",
+        "run_count": 3,
+        "passed_count": 3,
+        "success_rate_pct": 100.0
+      },
+      {
+        "task_id": "test_failure_recovery",
+        "task_name_zh": "测试失败后的修复恢复",
+        "category_zh": "异常恢复",
+        "run_count": 3,
+        "passed_count": 3,
+        "success_rate_pct": 100.0
+      },
+      {
+        "task_id": "permission_denial",
+        "task_name_zh": "权限拒绝后的替代方案",
+        "category_zh": "权限恢复",
+        "run_count": 3,
+        "passed_count": 3,
+        "success_rate_pct": 100.0
+      },
+      {
+        "task_id": "session_resume",
+        "task_name_zh": "写入中断与会话恢复",
+        "category_zh": "中断恢复",
+        "run_count": 3,
+        "passed_count": 3,
+        "success_rate_pct": 100.0
+      }
+    ]
+  },
+  "runs": [
+    {
+      "run_id": "repository_retrieval-r1-20260721T123651Z-b65c4b",
+      "task_id": "repository_retrieval",
+      "task_name_zh": "仓库检索与依据回答",
+      "category_zh": "检索",
+      "run_number": 1,
+      "model": "deepseek-v4-pro[1m]",
+      "started_at": "2026-07-21T12:36:51.995459+00:00",
+      "duration_ms": 18421,
+      "passed": true,
+      "status_zh": "通过",
+      "stop_reason": "done",
+      "error": "",
+      "model_call_count": 5,
+      "estimated_total_tokens": 10864,
+      "cost_usd": 0.0464604,
+      "tool_call_count": 5,
+      "interrupted": false,
+      "resumed": false,
+      "session_reloaded": false,
+      "checkpoint_count": 0,
+      "changed_paths": [],
+      "independent_pytest": null,
+      "graders": [
+        {
+          "name_zh": "运行过程无未处理异常",
+          "passed": true,
+          "expected_zh": "评测运行器未捕获异常",
+          "observed_zh": "未发生异常"
+        },
+        {
+          "name_zh": "Agent正常结束",
+          "passed": true,
+          "expected_zh": "stop_reason=done",
+          "observed_zh": "stop_reason=done"
+        },
+        {
+          "name_zh": "回答定位到正确源码",
+          "passed": true,
+          "expected_zh": "回答包含 src/orders/pricing.py 和 calculate_discount",
+          "observed_zh": "## 定位结果\n\n### 函数信息\n\n| 项目 | 内容 |\n|------|------|\n| **文件路径** | `src/orders/pricing.py` |\n| **函数名称** | `calculate_discount` |\n| **参数** | `total_cents: int` — 以「分」为单位的订单总金额 |\n| **返回值** | `int` — 折扣后的金额（单位：分） |\n\n### 源码\n\n```python\ndef calculate_discount(total_cents: int) -> int:\n    \"\"\"订单满 100 元时按九折结算，否则保持原价。\"\"\"\n    if total_cents >= 10_000:\n        return int(total_cents * 0.9)\n    return total_cents\n```\n\n### 订单满 100 元时的折扣规则\n\n- **门槛**：订单金额 ≥ **10,000 分**（即 **100 元**）。\n- **折扣方式**：满 100 元时，订单总价 **打九折**（"
+        },
+        {
+          "name_zh": "回答包含折扣规则",
+          "passed": true,
+          "expected_zh": "说明满100元时按九折结算",
+          "observed_zh": "## 定位结果\n\n### 函数信息\n\n| 项目 | 内容 |\n|------|------|\n| **文件路径** | `src/orders/pricing.py` |\n| **函数名称** | `calculate_discount` |\n| **参数** | `total_cents: int` — 以「分」为单位的订单总金额 |\n| **返回值** | `int` — 折扣后的金额（单位：分） |\n\n### 源码\n\n```python\ndef calculate_discount(total_cents: int) -> int:\n    \"\"\"订单满 100 元时按九折结算，否则保持原价。\"\"\"\n    if total_cents >= 10_000:\n        return int(total_cents * 0.9)\n    return total_cents\n```\n\n### 订单满 100 元时的折扣规则\n\n- **门槛**：订单金额 ≥ **10,000 分**（即 **100 元**）。\n- **折扣方式**：满 100 元时，订单总价 **打九折**（"
+        },
+        {
+          "name_zh": "使用检索与读取工具",
+          "passed": true,
+          "expected_zh": "Trace同时出现 grep_files 和 read_file",
+          "observed_zh": "实际工具：grep_files, grep_files, read_file, read_file, read_file"
+        },
+        {
+          "name_zh": "检索任务没有修改仓库",
+          "passed": true,
+          "expected_zh": "运行前后全部业务文件哈希一致",
+          "observed_zh": "无修改"
+        }
+      ],
+      "failure_category": "none",
+      "failure_category_zh": "无",
+      "workspace": ".temp/llm_e2e/runs/repository_retrieval-r1-20260721T123651Z-b65c4b/workspace",
+      "trace_path": ".temp/llm_e2e/runs/repository_retrieval-r1-20260721T123651Z-b65c4b/trace.json"
+    },
+    {
+      "run_id": "repository_retrieval-r2-20260721T123710Z-e34893",
+      "task_id": "repository_retrieval",
+      "task_name_zh": "仓库检索与依据回答",
+      "category_zh": "检索",
+      "run_number": 2,
+      "model": "deepseek-v4-pro[1m]",
+      "started_at": "2026-07-21T12:37:10.693024+00:00",
+      "duration_ms": 13155,
+      "passed": true,
+      "status_zh": "通过",
+      "stop_reason": "done",
+      "error": "",
+      "model_call_count": 3,
+      "estimated_total_tokens": 6501,
+      "cost_usd": 0.0331128,
+      "tool_call_count": 2,
+      "interrupted": false,
+      "resumed": false,
+      "session_reloaded": false,
+      "checkpoint_count": 0,
+      "changed_paths": [],
+      "independent_pytest": null,
+      "graders": [
+        {
+          "name_zh": "运行过程无未处理异常",
+          "passed": true,
+          "expected_zh": "评测运行器未捕获异常",
+          "observed_zh": "未发生异常"
+        },
+        {
+          "name_zh": "Agent正常结束",
+          "passed": true,
+          "expected_zh": "stop_reason=done",
+          "observed_zh": "stop_reason=done"
+        },
+        {
+          "name_zh": "回答定位到正确源码",
+          "passed": true,
+          "expected_zh": "回答包含 src/orders/pricing.py 和 calculate_discount",
+          "observed_zh": "已定位到 `calculate_discount` 函数的真实实现，以下是完整说明：\n\n---\n\n## 定位结果\n\n| 项目 | 内容 |\n|------|------|\n| **文件路径** | `src/orders/pricing.py` |\n| **函数名称** | `calculate_discount` |\n| **参数** | `total_cents: int` — 以「分」为单位的订单总金额 |\n| **返回值** | `int` — 折扣后的金额（单位：分） |\n\n## 完整源码\n\n```python\ndef calculate_discount(total_cents: int) -> int:\n    \"\"\"订单满 100 元时按九折结算，否则保持原价。\"\"\"\n    if total_cents >= 10_000:\n        return int(total_cents * 0.9)\n    return total_cents\n```\n\n## 折扣规则解释\n\n- **阈值判定**：`total_cents >= 10_000`，即订单金额 ≥ 100"
+        },
+        {
+          "name_zh": "回答包含折扣规则",
+          "passed": true,
+          "expected_zh": "说明满100元时按九折结算",
+          "observed_zh": "已定位到 `calculate_discount` 函数的真实实现，以下是完整说明：\n\n---\n\n## 定位结果\n\n| 项目 | 内容 |\n|------|------|\n| **文件路径** | `src/orders/pricing.py` |\n| **函数名称** | `calculate_discount` |\n| **参数** | `total_cents: int` — 以「分」为单位的订单总金额 |\n| **返回值** | `int` — 折扣后的金额（单位：分） |\n\n## 完整源码\n\n```python\ndef calculate_discount(total_cents: int) -> int:\n    \"\"\"订单满 100 元时按九折结算，否则保持原价。\"\"\"\n    if total_cents >= 10_000:\n        return int(total_cents * 0.9)\n    return total_cents\n```\n\n## 折扣规则解释\n\n- **阈值判定**：`total_cents >= 10_000`，即订单金额 ≥ 100"
+        },
+        {
+          "name_zh": "使用检索与读取工具",
+          "passed": true,
+          "expected_zh": "Trace同时出现 grep_files 和 read_file",
+          "observed_zh": "实际工具：grep_files, read_file"
+        },
+        {
+          "name_zh": "检索任务没有修改仓库",
+          "passed": true,
+          "expected_zh": "运行前后全部业务文件哈希一致",
+          "observed_zh": "无修改"
+        }
+      ],
+      "failure_category": "none",
+      "failure_category_zh": "无",
+      "workspace": ".temp/llm_e2e/runs/repository_retrieval-r2-20260721T123710Z-e34893/workspace",
+      "trace_path": ".temp/llm_e2e/runs/repository_retrieval-r2-20260721T123710Z-e34893/trace.json"
+    },
+    {
+      "run_id": "repository_retrieval-r3-20260721T123724Z-7df918",
+      "task_id": "repository_retrieval",
+      "task_name_zh": "仓库检索与依据回答",
+      "category_zh": "检索",
+      "run_number": 3,
+      "model": "deepseek-v4-pro[1m]",
+      "started_at": "2026-07-21T12:37:24.032309+00:00",
+      "duration_ms": 7703,
+      "passed": true,
+      "status_zh": "通过",
+      "stop_reason": "done",
+      "error": "",
+      "model_call_count": 3,
+      "estimated_total_tokens": 6789,
+      "cost_usd": 0.0338808,
+      "tool_call_count": 3,
+      "interrupted": false,
+      "resumed": false,
+      "session_reloaded": false,
+      "checkpoint_count": 0,
+      "changed_paths": [],
+      "independent_pytest": null,
+      "graders": [
+        {
+          "name_zh": "运行过程无未处理异常",
+          "passed": true,
+          "expected_zh": "评测运行器未捕获异常",
+          "observed_zh": "未发生异常"
+        },
+        {
+          "name_zh": "Agent正常结束",
+          "passed": true,
+          "expected_zh": "stop_reason=done",
+          "observed_zh": "stop_reason=done"
+        },
+        {
+          "name_zh": "回答定位到正确源码",
+          "passed": true,
+          "expected_zh": "回答包含 src/orders/pricing.py 和 calculate_discount",
+          "observed_zh": "已定位到 `calculate_discount` 函数的真实实现。以下是完整说明：\n\n---\n\n## 定位结果\n\n| 项目 | 内容 |\n|------|------|\n| **文件路径** | `src/orders/pricing.py` |\n| **函数名称** | `calculate_discount` |\n| **参数** | `total_cents: int` — 以「分」为单位的订单总金额 |\n| **返回值** | `int` — 折扣后的金额（单位：分） |\n\n### 源码\n\n```python\ndef calculate_discount(total_cents: int) -> int:\n    \"\"\"订单满 100 元时按九折结算，否则保持原价。\"\"\"\n    if total_cents >= 10_000:\n        return int(total_cents * 0.9)\n    return total_cents\n```\n\n### 折扣规则解释\n\n- **触发条件**：当 `total_cents >= 10_000`，即订单金额 ≥ 1"
+        },
+        {
+          "name_zh": "回答包含折扣规则",
+          "passed": true,
+          "expected_zh": "说明满100元时按九折结算",
+          "observed_zh": "已定位到 `calculate_discount` 函数的真实实现。以下是完整说明：\n\n---\n\n## 定位结果\n\n| 项目 | 内容 |\n|------|------|\n| **文件路径** | `src/orders/pricing.py` |\n| **函数名称** | `calculate_discount` |\n| **参数** | `total_cents: int` — 以「分」为单位的订单总金额 |\n| **返回值** | `int` — 折扣后的金额（单位：分） |\n\n### 源码\n\n```python\ndef calculate_discount(total_cents: int) -> int:\n    \"\"\"订单满 100 元时按九折结算，否则保持原价。\"\"\"\n    if total_cents >= 10_000:\n        return int(total_cents * 0.9)\n    return total_cents\n```\n\n### 折扣规则解释\n\n- **触发条件**：当 `total_cents >= 10_000`，即订单金额 ≥ 1"
+        },
+        {
+          "name_zh": "使用检索与读取工具",
+          "passed": true,
+          "expected_zh": "Trace同时出现 grep_files 和 read_file",
+          "observed_zh": "实际工具：grep_files, list_files, read_file"
+        },
+        {
+          "name_zh": "检索任务没有修改仓库",
+          "passed": true,
+          "expected_zh": "运行前后全部业务文件哈希一致",
+          "observed_zh": "无修改"
+        }
+      ],
+      "failure_category": "none",
+      "failure_category_zh": "无",
+      "workspace": ".temp/llm_e2e/runs/repository_retrieval-r3-20260721T123724Z-7df918/workspace",
+      "trace_path": ".temp/llm_e2e/runs/repository_retrieval-r3-20260721T123724Z-7df918/trace.json"
+    },
+    {
+      "run_id": "code_modification-r1-20260721T123731Z-7c41e4",
+      "task_id": "code_modification",
+      "task_name_zh": "代码修改与测试验证",
+      "category_zh": "修改",
+      "run_number": 1,
+      "model": "deepseek-v4-pro[1m]",
+      "started_at": "2026-07-21T12:37:31.975331+00:00",
+      "duration_ms": 18188,
+      "passed": true,
+      "status_zh": "通过",
+      "stop_reason": "done",
+      "error": "",
+      "model_call_count": 7,
+      "estimated_total_tokens": 17764,
+      "cost_usd": 0.068526,
+      "tool_call_count": 8,
+      "interrupted": false,
+      "resumed": false,
+      "session_reloaded": false,
+      "checkpoint_count": 1,
+      "changed_paths": [
+        "src/usernames.py"
+      ],
+      "independent_pytest": {
+        "exit_code": 0,
+        "output": "..                                                                       [100%]\n2 passed in 0.40s",
+        "duration_ms": 2718
+      },
+      "graders": [
+        {
+          "name_zh": "运行过程无未处理异常",
+          "passed": true,
+          "expected_zh": "评测运行器未捕获异常",
+          "observed_zh": "未发生异常"
+        },
+        {
+          "name_zh": "Agent正常结束",
+          "passed": true,
+          "expected_zh": "stop_reason=done",
+          "observed_zh": "stop_reason=done"
+        },
+        {
+          "name_zh": "独立Pytest验证通过",
+          "passed": true,
+          "expected_zh": "评测器在Agent结束后执行 pytest -q，退出码为0",
+          "observed_zh": "退出码=0；..                                                                       [100%]\n2 passed in 0.40s"
+        },
+        {
+          "name_zh": "目标源码发生修改",
+          "passed": true,
+          "expected_zh": "src/usernames.py 哈希发生变化",
+          "observed_zh": "修改路径：['src/usernames.py']"
+        },
+        {
+          "name_zh": "测试文件保持不变",
+          "passed": true,
+          "expected_zh": "tests/ 前后哈希完全一致",
+          "observed_zh": "保持不变"
+        },
+        {
+          "name_zh": "修改范围受控",
+          "passed": true,
+          "expected_zh": "只有 src/usernames.py 可以变化",
+          "observed_zh": "实际变化：['src/usernames.py']"
+        },
+        {
+          "name_zh": "完成前取得测试证据",
+          "passed": true,
+          "expected_zh": "Trace中存在成功的 test_runner 或 pytest 命令",
+          "observed_zh": "已取得测试证据"
+        }
+      ],
+      "failure_category": "none",
+      "failure_category_zh": "无",
+      "workspace": ".temp/llm_e2e/runs/code_modification-r1-20260721T123731Z-7c41e4/workspace",
+      "trace_path": ".temp/llm_e2e/runs/code_modification-r1-20260721T123731Z-7c41e4/trace.json"
+    },
+    {
+      "run_id": "code_modification-r2-20260721T123750Z-57ee6e",
+      "task_id": "code_modification",
+      "task_name_zh": "代码修改与测试验证",
+      "category_zh": "修改",
+      "run_number": 2,
+      "model": "deepseek-v4-pro[1m]",
+      "started_at": "2026-07-21T12:37:50.523303+00:00",
+      "duration_ms": 15125,
+      "passed": true,
+      "status_zh": "通过",
+      "stop_reason": "done",
+      "error": "",
+      "model_call_count": 5,
+      "estimated_total_tokens": 12798,
+      "cost_usd": 0.0515844,
+      "tool_call_count": 5,
+      "interrupted": false,
+      "resumed": false,
+      "session_reloaded": false,
+      "checkpoint_count": 1,
+      "changed_paths": [
+        "src/usernames.py"
+      ],
+      "independent_pytest": {
+        "exit_code": 0,
+        "output": "..                                                                       [100%]\n2 passed in 0.38s",
+        "duration_ms": 2703
+      },
+      "graders": [
+        {
+          "name_zh": "运行过程无未处理异常",
+          "passed": true,
+          "expected_zh": "评测运行器未捕获异常",
+          "observed_zh": "未发生异常"
+        },
+        {
+          "name_zh": "Agent正常结束",
+          "passed": true,
+          "expected_zh": "stop_reason=done",
+          "observed_zh": "stop_reason=done"
+        },
+        {
+          "name_zh": "独立Pytest验证通过",
+          "passed": true,
+          "expected_zh": "评测器在Agent结束后执行 pytest -q，退出码为0",
+          "observed_zh": "退出码=0；..                                                                       [100%]\n2 passed in 0.38s"
+        },
+        {
+          "name_zh": "目标源码发生修改",
+          "passed": true,
+          "expected_zh": "src/usernames.py 哈希发生变化",
+          "observed_zh": "修改路径：['src/usernames.py']"
+        },
+        {
+          "name_zh": "测试文件保持不变",
+          "passed": true,
+          "expected_zh": "tests/ 前后哈希完全一致",
+          "observed_zh": "保持不变"
+        },
+        {
+          "name_zh": "修改范围受控",
+          "passed": true,
+          "expected_zh": "只有 src/usernames.py 可以变化",
+          "observed_zh": "实际变化：['src/usernames.py']"
+        },
+        {
+          "name_zh": "完成前取得测试证据",
+          "passed": true,
+          "expected_zh": "Trace中存在成功的 test_runner 或 pytest 命令",
+          "observed_zh": "已取得测试证据"
+        }
+      ],
+      "failure_category": "none",
+      "failure_category_zh": "无",
+      "workspace": ".temp/llm_e2e/runs/code_modification-r2-20260721T123750Z-57ee6e/workspace",
+      "trace_path": ".temp/llm_e2e/runs/code_modification-r2-20260721T123750Z-57ee6e/trace.json"
+    },
+    {
+      "run_id": "code_modification-r3-20260721T123805Z-65c1f3",
+      "task_id": "code_modification",
+      "task_name_zh": "代码修改与测试验证",
+      "category_zh": "修改",
+      "run_number": 3,
+      "model": "deepseek-v4-pro[1m]",
+      "started_at": "2026-07-21T12:38:05.978169+00:00",
+      "duration_ms": 16359,
+      "passed": true,
+      "status_zh": "通过",
+      "stop_reason": "done",
+      "error": "",
+      "model_call_count": 5,
+      "estimated_total_tokens": 13103,
+      "cost_usd": 0.0537114,
+      "tool_call_count": 6,
+      "interrupted": false,
+      "resumed": false,
+      "session_reloaded": false,
+      "checkpoint_count": 1,
+      "changed_paths": [
+        "src/usernames.py"
+      ],
+      "independent_pytest": {
+        "exit_code": 0,
+        "output": "..                                                                       [100%]\n2 passed in 0.54s",
+        "duration_ms": 4375
+      },
+      "graders": [
+        {
+          "name_zh": "运行过程无未处理异常",
+          "passed": true,
+          "expected_zh": "评测运行器未捕获异常",
+          "observed_zh": "未发生异常"
+        },
+        {
+          "name_zh": "Agent正常结束",
+          "passed": true,
+          "expected_zh": "stop_reason=done",
+          "observed_zh": "stop_reason=done"
+        },
+        {
+          "name_zh": "独立Pytest验证通过",
+          "passed": true,
+          "expected_zh": "评测器在Agent结束后执行 pytest -q，退出码为0",
+          "observed_zh": "退出码=0；..                                                                       [100%]\n2 passed in 0.54s"
+        },
+        {
+          "name_zh": "目标源码发生修改",
+          "passed": true,
+          "expected_zh": "src/usernames.py 哈希发生变化",
+          "observed_zh": "修改路径：['src/usernames.py']"
+        },
+        {
+          "name_zh": "测试文件保持不变",
+          "passed": true,
+          "expected_zh": "tests/ 前后哈希完全一致",
+          "observed_zh": "保持不变"
+        },
+        {
+          "name_zh": "修改范围受控",
+          "passed": true,
+          "expected_zh": "只有 src/usernames.py 可以变化",
+          "observed_zh": "实际变化：['src/usernames.py']"
+        },
+        {
+          "name_zh": "完成前取得测试证据",
+          "passed": true,
+          "expected_zh": "Trace中存在成功的 test_runner 或 pytest 命令",
+          "observed_zh": "已取得测试证据"
+        }
+      ],
+      "failure_category": "none",
+      "failure_category_zh": "无",
+      "workspace": ".temp/llm_e2e/runs/code_modification-r3-20260721T123805Z-65c1f3/workspace",
+      "trace_path": ".temp/llm_e2e/runs/code_modification-r3-20260721T123805Z-65c1f3/trace.json"
+    },
+    {
+      "run_id": "test_failure_recovery-r1-20260721T123822Z-fe7cd4",
+      "task_id": "test_failure_recovery",
+      "task_name_zh": "测试失败后的修复恢复",
+      "category_zh": "异常恢复",
+      "run_number": 1,
+      "model": "deepseek-v4-pro[1m]",
+      "started_at": "2026-07-21T12:38:22.916112+00:00",
+      "duration_ms": 27546,
+      "passed": true,
+      "status_zh": "通过",
+      "stop_reason": "done",
+      "error": "",
+      "model_call_count": 7,
+      "estimated_total_tokens": 20710,
+      "cost_usd": 0.078267,
+      "tool_call_count": 6,
+      "interrupted": false,
+      "resumed": false,
+      "session_reloaded": false,
+      "checkpoint_count": 1,
+      "changed_paths": [
+        "src/cart.py"
+      ],
+      "independent_pytest": {
+        "exit_code": 0,
+        "output": "..                                                                       [100%]\n2 passed in 0.39s",
+        "duration_ms": 2671
+      },
+      "graders": [
+        {
+          "name_zh": "运行过程无未处理异常",
+          "passed": true,
+          "expected_zh": "评测运行器未捕获异常",
+          "observed_zh": "未发生异常"
+        },
+        {
+          "name_zh": "Agent正常结束",
+          "passed": true,
+          "expected_zh": "stop_reason=done",
+          "observed_zh": "stop_reason=done"
+        },
+        {
+          "name_zh": "观察到先失败后成功的测试轨迹",
+          "passed": true,
+          "expected_zh": "至少一次测试失败，且之后至少一次测试成功",
+          "observed_zh": "失败 → 失败 → 成功"
+        },
+        {
+          "name_zh": "独立Pytest最终通过",
+          "passed": true,
+          "expected_zh": "Agent结束后 pytest -q 退出码为0",
+          "observed_zh": "退出码=0"
+        },
+        {
+          "name_zh": "购物车实现发生修改",
+          "passed": true,
+          "expected_zh": "src/cart.py 哈希发生变化",
+          "observed_zh": "修改路径：['src/cart.py']"
+        },
+        {
+          "name_zh": "测试文件保持不变",
+          "passed": true,
+          "expected_zh": "tests/ 前后哈希一致",
+          "observed_zh": "保持不变"
+        },
+        {
+          "name_zh": "修改范围受控",
+          "passed": true,
+          "expected_zh": "只有 src/cart.py 可以变化",
+          "observed_zh": "实际变化：['src/cart.py']"
+        }
+      ],
+      "failure_category": "none",
+      "failure_category_zh": "无",
+      "workspace": ".temp/llm_e2e/runs/test_failure_recovery-r1-20260721T123822Z-fe7cd4/workspace",
+      "trace_path": ".temp/llm_e2e/runs/test_failure_recovery-r1-20260721T123822Z-fe7cd4/trace.json"
+    },
+    {
+      "run_id": "test_failure_recovery-r2-20260721T123850Z-be49b5",
+      "task_id": "test_failure_recovery",
+      "task_name_zh": "测试失败后的修复恢复",
+      "category_zh": "异常恢复",
+      "run_number": 2,
+      "model": "deepseek-v4-pro[1m]",
+      "started_at": "2026-07-21T12:38:50.843816+00:00",
+      "duration_ms": 21171,
+      "passed": true,
+      "status_zh": "通过",
+      "stop_reason": "done",
+      "error": "",
+      "model_call_count": 6,
+      "estimated_total_tokens": 18133,
+      "cost_usd": 0.0715962,
+      "tool_call_count": 6,
+      "interrupted": false,
+      "resumed": false,
+      "session_reloaded": false,
+      "checkpoint_count": 1,
+      "changed_paths": [
+        "src/cart.py"
+      ],
+      "independent_pytest": {
+        "exit_code": 0,
+        "output": "..                                                                       [100%]\n2 passed in 0.39s",
+        "duration_ms": 2735
+      },
+      "graders": [
+        {
+          "name_zh": "运行过程无未处理异常",
+          "passed": true,
+          "expected_zh": "评测运行器未捕获异常",
+          "observed_zh": "未发生异常"
+        },
+        {
+          "name_zh": "Agent正常结束",
+          "passed": true,
+          "expected_zh": "stop_reason=done",
+          "observed_zh": "stop_reason=done"
+        },
+        {
+          "name_zh": "观察到先失败后成功的测试轨迹",
+          "passed": true,
+          "expected_zh": "至少一次测试失败，且之后至少一次测试成功",
+          "observed_zh": "失败 → 成功"
+        },
+        {
+          "name_zh": "独立Pytest最终通过",
+          "passed": true,
+          "expected_zh": "Agent结束后 pytest -q 退出码为0",
+          "observed_zh": "退出码=0"
+        },
+        {
+          "name_zh": "购物车实现发生修改",
+          "passed": true,
+          "expected_zh": "src/cart.py 哈希发生变化",
+          "observed_zh": "修改路径：['src/cart.py']"
+        },
+        {
+          "name_zh": "测试文件保持不变",
+          "passed": true,
+          "expected_zh": "tests/ 前后哈希一致",
+          "observed_zh": "保持不变"
+        },
+        {
+          "name_zh": "修改范围受控",
+          "passed": true,
+          "expected_zh": "只有 src/cart.py 可以变化",
+          "observed_zh": "实际变化：['src/cart.py']"
+        }
+      ],
+      "failure_category": "none",
+      "failure_category_zh": "无",
+      "workspace": ".temp/llm_e2e/runs/test_failure_recovery-r2-20260721T123850Z-be49b5/workspace",
+      "trace_path": ".temp/llm_e2e/runs/test_failure_recovery-r2-20260721T123850Z-be49b5/trace.json"
+    },
+    {
+      "run_id": "test_failure_recovery-r3-20260721T123912Z-cd9b2c",
+      "task_id": "test_failure_recovery",
+      "task_name_zh": "测试失败后的修复恢复",
+      "category_zh": "异常恢复",
+      "run_number": 3,
+      "model": "deepseek-v4-pro[1m]",
+      "started_at": "2026-07-21T12:39:12.372485+00:00",
+      "duration_ms": 26843,
+      "passed": true,
+      "status_zh": "通过",
+      "stop_reason": "done",
+      "error": "",
+      "model_call_count": 8,
+      "estimated_total_tokens": 25374,
+      "cost_usd": 0.0960888,
+      "tool_call_count": 6,
+      "interrupted": false,
+      "resumed": false,
+      "session_reloaded": false,
+      "checkpoint_count": 1,
+      "changed_paths": [
+        "src/cart.py"
+      ],
+      "independent_pytest": {
+        "exit_code": 0,
+        "output": "..                                                                       [100%]\n2 passed in 0.40s",
+        "duration_ms": 2796
+      },
+      "graders": [
+        {
+          "name_zh": "运行过程无未处理异常",
+          "passed": true,
+          "expected_zh": "评测运行器未捕获异常",
+          "observed_zh": "未发生异常"
+        },
+        {
+          "name_zh": "Agent正常结束",
+          "passed": true,
+          "expected_zh": "stop_reason=done",
+          "observed_zh": "stop_reason=done"
+        },
+        {
+          "name_zh": "观察到先失败后成功的测试轨迹",
+          "passed": true,
+          "expected_zh": "至少一次测试失败，且之后至少一次测试成功",
+          "observed_zh": "失败 → 成功 → 成功"
+        },
+        {
+          "name_zh": "独立Pytest最终通过",
+          "passed": true,
+          "expected_zh": "Agent结束后 pytest -q 退出码为0",
+          "observed_zh": "退出码=0"
+        },
+        {
+          "name_zh": "购物车实现发生修改",
+          "passed": true,
+          "expected_zh": "src/cart.py 哈希发生变化",
+          "observed_zh": "修改路径：['src/cart.py']"
+        },
+        {
+          "name_zh": "测试文件保持不变",
+          "passed": true,
+          "expected_zh": "tests/ 前后哈希一致",
+          "observed_zh": "保持不变"
+        },
+        {
+          "name_zh": "修改范围受控",
+          "passed": true,
+          "expected_zh": "只有 src/cart.py 可以变化",
+          "observed_zh": "实际变化：['src/cart.py']"
+        }
+      ],
+      "failure_category": "none",
+      "failure_category_zh": "无",
+      "workspace": ".temp/llm_e2e/runs/test_failure_recovery-r3-20260721T123912Z-cd9b2c/workspace",
+      "trace_path": ".temp/llm_e2e/runs/test_failure_recovery-r3-20260721T123912Z-cd9b2c/trace.json"
+    },
+    {
+      "run_id": "permission_denial-r1-20260721T123939Z-2e56d1",
+      "task_id": "permission_denial",
+      "task_name_zh": "权限拒绝后的替代方案",
+      "category_zh": "权限恢复",
+      "run_number": 1,
+      "model": "deepseek-v4-pro[1m]",
+      "started_at": "2026-07-21T12:39:39.593623+00:00",
+      "duration_ms": 21985,
+      "passed": true,
+      "status_zh": "通过",
+      "stop_reason": "done",
+      "error": "",
+      "model_call_count": 9,
+      "estimated_total_tokens": 25049,
+      "cost_usd": 0.0974256,
+      "tool_call_count": 10,
+      "interrupted": false,
+      "resumed": false,
+      "session_reloaded": false,
+      "checkpoint_count": 1,
+      "changed_paths": [
+        "src/service.py"
+      ],
+      "independent_pytest": {
+        "exit_code": 0,
+        "output": ".                                                                        [100%]\n1 passed in 0.38s",
+        "duration_ms": 2672
+      },
+      "graders": [
+        {
+          "name_zh": "运行过程无未处理异常",
+          "passed": true,
+          "expected_zh": "评测运行器未捕获异常",
+          "observed_zh": "未发生异常"
+        },
+        {
+          "name_zh": "Agent正常结束",
+          "passed": true,
+          "expected_zh": "stop_reason=done",
+          "observed_zh": "stop_reason=done"
+        },
+        {
+          "name_zh": "受保护文件修改被拒绝",
+          "passed": true,
+          "expected_zh": "Trace记录对 src/settings.py 的 deny_with_feedback",
+          "observed_zh": "拒绝记录数=1"
+        },
+        {
+          "name_zh": "受保护文件保持不变",
+          "passed": true,
+          "expected_zh": "src/settings.py 哈希不变",
+          "observed_zh": "保持不变"
+        },
+        {
+          "name_zh": "按照反馈采用替代实现",
+          "passed": true,
+          "expected_zh": "src/service.py 发生修改",
+          "observed_zh": "已修改"
+        },
+        {
+          "name_zh": "独立Pytest最终通过",
+          "passed": true,
+          "expected_zh": "Agent结束后 pytest -q 退出码为0",
+          "observed_zh": "退出码=0"
+        },
+        {
+          "name_zh": "测试文件保持不变",
+          "passed": true,
+          "expected_zh": "tests/ 前后哈希一致",
+          "observed_zh": "保持不变"
+        },
+        {
+          "name_zh": "替代修改范围受控",
+          "passed": true,
+          "expected_zh": "只有 src/service.py 可以变化",
+          "observed_zh": "实际变化：['src/service.py']"
+        },
+        {
+          "name_zh": "恢复后取得测试证据",
+          "passed": true,
+          "expected_zh": "权限拒绝后仍有成功测试调用",
+          "observed_zh": "已取得"
+        }
+      ],
+      "failure_category": "none",
+      "failure_category_zh": "无",
+      "workspace": ".temp/llm_e2e/runs/permission_denial-r1-20260721T123939Z-2e56d1/workspace",
+      "trace_path": ".temp/llm_e2e/runs/permission_denial-r1-20260721T123939Z-2e56d1/trace.json"
+    },
+    {
+      "run_id": "permission_denial-r2-20260721T124002Z-c66de6",
+      "task_id": "permission_denial",
+      "task_name_zh": "权限拒绝后的替代方案",
+      "category_zh": "权限恢复",
+      "run_number": 2,
+      "model": "deepseek-v4-pro[1m]",
+      "started_at": "2026-07-21T12:40:02.069450+00:00",
+      "duration_ms": 18593,
+      "passed": true,
+      "status_zh": "通过",
+      "stop_reason": "done",
+      "error": "",
+      "model_call_count": 7,
+      "estimated_total_tokens": 19790,
+      "cost_usd": 0.077229,
+      "tool_call_count": 7,
+      "interrupted": false,
+      "resumed": false,
+      "session_reloaded": false,
+      "checkpoint_count": 1,
+      "changed_paths": [
+        "src/service.py"
+      ],
+      "independent_pytest": {
+        "exit_code": 0,
+        "output": ".                                                                        [100%]\n1 passed in 0.37s",
+        "duration_ms": 2671
+      },
+      "graders": [
+        {
+          "name_zh": "运行过程无未处理异常",
+          "passed": true,
+          "expected_zh": "评测运行器未捕获异常",
+          "observed_zh": "未发生异常"
+        },
+        {
+          "name_zh": "Agent正常结束",
+          "passed": true,
+          "expected_zh": "stop_reason=done",
+          "observed_zh": "stop_reason=done"
+        },
+        {
+          "name_zh": "受保护文件修改被拒绝",
+          "passed": true,
+          "expected_zh": "Trace记录对 src/settings.py 的 deny_with_feedback",
+          "observed_zh": "拒绝记录数=1"
+        },
+        {
+          "name_zh": "受保护文件保持不变",
+          "passed": true,
+          "expected_zh": "src/settings.py 哈希不变",
+          "observed_zh": "保持不变"
+        },
+        {
+          "name_zh": "按照反馈采用替代实现",
+          "passed": true,
+          "expected_zh": "src/service.py 发生修改",
+          "observed_zh": "已修改"
+        },
+        {
+          "name_zh": "独立Pytest最终通过",
+          "passed": true,
+          "expected_zh": "Agent结束后 pytest -q 退出码为0",
+          "observed_zh": "退出码=0"
+        },
+        {
+          "name_zh": "测试文件保持不变",
+          "passed": true,
+          "expected_zh": "tests/ 前后哈希一致",
+          "observed_zh": "保持不变"
+        },
+        {
+          "name_zh": "替代修改范围受控",
+          "passed": true,
+          "expected_zh": "只有 src/service.py 可以变化",
+          "observed_zh": "实际变化：['src/service.py']"
+        },
+        {
+          "name_zh": "恢复后取得测试证据",
+          "passed": true,
+          "expected_zh": "权限拒绝后仍有成功测试调用",
+          "observed_zh": "已取得"
+        }
+      ],
+      "failure_category": "none",
+      "failure_category_zh": "无",
+      "workspace": ".temp/llm_e2e/runs/permission_denial-r2-20260721T124002Z-c66de6/workspace",
+      "trace_path": ".temp/llm_e2e/runs/permission_denial-r2-20260721T124002Z-c66de6/trace.json"
+    },
+    {
+      "run_id": "permission_denial-r3-20260721T124021Z-aee961",
+      "task_id": "permission_denial",
+      "task_name_zh": "权限拒绝后的替代方案",
+      "category_zh": "权限恢复",
+      "run_number": 3,
+      "model": "deepseek-v4-pro[1m]",
+      "started_at": "2026-07-21T12:40:21.061374+00:00",
+      "duration_ms": 19281,
+      "passed": true,
+      "status_zh": "通过",
+      "stop_reason": "done",
+      "error": "",
+      "model_call_count": 7,
+      "estimated_total_tokens": 19354,
+      "cost_usd": 0.077652,
+      "tool_call_count": 9,
+      "interrupted": false,
+      "resumed": false,
+      "session_reloaded": false,
+      "checkpoint_count": 1,
+      "changed_paths": [
+        "src/service.py"
+      ],
+      "independent_pytest": {
+        "exit_code": 0,
+        "output": ".                                                                        [100%]\n1 passed in 0.50s",
+        "duration_ms": 2921
+      },
+      "graders": [
+        {
+          "name_zh": "运行过程无未处理异常",
+          "passed": true,
+          "expected_zh": "评测运行器未捕获异常",
+          "observed_zh": "未发生异常"
+        },
+        {
+          "name_zh": "Agent正常结束",
+          "passed": true,
+          "expected_zh": "stop_reason=done",
+          "observed_zh": "stop_reason=done"
+        },
+        {
+          "name_zh": "受保护文件修改被拒绝",
+          "passed": true,
+          "expected_zh": "Trace记录对 src/settings.py 的 deny_with_feedback",
+          "observed_zh": "拒绝记录数=1"
+        },
+        {
+          "name_zh": "受保护文件保持不变",
+          "passed": true,
+          "expected_zh": "src/settings.py 哈希不变",
+          "observed_zh": "保持不变"
+        },
+        {
+          "name_zh": "按照反馈采用替代实现",
+          "passed": true,
+          "expected_zh": "src/service.py 发生修改",
+          "observed_zh": "已修改"
+        },
+        {
+          "name_zh": "独立Pytest最终通过",
+          "passed": true,
+          "expected_zh": "Agent结束后 pytest -q 退出码为0",
+          "observed_zh": "退出码=0"
+        },
+        {
+          "name_zh": "测试文件保持不变",
+          "passed": true,
+          "expected_zh": "tests/ 前后哈希一致",
+          "observed_zh": "保持不变"
+        },
+        {
+          "name_zh": "替代修改范围受控",
+          "passed": true,
+          "expected_zh": "只有 src/service.py 可以变化",
+          "observed_zh": "实际变化：['src/service.py']"
+        },
+        {
+          "name_zh": "恢复后取得测试证据",
+          "passed": true,
+          "expected_zh": "权限拒绝后仍有成功测试调用",
+          "observed_zh": "已取得"
+        }
+      ],
+      "failure_category": "none",
+      "failure_category_zh": "无",
+      "workspace": ".temp/llm_e2e/runs/permission_denial-r3-20260721T124021Z-aee961/workspace",
+      "trace_path": ".temp/llm_e2e/runs/permission_denial-r3-20260721T124021Z-aee961/trace.json"
+    },
+    {
+      "run_id": "session_resume-r1-20260721T124040Z-ed2a28",
+      "task_id": "session_resume",
+      "task_name_zh": "写入中断与会话恢复",
+      "category_zh": "中断恢复",
+      "run_number": 1,
+      "model": "deepseek-v4-pro[1m]",
+      "started_at": "2026-07-21T12:40:40.790870+00:00",
+      "duration_ms": 11858,
+      "passed": true,
+      "status_zh": "通过",
+      "stop_reason": "done",
+      "error": "",
+      "model_call_count": 4,
+      "estimated_total_tokens": 9373,
+      "cost_usd": 0.0332736,
+      "tool_call_count": 3,
+      "interrupted": true,
+      "resumed": true,
+      "session_reloaded": true,
+      "checkpoint_count": 1,
+      "changed_paths": [
+        "src/state.py"
+      ],
+      "independent_pytest": {
+        "exit_code": 0,
+        "output": ".                                                                        [100%]\n1 passed in 0.41s",
+        "duration_ms": 2765
+      },
+      "graders": [
+        {
+          "name_zh": "运行过程无未处理异常",
+          "passed": true,
+          "expected_zh": "评测运行器未捕获异常",
+          "observed_zh": "未发生异常"
+        },
+        {
+          "name_zh": "Agent正常结束",
+          "passed": true,
+          "expected_zh": "stop_reason=done",
+          "observed_zh": "stop_reason=done"
+        },
+        {
+          "name_zh": "成功写入后发生模拟中断",
+          "passed": true,
+          "expected_zh": "首次写入后注入 SimulatedInterruption",
+          "observed_zh": "已中断"
+        },
+        {
+          "name_zh": "会话成功持久化并重新加载",
+          "passed": true,
+          "expected_zh": "保存Session后由同一session_id重新加载并继续",
+          "observed_zh": "resumed=True, session_reloaded=True"
+        },
+        {
+          "name_zh": "Checkpoint数量无重复漂移",
+          "passed": true,
+          "expected_zh": "最终恰好保留1个文件Checkpoint",
+          "observed_zh": "checkpoint_count=1"
+        },
+        {
+          "name_zh": "状态文件修改正确",
+          "passed": true,
+          "expected_zh": "src/state.py 哈希发生变化",
+          "observed_zh": "已修改"
+        },
+        {
+          "name_zh": "恢复阶段取得测试证据",
+          "passed": true,
+          "expected_zh": "resume阶段存在成功测试工具调用",
+          "observed_zh": "已取得"
+        },
+        {
+          "name_zh": "独立Pytest最终通过",
+          "passed": true,
+          "expected_zh": "Agent恢复完成后 pytest -q 退出码为0",
+          "observed_zh": "退出码=0"
+        },
+        {
+          "name_zh": "测试文件保持不变",
+          "passed": true,
+          "expected_zh": "tests/ 前后哈希一致",
+          "observed_zh": "保持不变"
+        },
+        {
+          "name_zh": "恢复任务修改范围受控",
+          "passed": true,
+          "expected_zh": "只有 src/state.py 可以变化",
+          "observed_zh": "实际变化：['src/state.py']"
+        }
+      ],
+      "failure_category": "none",
+      "failure_category_zh": "无",
+      "workspace": ".temp/llm_e2e/runs/session_resume-r1-20260721T124040Z-ed2a28/workspace",
+      "trace_path": ".temp/llm_e2e/runs/session_resume-r1-20260721T124040Z-ed2a28/trace.json"
+    },
+    {
+      "run_id": "session_resume-r2-20260721T124052Z-795146",
+      "task_id": "session_resume",
+      "task_name_zh": "写入中断与会话恢复",
+      "category_zh": "中断恢复",
+      "run_number": 2,
+      "model": "deepseek-v4-pro[1m]",
+      "started_at": "2026-07-21T12:40:52.929650+00:00",
+      "duration_ms": 15125,
+      "passed": true,
+      "status_zh": "通过",
+      "stop_reason": "done",
+      "error": "",
+      "model_call_count": 5,
+      "estimated_total_tokens": 12206,
+      "cost_usd": 0.044535,
+      "tool_call_count": 5,
+      "interrupted": true,
+      "resumed": true,
+      "session_reloaded": true,
+      "checkpoint_count": 1,
+      "changed_paths": [
+        "src/state.py"
+      ],
+      "independent_pytest": {
+        "exit_code": 0,
+        "output": ".                                                                        [100%]\n1 passed in 0.74s",
+        "duration_ms": 3906
+      },
+      "graders": [
+        {
+          "name_zh": "运行过程无未处理异常",
+          "passed": true,
+          "expected_zh": "评测运行器未捕获异常",
+          "observed_zh": "未发生异常"
+        },
+        {
+          "name_zh": "Agent正常结束",
+          "passed": true,
+          "expected_zh": "stop_reason=done",
+          "observed_zh": "stop_reason=done"
+        },
+        {
+          "name_zh": "成功写入后发生模拟中断",
+          "passed": true,
+          "expected_zh": "首次写入后注入 SimulatedInterruption",
+          "observed_zh": "已中断"
+        },
+        {
+          "name_zh": "会话成功持久化并重新加载",
+          "passed": true,
+          "expected_zh": "保存Session后由同一session_id重新加载并继续",
+          "observed_zh": "resumed=True, session_reloaded=True"
+        },
+        {
+          "name_zh": "Checkpoint数量无重复漂移",
+          "passed": true,
+          "expected_zh": "最终恰好保留1个文件Checkpoint",
+          "observed_zh": "checkpoint_count=1"
+        },
+        {
+          "name_zh": "状态文件修改正确",
+          "passed": true,
+          "expected_zh": "src/state.py 哈希发生变化",
+          "observed_zh": "已修改"
+        },
+        {
+          "name_zh": "恢复阶段取得测试证据",
+          "passed": true,
+          "expected_zh": "resume阶段存在成功测试工具调用",
+          "observed_zh": "已取得"
+        },
+        {
+          "name_zh": "独立Pytest最终通过",
+          "passed": true,
+          "expected_zh": "Agent恢复完成后 pytest -q 退出码为0",
+          "observed_zh": "退出码=0"
+        },
+        {
+          "name_zh": "测试文件保持不变",
+          "passed": true,
+          "expected_zh": "tests/ 前后哈希一致",
+          "observed_zh": "保持不变"
+        },
+        {
+          "name_zh": "恢复任务修改范围受控",
+          "passed": true,
+          "expected_zh": "只有 src/state.py 可以变化",
+          "observed_zh": "实际变化：['src/state.py']"
+        }
+      ],
+      "failure_category": "none",
+      "failure_category_zh": "无",
+      "workspace": ".temp/llm_e2e/runs/session_resume-r2-20260721T124052Z-795146/workspace",
+      "trace_path": ".temp/llm_e2e/runs/session_resume-r2-20260721T124052Z-795146/trace.json"
+    },
+    {
+      "run_id": "session_resume-r3-20260721T124108Z-7ad0bf",
+      "task_id": "session_resume",
+      "task_name_zh": "写入中断与会话恢复",
+      "category_zh": "中断恢复",
+      "run_number": 3,
+      "model": "deepseek-v4-pro[1m]",
+      "started_at": "2026-07-21T12:41:08.592817+00:00",
+      "duration_ms": 13640,
+      "passed": true,
+      "status_zh": "通过",
+      "stop_reason": "done",
+      "error": "",
+      "model_call_count": 4,
+      "estimated_total_tokens": 9718,
+      "cost_usd": 0.0365532,
+      "tool_call_count": 4,
+      "interrupted": true,
+      "resumed": true,
+      "session_reloaded": true,
+      "checkpoint_count": 1,
+      "changed_paths": [
+        "src/state.py"
+      ],
+      "independent_pytest": {
+        "exit_code": 0,
+        "output": ".                                                                        [100%]\n1 passed in 0.40s",
+        "duration_ms": 2780
+      },
+      "graders": [
+        {
+          "name_zh": "运行过程无未处理异常",
+          "passed": true,
+          "expected_zh": "评测运行器未捕获异常",
+          "observed_zh": "未发生异常"
+        },
+        {
+          "name_zh": "Agent正常结束",
+          "passed": true,
+          "expected_zh": "stop_reason=done",
+          "observed_zh": "stop_reason=done"
+        },
+        {
+          "name_zh": "成功写入后发生模拟中断",
+          "passed": true,
+          "expected_zh": "首次写入后注入 SimulatedInterruption",
+          "observed_zh": "已中断"
+        },
+        {
+          "name_zh": "会话成功持久化并重新加载",
+          "passed": true,
+          "expected_zh": "保存Session后由同一session_id重新加载并继续",
+          "observed_zh": "resumed=True, session_reloaded=True"
+        },
+        {
+          "name_zh": "Checkpoint数量无重复漂移",
+          "passed": true,
+          "expected_zh": "最终恰好保留1个文件Checkpoint",
+          "observed_zh": "checkpoint_count=1"
+        },
+        {
+          "name_zh": "状态文件修改正确",
+          "passed": true,
+          "expected_zh": "src/state.py 哈希发生变化",
+          "observed_zh": "已修改"
+        },
+        {
+          "name_zh": "恢复阶段取得测试证据",
+          "passed": true,
+          "expected_zh": "resume阶段存在成功测试工具调用",
+          "observed_zh": "已取得"
+        },
+        {
+          "name_zh": "独立Pytest最终通过",
+          "passed": true,
+          "expected_zh": "Agent恢复完成后 pytest -q 退出码为0",
+          "observed_zh": "退出码=0"
+        },
+        {
+          "name_zh": "测试文件保持不变",
+          "passed": true,
+          "expected_zh": "tests/ 前后哈希一致",
+          "observed_zh": "保持不变"
+        },
+        {
+          "name_zh": "恢复任务修改范围受控",
+          "passed": true,
+          "expected_zh": "只有 src/state.py 可以变化",
+          "observed_zh": "实际变化：['src/state.py']"
+        }
+      ],
+      "failure_category": "none",
+      "failure_category_zh": "无",
+      "workspace": ".temp/llm_e2e/runs/session_resume-r3-20260721T124108Z-7ad0bf/workspace",
+      "trace_path": ".temp/llm_e2e/runs/session_resume-r3-20260721T124108Z-7ad0bf/trace.json"
+    }
+  ]
+}

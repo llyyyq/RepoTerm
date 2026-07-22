@@ -39,6 +39,6 @@ package-lock.json binary
 ts-src/package-lock.json binary
 
 # Exclude nested git repos from top-level tracking
-MiniCode-fork/
+RepoTerm-fork/
 claude-code-src/claude-code/
 superpowers-zh/

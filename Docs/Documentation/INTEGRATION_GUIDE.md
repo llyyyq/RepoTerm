@@ -1,4 +1,4 @@
-# MiniCode Python - 新架构集成指南
+# RepoTerm - 新架构集成指南
 
 > 版本: v0.4.0 (Claude Code 架构对齐)
 > 创建时间: 2026-04-05
@@ -19,9 +19,9 @@
 
 | 文件 | 行数 | 功能 |
 |------|------|------|
-| `minicode/state.py` | 280 | Store 状态管理 + AppState |
-| `minicode/cost_tracker.py` | 280 | 费用追踪 + 使用统计 |
-| `minicode/tooling.py` | 扩展 | Tool Protocol + Metadata |
+| `repoterm/state.py` | 280 | Store 状态管理 + AppState |
+| `repoterm/cost_tracker.py` | 280 | 费用追踪 + 使用统计 |
+| `repoterm/tooling.py` | 扩展 | Tool Protocol + Metadata |
 
 ---
 
@@ -30,7 +30,7 @@
 ### 1. Store 状态管理
 
 ```python
-from minicode.state import create_app_store, format_app_state_summary
+from repoterm.state import create_app_store, format_app_state_summary
 
 # 创建 Store
 app_state = create_app_store({
@@ -40,7 +40,7 @@ app_state = create_app_store({
 })
 
 # 更新状态
-from minicode.state import set_busy, set_idle, update_context_usage
+from repoterm.state import set_busy, set_idle, update_context_usage
 
 app_state.set_state(set_busy("read_file"))
 app_state.set_state(update_context_usage(50000, 200000))
@@ -86,7 +86,7 @@ Status:
 ### 2. 费用追踪
 
 ```python
-from minicode.cost_tracker import CostTracker
+from repoterm.cost_tracker import CostTracker
 
 tracker = CostTracker()
 
@@ -149,7 +149,7 @@ Cost per minute: $0.0081
 ### 3. Tool Protocol
 
 ```python
-from minicode.tooling import Tool, ToolMetadata, ToolCapability
+from repoterm.tooling import Tool, ToolMetadata, ToolCapability
 
 # 定义工具元数据
 metadata = ToolMetadata(
@@ -180,8 +180,8 @@ print(metadata.is_concurrency_safe)  # True
 
 ```python
 # tty_app.py 中已添加：
-from minicode.state import AppState, Store, create_app_store
-from minicode.cost_tracker import CostTracker
+from repoterm.state import AppState, Store, create_app_store
+from repoterm.cost_tracker import CostTracker
 
 # 在 run_tty_app 中初始化：
 app_state_store = create_app_store({
@@ -204,7 +204,7 @@ state = ScreenState(
 
 ### 步骤 1: 添加 /cost 命令
 
-编辑 `minicode/cli_commands.py`，添加：
+编辑 `repoterm/cli_commands.py`，添加：
 
 ```python
 @dataclass
@@ -236,7 +236,7 @@ class StatusCommand:
 
 ### 步骤 3: 在 agent loop 中记录费用
 
-编辑 `minicode/agent_loop.py`，在 API 调用后添加：
+编辑 `repoterm/agent_loop.py`，在 API 调用后添加：
 
 ```python
 # 在 run_agent_turn 中，收到 API 响应后：
@@ -253,7 +253,7 @@ if state.cost_tracker and api_response.usage:
 
 ### 步骤 4: 在工具执行时记录代码变更
 
-编辑 `minicode/tty_app.py` 的 `on_tool_result` 回调：
+编辑 `repoterm/tty_app.py` 的 `on_tool_result` 回调：
 
 ```python
 def on_tool_result(tool_name: str, output: str, is_error: bool) -> None:
@@ -270,7 +270,7 @@ def on_tool_result(tool_name: str, output: str, is_error: bool) -> None:
 
 ## 🎯 架构对比
 
-| 维度 | Claude Code | MiniCode Python (之前) | MiniCode Python (现在) |
+| 维度 | Claude Code | RepoTerm (之前) | RepoTerm (现在) |
 |------|-------------|----------------------|----------------------|
 | **状态管理** | Zustand Store | 手动 dataclass | ✅ Store (已完成) |
 | **工具系统** | 声明式 Tool 对象 | Tool 类 + 注册表 | ✅ Protocol (已完成) |

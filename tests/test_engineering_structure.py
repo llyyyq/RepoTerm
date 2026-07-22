@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from minicode.engineering_structure import (
+from repoterm.engineering_structure import (
     ROOT_PROJECT_ID,
     check_product_project_compliance,
     scan_product_project_root,
     summarize_structure_projection,
 )
-from minicode.structure_check import check_material_inventory
-from minicode.structure_check import main as structure_check_main
+from repoterm.structure_check import check_material_inventory
+from repoterm.structure_check import main as structure_check_main
 from Package.EngineeringStructure.Src.Application.Query.ProductRootProjection import (
     scan_product_project_root as scan_product_project_root_from_package,
 )
@@ -48,7 +48,7 @@ REQUIRED_RECORD_FIELDS = {
 
 def test_product_root_projection_emits_required_payload_fields(tmp_path: Path) -> None:
     (tmp_path / ".git").mkdir()
-    (tmp_path / "minicode").mkdir()
+    (tmp_path / "repoterm").mkdir()
     (tmp_path / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
 
     records = scan_product_project_root(tmp_path)
@@ -60,7 +60,7 @@ def test_product_root_projection_emits_required_payload_fields(tmp_path: Path) -
     assert all(record["excludedRootEntries"] == [".git"] for record in records)
 
 
-def test_minicode_projection_api_is_package_compatibility_surface() -> None:
+def test_repoterm_projection_api_is_package_compatibility_surface() -> None:
     assert scan_product_project_root is scan_product_project_root_from_package
 
 
@@ -114,7 +114,7 @@ def test_structure_check_cli_can_gate_material_inventory(
     assert code == 0
     assert "material inventory findings: 0" in captured.out
     assert payload["materialInventory"]["passed"] is True
-    assert payload["materialInventory"]["summary"]["focused_gate_count"] >= 15
+    assert payload["materialInventory"]["summary"]["focused_gate_count"] == 4
     assert payload["qualityGateFindings"] == []
 
 
@@ -128,8 +128,8 @@ def test_material_inventory_gate_reports_missing_required_gate(tmp_path: Path) -
             {
                 "schemaVersion": 2,
                 "currentProductApp": {
-                    "logicalBoundary": "product/app/minicode_frontline",
-                    "currentSourceRoot": "minicode",
+                    "logicalBoundary": "product/app/repoterm_frontline",
+                    "currentSourceRoot": "repoterm",
                     "entrySurfaces": [],
                     "coverageEvidence": [],
                 },
@@ -137,8 +137,8 @@ def test_material_inventory_gate_reports_missing_required_gate(tmp_path: Path) -
                 "focusedGates": [
                     {
                         "name": "compileall",
-                        "command": "python -m compileall -q minicode",
-                        "portableFallback": "python3 -m compileall -q minicode",
+                        "command": "python -m compileall -q repoterm",
+                        "portableFallback": "python3 -m compileall -q repoterm",
                     }
                 ],
             }
@@ -150,7 +150,7 @@ def test_material_inventory_gate_reports_missing_required_gate(tmp_path: Path) -
     messages = "\n".join(finding["message"] for finding in check["findings"])
 
     assert check["passed"] is False
-    assert "focusedGates missing release-markdown-report-gate" in messages
+    assert "focusedGates missing readiness-gate" in messages
     assert "currentProductApp.entrySurfaces" in messages
 
 
@@ -166,8 +166,8 @@ def test_material_inventory_allows_declared_optional_workspace_material_to_be_ab
             {
                 "schemaVersion": 2,
                 "currentProductApp": {
-                    "logicalBoundary": "product/app/minicode_frontline",
-                    "currentSourceRoot": "minicode",
+                    "logicalBoundary": "product/app/repoterm_frontline",
+                    "currentSourceRoot": "repoterm",
                     "entrySurfaces": [{"path": "README.md"}],
                     "coverageEvidence": [{"path": "README.md"}],
                 },

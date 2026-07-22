@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from minicode.session import (
+from repoterm.session import (
     AutosaveManager,
     SessionData,
     SessionMetadata,
@@ -37,8 +37,8 @@ def temp_session_dir(tmp_path):
     """Create a temporary session directory."""
     sessions_dir = tmp_path / "sessions"
     sessions_dir.mkdir()
-    with patch("minicode.session.SESSIONS_DIR", sessions_dir), \
-         patch("minicode.session.MINI_CODE_DIR", tmp_path):
+    with patch("repoterm.session.SESSIONS_DIR", sessions_dir), \
+         patch("repoterm.session.REPOTERM_DIR", tmp_path):
         yield sessions_dir
 
 
@@ -326,7 +326,7 @@ def test_save_and_load_session_preserves_product_surfaces(temp_session_dir):
             "name": "project-managed",
             "scope": "project",
             "kind": "managed",
-            "path": "/tmp/test/.mini-code/MANAGED.md",
+            "path": "/tmp/test/.repoterm/MANAGED.md",
             "exists": True,
             "preview": "Prefer strict verification.",
         }
@@ -719,7 +719,7 @@ def test_format_session_inspect_includes_runtime_checkpoints_and_recent_transcri
             "kind": "tool",
             "toolName": "edit_file",
             "status": "success",
-            "body": "Patched minicode/session.py",
+            "body": "Patched repoterm/session.py",
         },
     ]
     session.update_metadata()
@@ -735,7 +735,7 @@ def test_format_session_inspect_includes_runtime_checkpoints_and_recent_transcri
     assert "Recent transcript (3 shown):" in result
     assert "- [assistant] Initial analysis complete." in result
     assert "- [runtime:phase] Runtime phase: verify." in result
-    assert "- [tool:edit_file/success] Patched minicode/session.py" in result
+    assert "- [tool:edit_file/success] Patched repoterm/session.py" in result
 
 
 def test_format_session_inspect_and_replay_include_product_surfaces(temp_session_dir):
@@ -745,7 +745,7 @@ def test_format_session_inspect_and_replay_include_product_surfaces(temp_session
             "name": "project-managed",
             "scope": "project",
             "kind": "managed",
-            "path": "/tmp/test/.mini-code/MANAGED.md",
+            "path": "/tmp/test/.repoterm/MANAGED.md",
             "exists": True,
             "preview": "Prefer strict verification.",
         }

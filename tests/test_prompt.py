@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from minicode.prompt import build_system_prompt
+from repoterm.prompt import build_system_prompt
 
 
 def test_build_system_prompt_includes_skills_and_mcp(tmp_path: Path) -> None:
@@ -54,7 +54,7 @@ def test_build_system_prompt_includes_memory_context(tmp_path: Path) -> None:
 def test_build_system_prompt_bundle_handles_malformed_mcp_entry():
     """A partial MCP server dict (missing toolCount/name/status) or a non-dict
     entry must not KeyError/AttributeError the prompt build."""
-    from minicode.prompt import build_system_prompt_bundle
+    from repoterm.prompt import build_system_prompt_bundle
 
     extras = {
         "mcpServers": [
@@ -73,7 +73,7 @@ def test_build_system_prompt_bundle_handles_malformed_mcp_entry():
 
 def test_build_system_prompt_bundle_handles_none_in_permission_summary():
     """A None element in permission_summary must not crash join()."""
-    from minicode.prompt import build_system_prompt_bundle
+    from repoterm.prompt import build_system_prompt_bundle
 
     bundle = build_system_prompt_bundle(
         ".", ["ok", None, "x"], {"mcpServers": [], "skills": [], "memory_context": "", "runtime": {}}
@@ -84,7 +84,7 @@ def test_build_system_prompt_bundle_handles_none_in_permission_summary():
 
 def test_build_system_prompt_bundle_handles_malformed_skill():
     """A skill dict missing name/description must not KeyError the build."""
-    from minicode.prompt import build_system_prompt_bundle
+    from repoterm.prompt import build_system_prompt_bundle
 
     bundle = build_system_prompt_bundle(
         ".", [], {"mcpServers": [], "skills": [{"name": "s"}], "memory_context": "", "runtime": {}}

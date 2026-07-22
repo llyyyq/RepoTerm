@@ -1,5 +1,5 @@
-from minicode.task_object import TaskState
-from minicode.turn_kernel import (
+from repoterm.task_object import TaskState
+from repoterm.turn_kernel import (
     TurnBudgetSignals,
     TurnRecurrentState,
     TurnVerificationState,

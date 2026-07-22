@@ -1,5 +1,5 @@
-import minicode.config as config_module
-from minicode.config import (
+import repoterm.config as config_module
+from repoterm.config import (
     describe_fallback_guidance,
     default_model_fallbacks,
     discovered_openai_fallbacks,
@@ -9,7 +9,7 @@ from minicode.config import (
     merge_settings,
     validate_provider_runtime,
 )
-from minicode.model_registry import Provider, detect_provider
+from repoterm.model_registry import Provider, detect_provider
 
 
 def test_merge_settings_merges_env_and_mcp_servers() -> None:
@@ -92,7 +92,7 @@ def test_detect_provider_can_classify_unknown_openai_model_without_probe(
     def fail_probe(*_args, **_kwargs):
         raise AssertionError("local provider detection must not probe the gateway")
 
-    monkeypatch.setattr("minicode.model_registry.probe_openai_exposed_models", fail_probe)
+    monkeypatch.setattr("repoterm.model_registry.probe_openai_exposed_models", fail_probe)
     provider = detect_provider(
         "qwen3.7-max",
         {
@@ -129,8 +129,8 @@ def test_load_runtime_config_includes_runtime_profile(monkeypatch) -> None:
             "env": {"ANTHROPIC_API_KEY": "test-key"},
         },
     )
-    monkeypatch.delenv("MINI_CODE_RUNTIME_PROFILE", raising=False)
-    monkeypatch.delenv("MINI_CODE_MODEL", raising=False)
+    monkeypatch.delenv("REPOTERM_RUNTIME_PROFILE", raising=False)
+    monkeypatch.delenv("REPOTERM_MODEL", raising=False)
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
@@ -153,7 +153,7 @@ def test_load_runtime_config_includes_anthropic_family_defaults(monkeypatch) -> 
             },
         },
     )
-    monkeypatch.delenv("MINI_CODE_MODEL", raising=False)
+    monkeypatch.delenv("REPOTERM_MODEL", raising=False)
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
@@ -190,7 +190,7 @@ def test_load_runtime_config_prefers_settings_env_for_anthropic_runtime(monkeypa
     monkeypatch.setenv("ANTHROPIC_DEFAULT_SONNET_MODEL", "deepseek-v4-pro[1m]")
     monkeypatch.setenv("ANTHROPIC_DEFAULT_OPUS_MODEL", "deepseek-v4-pro[1m]")
     monkeypatch.setenv("ANTHROPIC_DEFAULT_HAIKU_MODEL", "deepseek-v4-pro[1m]")
-    monkeypatch.delenv("MINI_CODE_MODEL", raising=False)
+    monkeypatch.delenv("REPOTERM_MODEL", raising=False)
 
     runtime = load_runtime_config(cwd=".")
 
@@ -216,7 +216,7 @@ def test_load_runtime_config_prefers_settings_env_for_openai_runtime(monkeypatch
     )
     monkeypatch.setenv("OPENAI_BASE_URL", "https://stale.example.com")
     monkeypatch.setenv("OPENAI_API_KEY", "stale-openai-token")
-    monkeypatch.delenv("MINI_CODE_MODEL", raising=False)
+    monkeypatch.delenv("REPOTERM_MODEL", raising=False)
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
 
     runtime = load_runtime_config(cwd=".")
@@ -227,7 +227,7 @@ def test_load_runtime_config_prefers_settings_env_for_openai_runtime(monkeypatch
     assert runtime["openaiApiKey"] == "fresh-openai-token"
 
 
-def test_load_runtime_config_preserves_mini_code_model_override(monkeypatch) -> None:
+def test_load_runtime_config_preserves_repoterm_model_override(monkeypatch) -> None:
     monkeypatch.setattr(
         config_module,
         "load_effective_settings",
@@ -239,7 +239,7 @@ def test_load_runtime_config_preserves_mini_code_model_override(monkeypatch) -> 
             },
         },
     )
-    monkeypatch.setenv("MINI_CODE_MODEL", "gpt-4o")
+    monkeypatch.setenv("REPOTERM_MODEL", "gpt-4o")
     monkeypatch.setenv("ANTHROPIC_MODEL", "deepseek-v4-pro[1m]")
 
     runtime = load_runtime_config(cwd=".")
@@ -258,10 +258,10 @@ def test_load_runtime_config_includes_structured_fallback_models(monkeypatch) ->
             "env": {"ANTHROPIC_API_KEY": "test-key"},
         },
     )
-    monkeypatch.delenv("MINI_CODE_MODEL", raising=False)
+    monkeypatch.delenv("REPOTERM_MODEL", raising=False)
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("MINI_CODE_MODEL_FALLBACKS", raising=False)
+    monkeypatch.delenv("REPOTERM_MODEL_FALLBACKS", raising=False)
     monkeypatch.delenv("ANTHROPIC_MODEL_FALLBACKS", raising=False)
 
     runtime = load_runtime_config(cwd=".")
@@ -363,7 +363,7 @@ def test_format_config_diagnostic_does_not_probe_openai_gateway(monkeypatch) -> 
         raise AssertionError("configuration diagnostics must remain local-only")
 
     monkeypatch.setattr(config_module, "load_runtime_config", lambda cwd=None: runtime)
-    monkeypatch.setattr("minicode.model_registry.probe_openai_exposed_models", fail_probe)
+    monkeypatch.setattr("repoterm.model_registry.probe_openai_exposed_models", fail_probe)
 
     result = format_config_diagnostic()
 
@@ -432,7 +432,7 @@ def test_load_runtime_config_falls_back_to_model_for_missing_anthropic_family_de
             },
         },
     )
-    monkeypatch.delenv("MINI_CODE_MODEL", raising=False)
+    monkeypatch.delenv("REPOTERM_MODEL", raising=False)
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
@@ -455,7 +455,7 @@ def test_load_runtime_config_falls_back_to_model_for_missing_anthropic_family_de
 def test_project_mcp_not_loaded_by_default(tmp_path, monkeypatch):
     """Project .mcp.json should NOT be loaded without explicit trust opt-in."""
     import json
-    from minicode.config import load_effective_settings, project_mcp_path
+    from repoterm.config import load_effective_settings, project_mcp_path
 
     # Create a project .mcp.json with a "malicious" server
     mcp_file = project_mcp_path(str(tmp_path))

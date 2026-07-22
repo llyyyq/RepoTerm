@@ -9,9 +9,12 @@ Covers all 5 components of the cost control closed-loop:
 """
 
 import time
+from pathlib import Path
 import pytest
 
-from minicode.cost_control import (
+TEST_WORKSPACE = Path(__file__).resolve().parents[1] / ".temp" / "test-tool-results"
+
+from repoterm.cost_control import (
     BudgetActuator,
     BudgetAdjustment,
     BudgetPIDController,
@@ -20,7 +23,7 @@ from minicode.cost_control import (
     CostRateSensor,
     SpendingTrend,
 )
-from minicode.context_compactor import (
+from repoterm.context_compactor import (
     AutoCompactConfig,
     ContextCompactor,
 )
@@ -280,7 +283,7 @@ class TestBudgetManagerIntegration:
     def test_apply_to_budget_manager(self):
         loop = CostControlLoop(target_cost_per_min=0.50, enabled=True)
         cfg = AutoCompactConfig(threshold_ratio=0.85, circuit_breaker_limit=3, session_memory_enabled=False)
-        compactor = ContextCompactor(context_window=10000, workspace="/tmp", estimate_fn=estimate_tokens, config=cfg)
+        compactor = ContextCompactor(context_window=10000, workspace=TEST_WORKSPACE, estimate_fn=estimate_tokens, config=cfg)
 
         original_threshold = compactor._tool_budget._persist_threshold
         original_budget = compactor._tool_budget._budget
@@ -295,7 +298,7 @@ class TestBudgetManagerIntegration:
     def test_disabled_does_not_modify(self):
         loop = CostControlLoop(enabled=False)
         cfg = AutoCompactConfig(threshold_ratio=0.85, circuit_breaker_limit=3, session_memory_enabled=False)
-        compactor = ContextCompactor(context_window=10000, workspace="/tmp", estimate_fn=estimate_tokens, config=cfg)
+        compactor = ContextCompactor(context_window=10000, workspace=TEST_WORKSPACE, estimate_fn=estimate_tokens, config=cfg)
 
         loop.run(cost_usd=99.0, total_tokens=999999, total_calls=999)
         params = loop.apply_to_budget_manager(compactor._tool_budget)
@@ -304,7 +307,7 @@ class TestBudgetManagerIntegration:
     def test_no_adjustment_returns_empty(self):
         loop = CostControlLoop(enabled=True)
         cfg = AutoCompactConfig(threshold_ratio=0.85, circuit_breaker_limit=3, session_memory_enabled=False)
-        compactor = ContextCompactor(context_window=10000, workspace="/tmp", estimate_fn=estimate_tokens, config=cfg)
+        compactor = ContextCompactor(context_window=10000, workspace=TEST_WORKSPACE, estimate_fn=estimate_tokens, config=cfg)
 
         params = loop.apply_to_budget_manager(compactor._tool_budget)
         assert params == {}
@@ -343,7 +346,7 @@ class TestCostControlE2E:
 
     def test_full_pipeline_with_compactor(self):
         cfg = AutoCompactConfig(threshold_ratio=0.85, circuit_breaker_limit=3, session_memory_enabled=False)
-        compactor = ContextCompactor(context_window=5000, workspace="/tmp", estimate_fn=estimate_tokens, config=cfg)
+        compactor = ContextCompactor(context_window=5000, workspace=TEST_WORKSPACE, estimate_fn=estimate_tokens, config=cfg)
         loop = CostControlLoop(target_cost_per_min=0.50, enabled=True)
 
         msgs = [{"role": "user", "content": "x" * 40} for _ in range(30)]

@@ -1,6 +1,6 @@
 import json
 
-from minicode.cybernetic_ablation import (
+from repoterm.cybernetic_ablation import (
     CyberneticAblationRunner,
     format_ablation_report,
     load_harness_task_profiles,
@@ -39,7 +39,7 @@ def test_ablation_report_can_be_written(tmp_path):
     assert paths["json"].exists()
     assert paths["markdown"].exists()
     report = paths["markdown"].read_text(encoding="utf-8")
-    assert "MiniCode 控制论消融实验" in report
+    assert "RepoTerm 控制论消融实验" in report
     assert "Cybernetic - Baseline" in report
 
 

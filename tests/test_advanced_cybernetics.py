@@ -11,18 +11,18 @@ Tests for:
 import pytest
 import time
 import math
-from minicode.adaptive_pid_tuner import (
+from repoterm.adaptive_pid_tuner import (
     AdaptivePIDTuner, PIDParameters, TuningMethod,
     ZieglerNicholsTuner, RelayFeedbackTuner, GradientBasedTuner,
 )
-from minicode.state_observer import StateObserver, MeasurementVector, ObservedState, KalmanFilter
-from minicode.decoupling_controller import DecouplingController, CouplingMatrix
-from minicode.predictive_controller import PredictiveController, PredictionHorizon
-from minicode.self_healing_engine import (
+from repoterm.state_observer import StateObserver, MeasurementVector, ObservedState, KalmanFilter
+from repoterm.decoupling_controller import DecouplingController, CouplingMatrix
+from repoterm.predictive_controller import PredictiveController, PredictionHorizon
+from repoterm.self_healing_engine import (
     SelfHealingEngine, FaultType, FaultSeverity, HealingStatus,
 )
-from minicode.feedback_controller import FeedbackController, SystemState
-from minicode.stability_monitor import StabilityMonitor
+from repoterm.feedback_controller import FeedbackController, SystemState
+from repoterm.stability_monitor import StabilityMonitor
 
 
 class TestAdaptivePIDTuner:
@@ -499,7 +499,7 @@ class TestSelfHealingEngine:
         assert "healing_success_rate" in stats
 
     def test_custom_strategy_registration(self):
-        from minicode.self_healing_engine import HealingStrategy
+        from repoterm.self_healing_engine import HealingStrategy
 
         engine = SelfHealingEngine()
         custom_strategy = HealingStrategy(
@@ -537,9 +537,9 @@ class TestSelfHealingEngine:
 
 class TestFullCyberneticsIntegration:
     def test_complete_cybernetics_loop(self):
-        from minicode.feedback_controller import FeedbackController, SystemState
-        from minicode.feedforward_controller import FeedforwardController
-        from minicode.stability_monitor import StabilityMonitor, MetricSnapshot
+        from repoterm.feedback_controller import FeedbackController, SystemState
+        from repoterm.feedforward_controller import FeedforwardController
+        from repoterm.stability_monitor import StabilityMonitor, MetricSnapshot
 
         feedback = FeedbackController()
         stability = StabilityMonitor()

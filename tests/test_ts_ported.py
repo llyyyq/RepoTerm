@@ -18,16 +18,16 @@ from __future__ import annotations
 
 import pytest
 
-from minicode.context_manager import (
+from repoterm.context_manager import (
     compute_context_stats,
     estimate_message_tokens,
     estimate_messages_tokens,
     get_model_context_window,
     token_count_with_estimation,
 )
-from minicode.local_tool_shortcuts import parse_local_tool_shortcut
-from minicode.tui.input_parser import parse_input_chunk
-from minicode.tui.types import TranscriptEntry
+from repoterm.local_tool_shortcuts import parse_local_tool_shortcut
+from repoterm.tui.input_parser import parse_input_chunk
+from repoterm.tui.types import TranscriptEntry
 
 
 # ---------------------------------------------------------------------------
@@ -56,7 +56,7 @@ def test_parse_input_chunk_real_enter_still_submits() -> None:
 
 
 def test_slash_commands_registers_help_and_exit() -> None:
-    from minicode.cli_commands import SLASH_COMMANDS
+    from repoterm.cli_commands import SLASH_COMMANDS
 
     usages = {c.usage for c in SLASH_COMMANDS}
     assert "/help" in usages
@@ -280,7 +280,7 @@ def test_transcript_wrapping_counts_visual_rows(monkeypatch: pytest.MonkeyPatch)
 
     Width 60 → inner = 56; a 172-char body wraps to 4 rows + 1 label row = 5,
     so a 4-row window yields scroll offset 1."""
-    from minicode.tui import transcript as transcript_module
+    from repoterm.tui import transcript as transcript_module
 
     monkeypatch.setattr(transcript_module, "_cached_terminal_size", lambda: (60, 24))
 

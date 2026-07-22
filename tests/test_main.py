@@ -5,12 +5,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from minicode.main import (
+from repoterm.main import (
     _handle_inspect_session_request,
     _handle_preview_rewind_request,
     _handle_replay_session_request,
 )
-from minicode.session import create_file_checkpoint, create_new_session
+from repoterm.session import create_file_checkpoint, create_new_session
 
 
 def test_handle_inspect_session_request_prints_session_summary(
@@ -28,7 +28,7 @@ def test_handle_inspect_session_request_prints_session_summary(
         {"id": 1, "kind": "assistant", "body": "Collected evidence."},
     ]
     session.update_metadata()
-    monkeypatch.setattr("minicode.main._resolve_target_session", lambda cwd, session_id: session)
+    monkeypatch.setattr("repoterm.main._resolve_target_session", lambda cwd, session_id: session)
 
     code = _handle_inspect_session_request("/tmp/test", "latest")
     captured = capsys.readouterr()
@@ -40,7 +40,7 @@ def test_handle_inspect_session_request_prints_session_summary(
 
 
 def test_handle_inspect_session_request_errors_when_missing(monkeypatch, capsys) -> None:
-    monkeypatch.setattr("minicode.main._resolve_target_session", lambda cwd, session_id: None)
+    monkeypatch.setattr("repoterm.main._resolve_target_session", lambda cwd, session_id: None)
 
     code = _handle_inspect_session_request("/tmp/test", "latest")
     captured = capsys.readouterr()
@@ -59,7 +59,7 @@ def test_handle_replay_session_request_prints_session_timeline(
         {"id": 1, "kind": "assistant", "body": "Collected evidence."},
     ]
     session.update_metadata()
-    monkeypatch.setattr("minicode.main._resolve_target_session", lambda cwd, session_id: session)
+    monkeypatch.setattr("repoterm.main._resolve_target_session", lambda cwd, session_id: session)
 
     code = _handle_replay_session_request("/tmp/test", "latest")
     captured = capsys.readouterr()
@@ -82,7 +82,7 @@ def test_handle_preview_rewind_request_prints_rewind_plan(
         previous_content="before",
     )
     session.update_metadata()
-    monkeypatch.setattr("minicode.main._resolve_target_session", lambda cwd, session_id: session)
+    monkeypatch.setattr("repoterm.main._resolve_target_session", lambda cwd, session_id: session)
 
     code = _handle_preview_rewind_request("/tmp/test", "latest", 1, None)
     captured = capsys.readouterr()
@@ -93,7 +93,7 @@ def test_handle_preview_rewind_request_prints_rewind_plan(
 
 
 def test_handle_preview_rewind_request_errors_when_missing(monkeypatch, capsys) -> None:
-    monkeypatch.setattr("minicode.main._resolve_target_session", lambda cwd, session_id: None)
+    monkeypatch.setattr("repoterm.main._resolve_target_session", lambda cwd, session_id: None)
 
     code = _handle_preview_rewind_request("/tmp/test", "latest", 1, None)
     captured = capsys.readouterr()
@@ -106,7 +106,7 @@ def test_piped_utf8_bom_local_command_is_handled_without_model_call() -> None:
     repo_root = Path(__file__).resolve().parent.parent
 
     result = subprocess.run(
-        [sys.executable, "-m", "minicode.main"],
+        [sys.executable, "-m", "repoterm.main"],
         input=codecs.BOM_UTF8 + b"/memory\n",
         cwd=repo_root,
         capture_output=True,

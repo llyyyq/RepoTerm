@@ -1,13 +1,13 @@
 """Unit tests for FeedforwardController — preemptive config, risk assessment, intent routing."""
 from __future__ import annotations
 
-from minicode.feedforward_controller import (
+from repoterm.feedforward_controller import (
     FeedforwardController,
     PreemptiveConfig,
     PreemptionLevel,
     RiskAssessment,
 )
-from minicode.intent_parser import ActionType, IntentType, ParsedIntent
+from repoterm.intent_parser import ActionType, IntentType, ParsedIntent
 
 
 def _make_intent(

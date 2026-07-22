@@ -18,7 +18,7 @@ import tempfile
 
 import pytest
 
-from minicode.context_compactor import (
+from repoterm.context_compactor import (
     AutoCompactConfig,
     AutoCompactDispatcher,
     CompactBoundary,
@@ -236,7 +236,7 @@ class TestToolResultBudgetManager:
             {"role": "tool_result", "toolName": "x", "content": "data" * 1000, "toolUseId": "1"},
         ]
         mgr.check_and_replace(messages)
-        results_dir = tmp_path / ".mini-code-tool-results"
+        results_dir = tmp_path / ".repoterm-tool-results"
         assert results_dir.exists()
         assert any(results_dir.iterdir())
 

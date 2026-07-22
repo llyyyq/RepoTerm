@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from hypothesis import given, strategies as st, settings
 
-from minicode.tui.input_parser import parse_input_chunk
-from minicode.tui.types import TranscriptEntry
+from repoterm.tui.input_parser import parse_input_chunk
+from repoterm.tui.types import TranscriptEntry
 
 
 # Strategy: any mix of printable + control + escape + CJK bytes
@@ -34,7 +34,7 @@ def test_parse_input_chunk_never_crashes(chunk: str) -> None:
 def test_transcript_layout_never_crashes(body: str) -> None:
     """Transcript layout computation must never crash on any body text,
     including CJK, control chars, and very long lines."""
-    from minicode.tui import transcript as t
+    from repoterm.tui import transcript as t
     t._cached_terminal_size = lambda: (80, 24)  # type: ignore[attr-defined]
     entries = [TranscriptEntry(id=1, kind="assistant", body=body)]
     offset = t.get_transcript_max_scroll_offset(entries, window_size=4)

@@ -2,7 +2,7 @@ import urllib.request
 
 import pytest
 
-from minicode.fallback_simulation import (
+from repoterm.fallback_simulation import (
     _static_provider,
     select_fallback_preview,
     simulate_fallback_patch,
@@ -90,7 +90,7 @@ def test_existing_local_openai_credential_never_probes_or_calls_network(
     def fail_network(*args: object, **kwargs: object) -> object:
         raise AssertionError("fallback simulation must not make network calls")
 
-    monkeypatch.setattr("minicode.model_registry.probe_openai_exposed_models", fail_probe)
+    monkeypatch.setattr("repoterm.model_registry.probe_openai_exposed_models", fail_probe)
     monkeypatch.setattr(urllib.request, "urlopen", fail_network)
     preview = _openai_preview(key="[REDACTED]")
     preview["merge_patch"]["env"]["OPENAI_BASE_URL"] = "https://preview.example.test/v1"

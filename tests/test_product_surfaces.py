@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from minicode.product_surfaces import build_readiness_report
-from minicode.product_surfaces import (
+from repoterm.product_surfaces import build_readiness_report
+from repoterm.product_surfaces import (
     DelegationStatus,
     HookStatus,
     InstructionLayer,
@@ -33,7 +33,7 @@ def test_build_readiness_report_surfaces_viable_fallbacks() -> None:
     assert report.provider_ready is True
     assert report.fallback_ready is True
     assert report.risk_scope == "none"
-    assert "Keep fallback coverage in release readiness checks." in report.next_actions
+    assert "Keep fallback coverage in local runtime readiness checks." in report.next_actions
     # Configured fallback should always be in candidates
     assert "gpt-4o" in report.fallback_candidates
     # Default fallback list varies by provider/env; at least one should be present
@@ -69,14 +69,14 @@ def test_build_readiness_report_warns_when_primary_ready_but_no_fallbacks() -> N
            any("fallback" in issue.lower() for issue in report.issues)
     assert report.fallback_config_examples
     assert Path(report.fallback_config_examples[0]["path"]).parts[-2:] == (
-        ".mini-code",
+        ".repoterm",
         "settings.json",
     )
     assert "OPENAI_API_KEY" in report.fallback_config_examples[0]["settings"]["env"]
     assert report.repair_plan
     assert any(item["step"] == "choose-fallback-provider" for item in report.repair_plan)
     assert any(item["step"].startswith("preview-") for item in report.repair_plan)
-    assert any(item.get("command") == "minicode-readiness --json --fail-on blocked" for item in report.repair_plan)
+    assert any(item.get("command") == "repoterm-readiness --json --fail-on blocked" for item in report.repair_plan)
 
 
 def test_build_readiness_report_uses_default_fallback_coverage() -> None:
@@ -130,7 +130,7 @@ def test_build_readiness_report_does_not_probe_custom_gateway(monkeypatch) -> No
     def fail_probe(*_args, **_kwargs):
         raise AssertionError("readiness preflight must remain local-only")
 
-    monkeypatch.setattr("minicode.model_registry.probe_openai_exposed_models", fail_probe)
+    monkeypatch.setattr("repoterm.model_registry.probe_openai_exposed_models", fail_probe)
     report = build_readiness_report(
         ".",
         runtime={
@@ -223,7 +223,7 @@ class TestExtensionManifests:
     def test_collect_finds_extension_json(self, tmp_path) -> None:
         import json
 
-        ext_dir = tmp_path / ".minicode" / "extensions" / "my-ext"
+        ext_dir = tmp_path / ".repoterm" / "extensions" / "my-ext"
         ext_dir.mkdir(parents=True)
         ext_dir.joinpath("extension.json").write_text(json.dumps({
             "name": "my-ext",
@@ -232,8 +232,8 @@ class TestExtensionManifests:
         }))
 
         # Monkey-patch extension_search_roots to include tmp_path
-        from minicode.product_surfaces import extension_search_roots as _original
-        import minicode.product_surfaces as ps
+        from repoterm.product_surfaces import extension_search_roots as _original
+        import repoterm.product_surfaces as ps
 
         original = ps.extension_search_roots
         try:

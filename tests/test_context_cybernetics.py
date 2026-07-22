@@ -12,9 +12,12 @@ Covers all 7 components of the closed-loop control system:
 
 import math
 import time
+from pathlib import Path
 import pytest
 
-from minicode.context_cybernetics import (
+TEST_WORKSPACE = Path(__file__).resolve().parents[1] / ".temp" / "test-tool-results"
+
+from repoterm.context_cybernetics import (
     AnomalyType,
     ContextCyberneticsOrchestrator,
     ContextPIDController,
@@ -27,7 +30,7 @@ from minicode.context_cybernetics import (
     AdaptiveThresholdManager,
     CompactionStrategySelector,
 )
-from minicode.context_compactor import (
+from repoterm.context_compactor import (
     AutoCompactConfig,
     CompactStrategy,
     CompactTrigger,
@@ -429,7 +432,7 @@ class TestContextCyberneticsOrchestrator:
     def _make_orchestrator(self, context_window: int = 10000) -> ContextCyberneticsOrchestrator:
         config = AutoCompactConfig(threshold_ratio=0.85, circuit_breaker_limit=3, session_memory_enabled=False)
         compactor = ContextCompactor(
-            context_window=context_window, workspace="/tmp",
+            context_window=context_window, workspace=TEST_WORKSPACE,
             estimate_fn=estimate_tokens, config=config,
         )
         return ContextCyberneticsOrchestrator(
@@ -545,7 +548,7 @@ class TestCyberneticsE2EIntegration:
 
     def _orch(self, cw: int = 8000) -> ContextCyberneticsOrchestrator:
         cfg = AutoCompactConfig(threshold_ratio=0.85, circuit_breaker_limit=3, session_memory_enabled=False)
-        comp = ContextCompactor(context_window=cw, workspace="/tmp", estimate_fn=estimate_tokens, config=cfg)
+        comp = ContextCompactor(context_window=cw, workspace=TEST_WORKSPACE, estimate_fn=estimate_tokens, config=cfg)
         return ContextCyberneticsOrchestrator(comp, kp=2.0, ki=0.15, kd=0.3, pid_setpoint=0.70, base_threshold=0.85, enabled=True)
 
     def test_gradual_context_rise_triggers_progressive_response(self):

@@ -1,7 +1,7 @@
-﻿"""Memory system integration tests.
+"""Memory system integration tests.
 
 Verifies integration points between the memory subsystem and other
-MiniCode components: ContextManager, Session, Agent Loop, Permissions,
+RepoTerm components: ContextManager, Session, Agent Loop, Permissions,
 Auto-classification, and Recovery.
 """
 from __future__ import annotations
@@ -15,7 +15,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from minicode.memory import (
+from repoterm.memory import (
     MemoryEntry,
     MemoryFile,
     MemoryManager,
@@ -25,17 +25,17 @@ from minicode.memory import (
     _tokenize,
     _CODE_TERM_EXPANSIONS,
 )
-from minicode.context_manager import ContextManager, estimate_tokens
-from minicode.session import (
+from repoterm.context_manager import ContextManager, estimate_tokens
+from repoterm.session import (
     save_session,
     load_session,
     create_new_session,
 )
-from minicode.agent_loop import run_agent_turn
-from minicode.mock_model import MockModelAdapter
-from minicode.permissions import PermissionManager
-from minicode.tools import create_default_tool_registry
-from minicode.prompt import build_system_prompt
+from repoterm.agent_loop import run_agent_turn
+from repoterm.mock_model import MockModelAdapter
+from repoterm.permissions import PermissionManager
+from repoterm.tools import create_default_tool_registry
+from repoterm.prompt import build_system_prompt
 
 from tests.test_helpers import (
     verify_memory_integrity,
@@ -139,7 +139,7 @@ class TestMemoryContextManagerIntegration:
         def fail_if_recreated(*_args, **_kwargs):
             raise AssertionError("agent loop recreated the frontend memory manager")
 
-        monkeypatch.setattr("minicode.agent_loop.MemoryManager", fail_if_recreated)
+        monkeypatch.setattr("repoterm.agent_loop.MemoryManager", fail_if_recreated)
 
         result = run_agent_turn(
             model=mock_model,
@@ -539,11 +539,11 @@ class TestMemoryPermissionIntegration:
         mm_b = MemoryManager(project_root=ws_b)
         mm_b.add_entry(MemoryScope.PROJECT, "test", "Project B test convention")
 
-        assert (ws_a / ".mini-code-memory" / "memory.json").exists()
-        assert (ws_b / ".mini-code-memory" / "memory.json").exists()
+        assert (ws_a / ".repoterm-memory" / "memory.json").exists()
+        assert (ws_b / ".repoterm-memory" / "memory.json").exists()
 
-        a_path = ws_a / ".mini-code-memory" / "memory.json"
-        b_path = ws_b / ".mini-code-memory" / "memory.json"
+        a_path = ws_a / ".repoterm-memory" / "memory.json"
+        b_path = ws_b / ".repoterm-memory" / "memory.json"
         assert a_path != b_path
 
         data_a = json.loads(a_path.read_text(encoding="utf-8"))
@@ -581,8 +581,8 @@ class TestMemoryPermissionIntegration:
         local_path = mm.paths.local_memory
         project_path = mm.paths.project_memory
 
-        assert local_path == tmp_workspace / ".mini-code-memory-local"
-        assert project_path == tmp_workspace / ".mini-code-memory"
+        assert local_path == tmp_workspace / ".repoterm-memory-local"
+        assert project_path == tmp_workspace / ".repoterm-memory"
 
         assert ".." not in str(local_path)
         assert ".." not in str(project_path)
@@ -600,7 +600,7 @@ class TestMemoryPermissionIntegration:
         ws1.mkdir()
         ws2.mkdir()
 
-        from minicode.config import MINI_CODE_DIR
+        from repoterm.config import REPOTERM_DIR
 
         mm1 = MemoryManager(project_root=ws1)
         mm1.add_entry(
@@ -794,7 +794,7 @@ class TestMemoryRecoveryIntegration:
     """Corrupted memory file recovery and data integrity."""
 
     def test_loading_from_corrupted_memory_file(self, tmp_workspace):
-        memory_dir = tmp_workspace / ".mini-code-memory"
+        memory_dir = tmp_workspace / ".repoterm-memory"
         memory_dir.mkdir()
         memory_json = memory_dir / "memory.json"
 
@@ -818,7 +818,7 @@ class TestMemoryRecoveryIntegration:
         assert "valid-3" in valid_ids
 
     def test_backup_file_creation_on_corruption(self, tmp_workspace):
-        memory_dir = tmp_workspace / ".mini-code-memory"
+        memory_dir = tmp_workspace / ".repoterm-memory"
         memory_dir.mkdir()
         memory_json = memory_dir / "memory.json"
 
@@ -840,7 +840,7 @@ class TestMemoryRecoveryIntegration:
         assert len(backup_content["entries"]) == 2
 
     def test_integrity_check_and_auto_recovery_flow(self, tmp_workspace):
-        memory_dir = tmp_workspace / ".mini-code-memory"
+        memory_dir = tmp_workspace / ".repoterm-memory"
         memory_dir.mkdir()
         memory_json = memory_dir / "memory.json"
 
@@ -1024,7 +1024,7 @@ class TestMemoryRecoveryIntegration:
         assert len(diag["issues"]) == 0
 
     def test_test_helpers_create_corrupted_memory_file(self, tmp_workspace):
-        memory_dir = tmp_workspace / ".mini-code-memory"
+        memory_dir = tmp_workspace / ".repoterm-memory"
         memory_json = memory_dir / "memory.json"
 
         corrupted = create_corrupted_memory_file(memory_json)

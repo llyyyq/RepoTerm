@@ -1,4 +1,4 @@
-﻿"""Comprehensive integration tests for Agent Loop intelligence features."""
+"""Comprehensive integration tests for Agent Loop intelligence features."""
 
 from __future__ import annotations
 
@@ -9,14 +9,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from minicode.agent_metrics import (
+from repoterm.agent_metrics import (
     AgentMetricsCollector,
     AgentTurnMetrics,
     ErrorCategory,
     ToolExecutionRecord,
     ToolHistoricalStats,
 )
-from minicode.agent_intelligence import (
+from repoterm.agent_intelligence import (
     ClassifiedError,
     ErrorCategory as AIErrorCategory,
     ErrorClassifier,
@@ -26,15 +26,15 @@ from minicode.agent_intelligence import (
     ToolSchedulerController,
     ToolSchedulingSignal,
 )
-from minicode.memory_injector import (
+from repoterm.memory_injector import (
     InjectedMemory,
     MemoryInjectionController,
     MemoryInjectionMode,
     MemoryInjectionSignal,
     MemoryInjector,
 )
-from minicode.memory import MemoryManager, MemoryScope
-from minicode.tooling import ToolCapability, ToolDefinition, ToolMetadata, ToolRegistry
+from repoterm.memory import MemoryManager, MemoryScope
+from repoterm.tooling import ToolCapability, ToolDefinition, ToolMetadata, ToolRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -538,8 +538,8 @@ class TestAgentLoopIntegration:
 
     def test_metrics_collector_integration(self):
         """Metrics flow through agent loop."""
-        from minicode.agent_loop import run_agent_turn
-        from minicode.types import AgentStep
+        from repoterm.agent_loop import run_agent_turn
+        from repoterm.types import AgentStep
 
         metrics = AgentMetricsCollector()
 
@@ -569,9 +569,9 @@ class TestAgentLoopIntegration:
 
     def test_error_recovery_integration(self):
         """Error classification in loop."""
-        from minicode.agent_loop import run_agent_turn
-        from minicode.types import AgentStep, ToolCall
-        from minicode.tooling import ToolResult
+        from repoterm.agent_loop import run_agent_turn
+        from repoterm.types import AgentStep, ToolCall
+        from repoterm.tooling import ToolResult
 
         # Tool that always fails with a network error
         def failing_runner(args, ctx):
@@ -618,9 +618,9 @@ class TestAgentLoopIntegration:
 
     def test_scheduler_integration(self):
         """Tool scheduling in loop."""
-        from minicode.agent_loop import run_agent_turn
-        from minicode.types import AgentStep, ToolCall
-        from minicode.tooling import ToolResult
+        from repoterm.agent_loop import run_agent_turn
+        from repoterm.types import AgentStep, ToolCall
+        from repoterm.tooling import ToolResult
 
         results_log: list[str] = []
 

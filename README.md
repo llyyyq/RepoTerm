@@ -1,4 +1,4 @@
-# MiniCode Python
+# RepoTerm
 
 <p align="center">
   <strong>A lightweight local coding agent for developers who want durable terminal workflows, not just a chat wrapper.</strong>
@@ -7,34 +7,22 @@
 <p align="center">
   <a href="./README.zh-CN.md">Chinese</a>
   |
-  <a href="https://github.com/LiuMengxuan04/MiniCode">MiniCode Main Repo</a>
-  |
-  <a href="https://github.com/QUSETIONS/MiniCode-Python">Python Repo</a>
+  <a href="#source-and-attribution">Source and Attribution</a>
 </p>
 
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white">
   <img alt="Tests" src="https://img.shields.io/badge/tests-1000%2B%20passed-brightgreen?style=flat-square">
-  <img alt="Package" src="https://img.shields.io/badge/package-minicode--py-555?style=flat-square">
+  <img alt="Package" src="https://img.shields.io/badge/package-repoterm-555?style=flat-square">
 </p>
 
-<p align="center">
-  <img alt="Real MiniCode Python frontend demo showing memory, session, rewind, and readiness" src="./Docs/Documentation/assets/readme/minicode-frontend-hero.png" width="100%">
-</p>
+RepoTerm is a Python Coding Agent for local development where the agent needs to survive long sessions, keep its state inspectable, recover from bad edits, and show what it is doing while it works.
 
-<p align="center">
-  <em>Real MiniCode frontend demo, not a mock: the landing page now reflects the current Python runtime and shows memory, session, rewind, and readiness as first-class product surfaces.</em>
-</p>
-
-MiniCode Python is the Python runtime in the MiniCode family. It is built for local development where the agent needs to survive long sessions, keep its state inspectable, recover from bad edits, and show what it is doing while it works.
-
-If Claude Code represents the polished terminal-agent experience, MiniCode Python is the lightweight, local-first version that leans harder into runtime transparency, durable sessions, memory-backed continuity, rewindability, and verifiable behavior.
-
-The screenshot above is rendered from the real MiniCode frontend demo. It highlights the four product promises we care about most on day one: memory that keeps context alive, sessions you can inspect and replay, rewind flows that make local edits safer, and readiness checks that tell you whether the runtime is actually ready to work.
+If Claude Code represents the polished terminal-agent experience, RepoTerm is the lightweight, local-first version that leans harder into runtime transparency, durable sessions, memory-backed continuity, rewindability, and verifiable behavior.
 
 ## At a Glance
 
-MiniCode Python is for you if you want:
+RepoTerm is for you if you want:
 
 - a terminal coding agent that behaves like a runtime, not a chat window;
 - durable sessions you can inspect, replay, resume, and summarize;
@@ -44,11 +32,11 @@ MiniCode Python is for you if you want:
 
 If you only remember one thing, remember this:
 
-> MiniCode Python is optimized for local trust: you should be able to inspect the work, recover the edits, and understand why the agent stopped.
+> RepoTerm is optimized for local trust: you should be able to inspect the work, recover the edits, and understand why the agent stopped.
 
 ## Why This Repo Exists
 
-Most coding-agent READMEs lead with model access and feature lists. MiniCode Python is organized around a different promise:
+Most coding-agent READMEs lead with model access and feature lists. RepoTerm is organized around a different promise:
 
 > the runtime should be observable, recoverable, and testable, not just clever.
 
@@ -61,9 +49,9 @@ That changes the product priorities:
 | Runtime-first | Widening, verification, compaction, and stop reasons are explicit. |
 | Local-first | The agent is built around real repos, local tools, and terminal workflows. |
 
-## Why MiniCode Python
+## Why RepoTerm
 
-| Area | What MiniCode Python emphasizes |
+| Area | What RepoTerm emphasizes |
 | --- | --- |
 | Durable sessions | Inspect, replay, resume, and summarize live or saved sessions with local commands. |
 | Memory as a first-class system | Protect active task context, re-inject project knowledge, compact with memory awareness, and persist useful reflections over time. |
@@ -77,9 +65,9 @@ That changes the product priorities:
 
 With the current repository state, you can already:
 
-- run an interactive terminal agent with `minicode-py`;
-- run a single-shot command with `minicode-headless`;
-- run a provider/runtime readiness gate with `minicode-readiness`;
+- run an interactive terminal agent with `repoterm`;
+- run a single-shot command with `repoterm-headless`;
+- run a provider/runtime readiness gate with `repoterm-readiness`;
 - inspect the current session with `/session`;
 - browse previous sessions with `/sessions`;
 - replay a session with `/session-replay`;
@@ -99,10 +87,9 @@ With the current repository state, you can already:
 ### 1. Install and launch
 
 ```bash
-git clone https://github.com/QUSETIONS/MiniCode-Python.git
-cd MiniCode-Python
+cd RepoTerm
 python -m pip install -e .[dev]
-minicode-py
+repoterm
 ```
 
 ### 2. Ask it to do a real repo task
@@ -111,7 +98,7 @@ minicode-py
 Explain this repository and tell me which commands matter most for day-to-day use.
 ```
 
-You should expect the normal MiniCode loop here: inspect repo state, explain findings, then let you inspect, replay, or continue the session.
+You should expect the normal RepoTerm loop here: inspect repo state, explain findings, then let you inspect, replay, or continue the session.
 
 ### 3. Inspect what the runtime is doing
 
@@ -132,68 +119,24 @@ You should expect the normal MiniCode loop here: inspect repo state, explain fin
 ### 5. Run one-shot headless mode
 
 ```bash
-minicode-headless "Explain what this repo does."
+repoterm-headless "Explain what this repo does."
 ```
 
 ### 6. Run a readiness gate
 
 ```bash
-minicode-readiness --json --fail-on blocked
-minicode-readiness --examples-out .temp/readiness-fallback-examples.json --fail-on blocked
-minicode-readiness --doctor-out .temp/readiness-doctor.md --fail-on blocked
-minicode-readiness --repair-plan-out .temp/readiness-repair-plan.json --fail-on blocked
-minicode-readiness --patch-preview-out .temp/readiness-fallback-patch-preview.json --fail-on blocked
-minicode-readiness --bundle-out .temp/readiness-bundle --fail-on blocked
-python -m minicode.release_readiness --check-readiness-bundle .temp/readiness-bundle
-python -m minicode.release_readiness --write-artifact-manifest .temp/readiness-artifact-manifest.json --artifact fallback_examples_json=.temp/readiness-fallback-examples.json --artifact doctor_markdown=.temp/readiness-doctor.md --artifact repair_plan_json=.temp/readiness-repair-plan.json --artifact patch_preview_json=.temp/readiness-fallback-patch-preview.json
-python -m minicode.release_readiness --check-artifact-manifest .temp/readiness-artifact-manifest.json
-python -m minicode.release_readiness --check-fallback-patch-preview .temp/readiness-fallback-patch-preview.json
-python -m minicode.release_readiness --check-fallback-simulation .temp/readiness-bundle/readiness-fallback-simulations.json
-python -m minicode.release_readiness --check-fallback-switch-smoke
-python benchmarks/release_readiness.py
-python -m minicode.release_readiness --check-fallback-evidence benchmarks/release_readiness_results.json
-python -m minicode.release_readiness --check-release-report benchmarks/release_readiness_results.json
-python -m minicode.release_readiness --check-release-markdown benchmarks/release_readiness_results.md --release-json benchmarks/release_readiness_results.json
+repoterm-readiness --json --fail-on blocked
 ```
 
-Use `--fail-on blocked` for CI environments where provider warnings should be
-reported but not fail local product gates. Use `--fail-on warning` when a release
-candidate must have a ready provider and at least one ready fallback. The
-`--examples-out` artifact is read-only guidance; it never writes credentials or
-changes your MiniCode settings. The `--doctor-out` artifact adds a human-readable
-readiness repair report for CI and release bundles, including a local preflight
-checklist for primary provider config, fallback coverage, configured/default
-fallbacks, and the still-separate live provider smoke. The `--repair-plan-out`
-artifact exports the same next steps as structured, redacted JSON so CI can keep
-the repair path auditable without writing credentials. The `--patch-preview-out`
-artifact exports redacted settings merge patch previews so the chosen fallback
-provider can be reviewed before any local settings change. The artifact manifest
-command records existence, size, and SHA-256 for readiness artifacts so CI can
-detect missing or drifting evidence. `--bundle-out` writes examples, doctor,
-repair plan, patch preview, offline fallback simulations, and manifest together
-for the lowest-friction local check.
-`--check-fallback-patch-preview` validates patch preview safety fields, apply
-notes, merge patch shape, and redaction. `--check-readiness-bundle` validates
-that bundle as one unit, including schema, manifest, and redaction.
-`--check-fallback-simulation` validates every offline fallback simulation and
-rejects any live-provider claim; it does not call a provider.
-`benchmarks/release_readiness.py` is report-only by default; use
-`python benchmarks/release_readiness.py --fail-on at-risk` when a release
-candidate must fail on live-provider risk. It also validates the generated
-headless provider trace so live-smoke failures keep a machine-readable
-readiness snapshot and repair plan. `--check-release-report` validates the full
-release JSON schema and evidence links while still allowing provider `at-risk`
-when the diagnostic evidence is present. `--check-release-markdown` validates
-that the human-readable report contains the same status, smoke, provider,
-fallback, and artifact evidence as the release JSON. `--check-fallback-evidence` validates
-that provider risk is paired with fallback coverage or an auditable fallback
-repair path.
+`--fail-on blocked` reports provider warnings without turning missing optional
+fallbacks into a hard failure. Real-provider behavior is verified separately by
+the end-to-end AgentOps tasks under `benchmarks/llm_e2e_eval.py`.
 
 ## Typical Workflow
 
 ```mermaid
 flowchart LR
-    Start["Start local task"] --> Run["Run minicode-py"]
+    Start["Start local task"] --> Run["Run repoterm"]
     Run --> Work["Agent reads, edits, tests, and reports"]
     Work --> Inspect["Inspect with /session, /memory, or /readiness"]
     Inspect --> Replay["Replay with /session-replay"]
@@ -202,7 +145,7 @@ flowchart LR
     Recover --> Continue
 ```
 
-The main point is simple: MiniCode Python is not trying to hide the runtime. It lets you see the work, inspect the state, and recover from mistakes without manually cleaning everything up.
+The main point is simple: RepoTerm is not trying to hide the runtime. It lets you see the work, inspect the state, and recover from mistakes without manually cleaning everything up.
 
 That same philosophy applies to memory: active task context is protected, durable project knowledge can be re-injected when it matters, and compaction is allowed to reuse memory instead of blindly dropping context.
 
@@ -225,36 +168,20 @@ If you only use six commands at first, use these: `/session`, `/sessions`, `/ses
 
 This repository is past the prototype stage. It already behaves like a usable local product, but it is still being tightened into a more polished lightweight Claude Code style experience.
 
-The active package is the root `minicode/` package configured by `pyproject.toml` as `minicode-py`.
+The active package is the root `repoterm/` package configured by `pyproject.toml` as `repoterm`.
 
-Current cross-platform CI verification result:
+Current local full-suite verification result after repository cleanup:
 
 ```text
-1311 passed, 2 skipped
+1263 passed, 2 skipped
 ```
 
 Verification command:
 
 ```bash
-python -m compileall -q minicode tests benchmarks Main Package
-python -m minicode.structure_check --root . --hotspots 5 --max-dependency-upstream 4 --check-material-inventory --report .temp/structure-compliance.json
-python -m minicode.release_readiness --check-structure-compliance-artifact .temp/structure-compliance.json
-python -m minicode.readiness --json --fail-on blocked
-python -m minicode.readiness --examples-out .temp/readiness-fallback-examples.json --fail-on blocked
-python -m minicode.readiness --doctor-out .temp/readiness-doctor.md --fail-on blocked
-python -m minicode.readiness --repair-plan-out .temp/readiness-repair-plan.json --fail-on blocked
-python -m minicode.readiness --patch-preview-out .temp/readiness-fallback-patch-preview.json --fail-on blocked
-python -m minicode.readiness --bundle-out .temp/readiness-bundle --fail-on blocked
-python -m minicode.release_readiness --check-readiness-bundle .temp/readiness-bundle
-python -m minicode.release_readiness --write-artifact-manifest .temp/readiness-artifact-manifest.json --artifact fallback_examples_json=.temp/readiness-fallback-examples.json --artifact doctor_markdown=.temp/readiness-doctor.md --artifact repair_plan_json=.temp/readiness-repair-plan.json --artifact patch_preview_json=.temp/readiness-fallback-patch-preview.json
-python -m minicode.release_readiness --check-artifact-manifest .temp/readiness-artifact-manifest.json
-python -m minicode.release_readiness --check-fallback-patch-preview .temp/readiness-fallback-patch-preview.json
-python -m minicode.release_readiness --check-fallback-simulation .temp/readiness-bundle/readiness-fallback-simulations.json
-python -m minicode.release_readiness --check-fallback-switch-smoke
-python benchmarks/release_readiness.py
-python -m minicode.release_readiness --check-fallback-evidence benchmarks/release_readiness_results.json
-python -m minicode.release_readiness --check-release-report benchmarks/release_readiness_results.json
-python -m minicode.release_readiness --check-release-markdown benchmarks/release_readiness_results.md --release-json benchmarks/release_readiness_results.json
+python -m compileall -q repoterm tests benchmarks Main Package
+python -m repoterm.structure_check --root . --hotspots 5 --max-dependency-upstream 4 --check-material-inventory --report .temp/structure-compliance.json
+python -m repoterm.readiness --json --fail-on blocked
 python -m pytest -q --import-mode=importlib
 ```
 
@@ -269,6 +196,37 @@ Current state, honestly:
 Live provider readiness still depends on configured credentials and channel
 availability, so the default CI readiness gate only fails when the runtime is
 blocked.
+
+## AgentOps Evidence
+
+RepoTerm publishes two evaluation layers instead of mixing deterministic Runtime correctness with nondeterministic model behavior:
+
+| Layer | Current result | What it validates |
+| --- | ---: | --- |
+| Deterministic Runtime regression | 20 scenarios × 3 rounds, 60/60 passed | State transitions, tool-result normalization, permission boundaries, context continuity, and session recovery |
+| Live-model end-to-end smoke | 5 task types × 3 runs, 15/15 passed | A real model selecting tools, reacting to failures, editing files, and obtaining test evidence in controlled repositories |
+
+Evidence entry points:
+
+- [Evaluation methodology and metric definitions](./benchmarks/eval-methodology.md)
+- [Deterministic Runtime regression report](./benchmarks/runtime_regression_results.md)
+- [Live-model end-to-end report](./benchmarks/llm_e2e_results.md)
+- [Curated traces: normal edit, permission denial, and session resume](./benchmarks/traces/README.md)
+- [Memory conflict, update, and deletion lifecycle trace](./benchmarks/traces/memory-conflict-update-delete.md)
+
+Reproduce the deterministic report without provider credentials:
+
+```bash
+python benchmarks/runtime_regression_eval.py --rounds 3
+```
+
+The live smoke calls the configured provider and therefore requires local credentials and explicit confirmation:
+
+```bash
+python benchmarks/llm_e2e_eval.py --all --runs 3 --confirm-live
+```
+
+These results describe the checked-in controlled task sets; they are not presented as an open-world repository success rate.
 
 ## Architecture
 
@@ -300,39 +258,37 @@ What matters is not the diagram itself. What matters is that runtime state is tr
 
 | Path | Role |
 | --- | --- |
-| `minicode/` | Canonical Python package used by install and tests. |
+| `repoterm/` | Canonical Python package used by install and tests. |
 | `tests/` | Active test suite. |
-| `benchmarks/` | Runtime profile and release-readiness runners plus generated reports. |
-| `Docs/Documentation/` | Architecture notes, optimization history, and productization reports. |
-| `openspec/` | Specs, archived change records, and build/verify planning artifacts. |
-| `.mini-code-memory/` | Workspace-level durable memory state created by the runtime. |
+| `benchmarks/` | AgentOps evaluation, deterministic Runtime regression, real-model tasks, and traces. |
+| `Docs/Documentation/` | Focused usage, memory, integration, and engineering-boundary documentation. |
+| `Main/`, `Package/` | Product entry contracts and engineering-structure support still used by the runtime. |
 
 ## Core Modules
 
 | Module | Purpose |
 | --- | --- |
-| `minicode/agent_loop.py` | Main model and tool loop, runtime event flow, and product integration. |
-| `minicode/turn_kernel.py` | Step policy, phase transitions, widening, and verification gates. |
-| `minicode/session.py` | Durable sessions, inspect and replay views, checkpoints, and rewind helpers. |
-| `minicode/cli_commands.py` | Local product commands such as session, replay, rewind, and readiness. |
-| `minicode/memory.py` | Long-term project memory manager and retrieval surface. |
-| `minicode/working_memory.py` | Protected working-memory entries that survive compaction pressure. |
-| `minicode/memory_pipeline.py` | Closed-loop memory retrieval, injection, reflection writeback, and optimization path. |
-| `minicode/product_surfaces.py` | User-facing summaries for readiness, hooks, instructions, delegation, and extensions. |
-| `minicode/readiness.py` | Standalone readiness CLI used by local checks and CI gates. |
-| `minicode/release_readiness.py` | Release-oriented runtime smoke and provider-readiness checks. |
-| `minicode/model_switcher.py` | Bounded fallback and failover selection. |
-| `minicode/runtime_profiles.py` | Runtime profiles such as `single` and `single-deep`. |
-| `minicode/cybernetic_orchestrator.py` | Runtime control lifecycle facade. |
+| `repoterm/agent_loop.py` | Main model and tool loop, runtime event flow, and product integration. |
+| `repoterm/turn_kernel.py` | Step policy, phase transitions, widening, and verification gates. |
+| `repoterm/session.py` | Durable sessions, inspect and replay views, checkpoints, and rewind helpers. |
+| `repoterm/cli_commands.py` | Local product commands such as session, replay, rewind, and readiness. |
+| `repoterm/memory.py` | Long-term project memory manager and retrieval surface. |
+| `repoterm/working_memory.py` | Protected working-memory entries that survive compaction pressure. |
+| `repoterm/memory_pipeline.py` | Closed-loop memory retrieval, injection, reflection writeback, and optimization path. |
+| `repoterm/product_surfaces.py` | User-facing summaries for readiness, hooks, instructions, delegation, and extensions. |
+| `repoterm/readiness.py` | Standalone readiness CLI used by local checks and CI gates. |
+| `repoterm/evidence_safety.py` | Path normalization and credential redaction for public Trace and evaluation evidence. |
+| `repoterm/model_switcher.py` | Bounded fallback and failover selection. |
+| `repoterm/runtime_profiles.py` | Runtime profiles such as `single` and `single-deep`. |
+| `repoterm/cybernetic_orchestrator.py` | Runtime control lifecycle facade. |
 
-## MiniCode Family
+## Source and Attribution
 
-| Version | Repository | Focus |
-| --- | --- | --- |
-| TypeScript | [LiuMengxuan04/MiniCode](https://github.com/LiuMengxuan04/MiniCode) | Mainline terminal agent, TUI, MCP, skills, sessions, and context controls. |
-| Python | [QUSETIONS/MiniCode-Python](https://github.com/QUSETIONS/MiniCode-Python) | Local-first Python runtime with stronger session, rewind, readiness, and observability surfaces. |
-| Rust | [harkerhand/MiniCode-rs](https://github.com/harkerhand/MiniCode-rs/tree/master) | Systems-side implementation and experiments. |
-| Java | [hobbescalvin414-tech/minicode4j](https://github.com/hobbescalvin414-tech/minicode4j/tree/feat/default-ts-ui) | Java implementation with a TypeScript-style UI direction. |
+RepoTerm is a secondary-development project based on [MiniCode-Python](https://github.com/QUSETIONS/MiniCode-Python), whose upstream project is [MiniCode](https://github.com/LiuMengxuan04/MiniCode). We thank the original authors for the foundational Agent Loop, tool-calling, and terminal-interaction implementation.
+
+This repository extends and restructures that foundation with Agent Runtime state control, deterministic AgentOps regression, live-model end-to-end evaluation, Trace evidence, memory lifecycle management, safe writes, and failure recovery. Rights in upstream code and contributions remain with their respective authors; additions in this repository are represented by the actual Git history and file contents.
+
+See the preserved [MIT License](./LICENSE) and the detailed [attribution notice](./NOTICE.md).
 
 ## Documentation
 
@@ -340,12 +296,12 @@ Start here if you want the deeper implementation and productization record:
 
 
 - [Chinese README](./README.zh-CN.md)
-- [Optimization Summary](./Docs/Documentation/OPTIMIZATION_SUMMARY.md)
+- [AgentOps Evaluation Methodology](./benchmarks/eval-methodology.md)
+- [Curated Agent Traces](./benchmarks/traces/README.md)
+- [Usage Guide](./Docs/Documentation/USAGE_GUIDE.md)
+- [Integration Guide](./Docs/Documentation/INTEGRATION_GUIDE.md)
 - [Memory Theory](./Docs/Documentation/memory_theory.md)
-- [Minicode-lite Productization Design](./Docs/Documentation/superpowers/specs/2026-06-05-minicode-lite-productization-design.md)
-- [Minicode-lite Build Plan](./Docs/Documentation/superpowers/plans/2026-06-05-minicode-lite-productization-build.md)
-- [Minicode-lite Verify Report](./Docs/Documentation/superpowers/reports/2026-06-05-minicode-lite-productization-verify.md)
-- [Main MiniCode Repository](https://github.com/LiuMengxuan04/MiniCode)
+- [Source and Attribution](#source-and-attribution)
 
 ## Design Principles
 
