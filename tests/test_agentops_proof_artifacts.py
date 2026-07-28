@@ -23,11 +23,12 @@ PUBLIC_EVIDENCE_PATHS = (
     "benchmarks/traces/permission-denial.md",
     "benchmarks/traces/session-resume.md",
 )
-INTERVIEWER_HEADINGS = (
-    "## Interviewer Quick Index",
-    "## Resume Claims → Evidence",
+PROJECT_README_HEADINGS = (
+    "## Core Highlights",
     "## Architecture",
+    "## Implementation Index",
     "## Evaluation",
+    "## Runtime Flow",
     "## Trace",
     "## Failure Recovery",
     "## Reproduce",
@@ -130,5 +131,5 @@ def test_public_agentops_evidence_exists_and_is_linked_from_both_readmes():
         link = f"./{relative_path}"
         assert all(link in readme for readme in readmes), link
 
-    for heading in INTERVIEWER_HEADINGS:
+    for heading in PROJECT_README_HEADINGS:
         assert all(heading in readme for readme in readmes), heading

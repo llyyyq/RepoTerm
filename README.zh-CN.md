@@ -7,9 +7,15 @@
 <p align="center">
   <a href="./README.md">English</a>
   ·
+  <a href="#core-highlights">核心亮点</a>
+  ·
   <a href="#architecture">Architecture</a>
   ·
+  <a href="#implementation-index">实现索引</a>
+  ·
   <a href="#evaluation">Evaluation</a>
+  ·
+  <a href="#runtime-flow">运行链路</a>
   ·
   <a href="#trace">Trace</a>
   ·
@@ -28,28 +34,15 @@ RepoTerm 是一个面向本地代码仓库的 Python 终端 Coding Agent。项�
 
 > README 中的数字只描述仓库内固定的受控任务集。确定性回归与真实模型评测验证的是不同故障面，不代表开放世界代码仓库任务成功率。
 
-简历证据快照：[`resume-2026-07-28`](https://github.com/llyyyq/RepoTerm/tree/resume-2026-07-28)。
+AgentOps 评测快照：[`agentops-2026-07-28`](https://github.com/llyyyq/RepoTerm/tree/agentops-2026-07-28)。
 
-## Interviewer Quick Index
+## Core Highlights
 
-| 面试官想看什么 | 直接入口 |
-| --- | --- |
-| Runtime 架构与数据流 | [Architecture](#architecture) |
-| 60 次确定性回归与 15 次真实模型执行 | [Evaluation](#evaluation) |
-| 四条可直接审阅的执行记录 | [Trace](#trace) |
-| 工具失败、权限拒绝和中断恢复 | [Failure Recovery](#failure-recovery) |
-| 本地复现命令 | [Reproduce](#reproduce) |
-| 简历表述与源码、测试、证据的对应关系 | [Resume Claims → Evidence](#resume-claims--evidence) |
-
-## Resume Claims → Evidence
-
-| 简历要点 | 核心实现 | 回归测试 | 公开证据 |
-| --- | --- | --- | --- |
-| `explore → execute → verify` Agent Turn 状态机 | [`repoterm/agent_loop.py`](./repoterm/agent_loop.py)、[`repoterm/turn_kernel.py`](./repoterm/turn_kernel.py)、[`repoterm/runtime_profiles.py`](./repoterm/runtime_profiles.py) | [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [正常修改 Trace](./benchmarks/traces/normal-edit.md)、[Runtime 报告](./benchmarks/runtime_regression_results.md) |
-| 分层上下文治理与 `StableTaskPack` | [`repoterm/context_manager.py`](./repoterm/context_manager.py)、[`repoterm/micro_compact.py`](./repoterm/micro_compact.py)、[`repoterm/context_compactor.py`](./repoterm/context_compactor.py)、[`repoterm/turn_kernel.py`](./repoterm/turn_kernel.py) | [`tests/test_context_compactor.py`](./tests/test_context_compactor.py)、[`tests/test_micro_compact.py`](./tests/test_micro_compact.py)、[`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [评测方法中的上下文场景](./benchmarks/eval-methodology.md) |
-| `ToolDefinition` / `ToolRegistry`、参数校验与统一 `ToolResult` | [`repoterm/tooling.py`](./repoterm/tooling.py)、[`repoterm/tools/`](./repoterm/tools/) | [`tests/test_tools.py`](./tests/test_tools.py)、[`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [工具失败恢复 Trace](./benchmarks/traces/tool-failure-recovery.md) |
-| Diff、权限、Checkpoint、Snapshot/Delta、resume 与 rewind | [`repoterm/file_review.py`](./repoterm/file_review.py)、[`repoterm/permissions.py`](./repoterm/permissions.py)、[`repoterm/session.py`](./repoterm/session.py)、[`repoterm/tui/session_flow.py`](./repoterm/tui/session_flow.py) | [`tests/test_permissions.py`](./tests/test_permissions.py)、[`tests/test_session.py`](./tests/test_session.py)、[`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [权限拒绝 Trace](./benchmarks/traces/permission-denial.md)、[中断恢复 Trace](./benchmarks/traces/session-resume.md) |
-| 通过脚本化与真实 Model Adapter 构建分层 AgentOps 评测 | [`benchmarks/runtime_regression_eval.py`](./benchmarks/runtime_regression_eval.py)、[`repoterm/llm_e2e_eval.py`](./repoterm/llm_e2e_eval.py)、[`benchmarks/llm_e2e_eval.py`](./benchmarks/llm_e2e_eval.py) | [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py)、[`tests/test_agentops_proof_artifacts.py`](./tests/test_agentops_proof_artifacts.py) | [评测方法](./benchmarks/eval-methodology.md)、[Runtime 报告](./benchmarks/runtime_regression_results.md)、[真实模型报告](./benchmarks/llm_e2e_results.md) |
+- **分阶段 Agent Turn：**以 `explore → execute → verify` 路由任务；检索停滞时扩大范围，缺少证据时拒绝结束，达到步数上限后安全终止。
+- **分层上下文治理：**结合 Provider usage 与本地 Token 估算，对旧工具结果微压缩、对历史消息摘要压缩，并通过 `StableTaskPack` 保护任务关键状态。
+- **结构化工具运行时：**使用 JSON Schema 与 Python validator 校验参数，将失败统一为 `ToolResult`，并从超长输出中保留 head/error/tail 证据。
+- **受控写入与持久化恢复：**提供 Diff 审查、权限决策、Checkpoint、Snapshot/Delta、会话 replay/resume 和受管文件 rewind。
+- **分层 AgentOps 评测：**分别验证确定性 Runtime 控制逻辑与真实模型端到端行为，并保留评测报告和脱敏 Trace。
 
 ## Architecture
 
@@ -109,7 +102,17 @@ Diff 预览 → 权限决策 → 创建 Checkpoint → 文件写入
 - `ScenarioModel` 按预设顺序返回模型回答与工具调用，用于确定性 Runtime 回归。
 - 真实模型 Adapter 让模型自主选择工具，并根据实际工具结果继续决策。
 
-Grader 根据测试结果、文件内容与 Hash、禁止路径、权限结果、停止原因、Checkpoint 和恢复后的会话状态判分。评测报告与精选 Trace 让面试官不必重新跑完全部任务也能检查证据。
+Grader 根据测试结果、文件内容与 Hash、禁止路径、权限结果、停止原因、Checkpoint 和恢复后的会话状态判分。评测报告与精选 Trace 可以在不重跑全部任务的情况下直接检查运行证据。
+
+## Implementation Index
+
+| 能力 | 核心实现 | 回归测试 | 报告与 Trace |
+| --- | --- | --- | --- |
+| Agent Turn 状态机 | [`repoterm/agent_loop.py`](./repoterm/agent_loop.py)、[`repoterm/turn_kernel.py`](./repoterm/turn_kernel.py)、[`repoterm/runtime_profiles.py`](./repoterm/runtime_profiles.py) | [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [正常修改 Trace](./benchmarks/traces/normal-edit.md)、[Runtime 报告](./benchmarks/runtime_regression_results.md) |
+| 上下文治理与 `StableTaskPack` | [`repoterm/context_manager.py`](./repoterm/context_manager.py)、[`repoterm/micro_compact.py`](./repoterm/micro_compact.py)、[`repoterm/context_compactor.py`](./repoterm/context_compactor.py)、[`repoterm/turn_kernel.py`](./repoterm/turn_kernel.py) | [`tests/test_context_compactor.py`](./tests/test_context_compactor.py)、[`tests/test_micro_compact.py`](./tests/test_micro_compact.py)、[`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [评测方法中的上下文场景](./benchmarks/eval-methodology.md) |
+| 工具契约、调度与结果归一化 | [`repoterm/tooling.py`](./repoterm/tooling.py)、[`repoterm/tools/`](./repoterm/tools/) | [`tests/test_tools.py`](./tests/test_tools.py)、[`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [工具失败恢复 Trace](./benchmarks/traces/tool-failure-recovery.md) |
+| 安全编辑与会话持久化 | [`repoterm/file_review.py`](./repoterm/file_review.py)、[`repoterm/permissions.py`](./repoterm/permissions.py)、[`repoterm/session.py`](./repoterm/session.py)、[`repoterm/tui/session_flow.py`](./repoterm/tui/session_flow.py) | [`tests/test_permissions.py`](./tests/test_permissions.py)、[`tests/test_session.py`](./tests/test_session.py)、[`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [权限拒绝 Trace](./benchmarks/traces/permission-denial.md)、[中断恢复 Trace](./benchmarks/traces/session-resume.md) |
+| 确定性与真实模型评测 | [`benchmarks/runtime_regression_eval.py`](./benchmarks/runtime_regression_eval.py)、[`repoterm/llm_e2e_eval.py`](./repoterm/llm_e2e_eval.py)、[`benchmarks/llm_e2e_eval.py`](./benchmarks/llm_e2e_eval.py) | [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py)、[`tests/test_agentops_proof_artifacts.py`](./tests/test_agentops_proof_artifacts.py) | [评测方法](./benchmarks/eval-methodology.md)、[Runtime 报告](./benchmarks/runtime_regression_results.md)、[真实模型报告](./benchmarks/llm_e2e_results.md) |
 
 ## Evaluation
 
@@ -137,16 +140,30 @@ Grader 根据测试结果、文件内容与 Hash、禁止路径、权限结果�
 - [确定性 Runtime 回归报告](./benchmarks/runtime_regression_results.md)
 - [真实模型端到端评测报告](./benchmarks/llm_e2e_results.md)
 
+## Runtime Flow
+
+一次正常的仓库任务会经过下面这条可观察链路：
+
+1. CLI/TUI 创建或加载 Session，并记录用户任务。
+2. 系统把指令、相关记忆、当前阶段、预算信号和 `StableTaskPack` 组装为模型输入。
+3. Model Adapter 返回文本回答或结构化工具调用。
+4. `ToolRegistry` 校验并执行工具；文件修改还要经过 Diff 审查、权限控制和 Checkpoint。
+5. `ToolResult` 写入 Transcript，并作为观察结果进入下一轮模型决策。
+6. Turn Kernel 更新任务进展、阶段、widening、verification 和 stop signals。
+7. 任务以明确 stop reason 结束，随后通过测试命令和 Grader 验证仓库与会话状态。
+
+[正常修改 Trace](./benchmarks/traces/normal-edit.md) 展示了从仓库检索到验证完成的完整顺序。
+
 ## Trace
 
 RepoTerm 的可观测性由两个相关层次组成：
 
 - **Session Transcript** 是持久化的任务原始记录，包含用户/模型消息、工具调用与结果、权限、Checkpoint 和 Runtime events。
-- **精选 Trace** 是经过脱敏和裁剪的面试/评测证据，组合时间线、模型与工具元数据、停止原因、恢复动作和 Grader 结果。
+- **精选 Trace** 是经过脱敏和裁剪的运行记录，组合时间线、模型与工具元数据、停止原因、恢复动作和 Grader 结果。
 
 Runtime event 回答“阶段为什么改变”，Transcript/tool event 回答“任务实际做了什么”，Grader 回答“最终仓库状态是否满足任务”。
 
-| 演示材料 | 重点观察 | 中文文档 | 机器可读 |
+| 参考场景 | 可观察行为 | 中文文档 | 机器可读 |
 | --- | --- | --- | --- |
 | 成功修改 | read → edit → test → `done`，包含 Checkpoint 和通过的 Grader | [normal-edit.md](./benchmarks/traces/normal-edit.md) | [normal-edit.json](./benchmarks/traces/normal-edit.json) |
 | 工具失败后恢复 | 测试失败作为下一轮观察，修改后再次测试直至成功 | [tool-failure-recovery.md](./benchmarks/traces/tool-failure-recovery.md) | [tool-failure-recovery.json](./benchmarks/traces/tool-failure-recovery.json) |

@@ -7,9 +7,15 @@
 <p align="center">
   <a href="./README.zh-CN.md">中文</a>
   ·
+  <a href="#core-highlights">Highlights</a>
+  ·
   <a href="#architecture">Architecture</a>
   ·
+  <a href="#implementation-index">Implementation</a>
+  ·
   <a href="#evaluation">Evaluation</a>
+  ·
+  <a href="#runtime-flow">Runtime Flow</a>
   ·
   <a href="#trace">Trace</a>
   ·
@@ -28,28 +34,15 @@ RepoTerm is a Python terminal Coding Agent for local repositories. Inspired by t
 
 > The numbers in this README refer to checked-in, controlled task sets. The deterministic and live-model layers test different failure surfaces and are not presented as an open-world repository success rate.
 
-Resume evidence snapshot: [`resume-2026-07-28`](https://github.com/llyyyq/RepoTerm/tree/resume-2026-07-28).
+AgentOps evaluation snapshot: [`agentops-2026-07-28`](https://github.com/llyyyq/RepoTerm/tree/agentops-2026-07-28).
 
-## Interviewer Quick Index
+## Core Highlights
 
-| What to inspect | Direct entry |
-| --- | --- |
-| Runtime and data flow | [Architecture](#architecture) |
-| 60 deterministic runs and 15 live-model runs | [Evaluation](#evaluation) |
-| Four reviewable execution records | [Trace](#trace) |
-| Error routing, permission denial, and resume boundaries | [Failure Recovery](#failure-recovery) |
-| Commands to reproduce the evidence | [Reproduce](#reproduce) |
-| Resume claim to source/test/report mapping | [Resume Claims → Evidence](#resume-claims--evidence) |
-
-## Resume Claims → Evidence
-
-| Resume claim | Main implementation | Regression tests | Public evidence |
-| --- | --- | --- | --- |
-| `explore → execute → verify` Agent Turn state machine | [`repoterm/agent_loop.py`](./repoterm/agent_loop.py), [`repoterm/turn_kernel.py`](./repoterm/turn_kernel.py), [`repoterm/runtime_profiles.py`](./repoterm/runtime_profiles.py) | [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [Normal-edit Trace](./benchmarks/traces/normal-edit.md), [Runtime report](./benchmarks/runtime_regression_results.md) |
-| Layered context governance and `StableTaskPack` | [`repoterm/context_manager.py`](./repoterm/context_manager.py), [`repoterm/micro_compact.py`](./repoterm/micro_compact.py), [`repoterm/context_compactor.py`](./repoterm/context_compactor.py), [`repoterm/turn_kernel.py`](./repoterm/turn_kernel.py) | [`tests/test_context_compactor.py`](./tests/test_context_compactor.py), [`tests/test_micro_compact.py`](./tests/test_micro_compact.py), [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [Methodology: context cases](./benchmarks/eval-methodology.md) |
-| `ToolDefinition` / `ToolRegistry`, schema validation and normalized `ToolResult` | [`repoterm/tooling.py`](./repoterm/tooling.py), [`repoterm/tools/`](./repoterm/tools/) | [`tests/test_tools.py`](./tests/test_tools.py), [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [Tool-failure Trace](./benchmarks/traces/tool-failure-recovery.md) |
-| Diff review, permission, checkpoint, snapshot/Delta, resume and rewind | [`repoterm/file_review.py`](./repoterm/file_review.py), [`repoterm/permissions.py`](./repoterm/permissions.py), [`repoterm/session.py`](./repoterm/session.py), [`repoterm/tui/session_flow.py`](./repoterm/tui/session_flow.py) | [`tests/test_permissions.py`](./tests/test_permissions.py), [`tests/test_session.py`](./tests/test_session.py), [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [Permission-denial Trace](./benchmarks/traces/permission-denial.md), [Resume Trace](./benchmarks/traces/session-resume.md) |
-| Layered AgentOps evaluation through a scripted and a live Model Adapter | [`benchmarks/runtime_regression_eval.py`](./benchmarks/runtime_regression_eval.py), [`repoterm/llm_e2e_eval.py`](./repoterm/llm_e2e_eval.py), [`benchmarks/llm_e2e_eval.py`](./benchmarks/llm_e2e_eval.py) | [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py), [`tests/test_agentops_proof_artifacts.py`](./tests/test_agentops_proof_artifacts.py) | [Methodology](./benchmarks/eval-methodology.md), [Runtime report](./benchmarks/runtime_regression_results.md), [Live E2E report](./benchmarks/llm_e2e_results.md) |
+- **Phase-aware Agent Turn:** routes work through `explore → execute → verify`, widens stalled searches, rejects evidence-free completion, and stops safely at the configured step limit.
+- **Layered context governance:** combines provider usage with local token estimation, compacts old tool output, summarizes history under pressure, and protects task-critical state in `StableTaskPack`.
+- **Structured tool runtime:** uses JSON Schema and Python validators for tool arguments, normalizes failures into `ToolResult`, and preserves head/error/tail evidence from oversized output.
+- **Controlled writes and durable recovery:** enforces Diff review, permission decisions, checkpoints, snapshot/Delta persistence, session replay, resume, and managed-file rewind.
+- **Layered AgentOps evaluation:** separates deterministic Runtime regression from live-model end-to-end behavior, with checked-in reports and sanitized execution traces.
 
 ## Architecture
 
@@ -111,6 +104,16 @@ The same Agent Loop accepts two adapters:
 
 Graders inspect tests, file content and hashes, forbidden-path access, permission outcomes, stop reasons, checkpoints, and restored session state. Reports and curated traces make the result inspectable without replaying every run.
 
+## Implementation Index
+
+| Capability | Main implementation | Regression tests | Reports and traces |
+| --- | --- | --- | --- |
+| Agent Turn state machine | [`repoterm/agent_loop.py`](./repoterm/agent_loop.py), [`repoterm/turn_kernel.py`](./repoterm/turn_kernel.py), [`repoterm/runtime_profiles.py`](./repoterm/runtime_profiles.py) | [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [Normal-edit Trace](./benchmarks/traces/normal-edit.md), [Runtime report](./benchmarks/runtime_regression_results.md) |
+| Context governance and `StableTaskPack` | [`repoterm/context_manager.py`](./repoterm/context_manager.py), [`repoterm/micro_compact.py`](./repoterm/micro_compact.py), [`repoterm/context_compactor.py`](./repoterm/context_compactor.py), [`repoterm/turn_kernel.py`](./repoterm/turn_kernel.py) | [`tests/test_context_compactor.py`](./tests/test_context_compactor.py), [`tests/test_micro_compact.py`](./tests/test_micro_compact.py), [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [Methodology: context cases](./benchmarks/eval-methodology.md) |
+| Tool contracts, dispatch, and normalized results | [`repoterm/tooling.py`](./repoterm/tooling.py), [`repoterm/tools/`](./repoterm/tools/) | [`tests/test_tools.py`](./tests/test_tools.py), [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [Tool-failure Trace](./benchmarks/traces/tool-failure-recovery.md) |
+| Safe editing and session persistence | [`repoterm/file_review.py`](./repoterm/file_review.py), [`repoterm/permissions.py`](./repoterm/permissions.py), [`repoterm/session.py`](./repoterm/session.py), [`repoterm/tui/session_flow.py`](./repoterm/tui/session_flow.py) | [`tests/test_permissions.py`](./tests/test_permissions.py), [`tests/test_session.py`](./tests/test_session.py), [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [Permission-denial Trace](./benchmarks/traces/permission-denial.md), [Session-resume Trace](./benchmarks/traces/session-resume.md) |
+| Deterministic and live-model evaluation | [`benchmarks/runtime_regression_eval.py`](./benchmarks/runtime_regression_eval.py), [`repoterm/llm_e2e_eval.py`](./repoterm/llm_e2e_eval.py), [`benchmarks/llm_e2e_eval.py`](./benchmarks/llm_e2e_eval.py) | [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py), [`tests/test_agentops_proof_artifacts.py`](./tests/test_agentops_proof_artifacts.py) | [Methodology](./benchmarks/eval-methodology.md), [Runtime report](./benchmarks/runtime_regression_results.md), [Live E2E report](./benchmarks/llm_e2e_results.md) |
+
 ## Evaluation
 
 The evaluation is split because deterministic Runtime correctness and live-model behavior answer different questions.
@@ -137,6 +140,20 @@ Evidence:
 - [Deterministic Runtime regression report](./benchmarks/runtime_regression_results.md)
 - [Live-model end-to-end report](./benchmarks/llm_e2e_results.md)
 
+## Runtime Flow
+
+A normal repository task moves through the following observable loop:
+
+1. The CLI/TUI creates or loads a session and records the user task.
+2. Instructions, relevant memory, current phase, budget signals, and `StableTaskPack` are assembled into the model input.
+3. The Model Adapter returns text or structured tool calls.
+4. `ToolRegistry` validates and executes each call; file edits additionally pass through Diff review, permission control, and checkpoint creation.
+5. Each `ToolResult` is appended to the transcript and fed into the next model decision.
+6. The Turn Kernel updates progress, phase, widening, verification, and stop signals.
+7. The task ends only with an explicit stop reason; verification commands and graders check the resulting repository and session state.
+
+The [normal-edit Trace](./benchmarks/traces/normal-edit.md) shows this sequence from repository inspection to verified completion.
+
 ## Trace
 
 RepoTerm uses two related observability layers:
@@ -146,7 +163,7 @@ RepoTerm uses two related observability layers:
 
 Runtime events answer “which phase changed and why”; transcript/tool events answer “what actually happened”; graders answer “did the final repository state satisfy the task”.
 
-| Demo | What to look for | Markdown | Machine-readable |
+| Reference scenario | Observable behavior | Markdown | Machine-readable |
 | --- | --- | --- | --- |
 | Successful edit | read → edit → test → `done`, with checkpoint and passing graders | [normal-edit.md](./benchmarks/traces/normal-edit.md) | [normal-edit.json](./benchmarks/traces/normal-edit.json) |
 | Tool failure and recovery | failing test result enters the next decision; model edits and reruns until success | [tool-failure-recovery.md](./benchmarks/traces/tool-failure-recovery.md) | [tool-failure-recovery.json](./benchmarks/traces/tool-failure-recovery.json) |
