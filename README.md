@@ -9,6 +9,8 @@
   ·
   <a href="#core-highlights">Highlights</a>
   ·
+  <a href="#quick-start">Quick Start</a>
+  ·
   <a href="#architecture">Architecture</a>
   ·
   <a href="#implementation-index">Implementation</a>
@@ -43,6 +45,36 @@ AgentOps evaluation snapshot: [`agentops-2026-07-28`](https://github.com/llyyyq/
 - **Structured tool runtime:** uses JSON Schema and Python validators for tool arguments, normalizes failures into `ToolResult`, and preserves head/error/tail evidence from oversized output.
 - **Controlled writes and durable recovery:** enforces Diff review, permission decisions, checkpoints, snapshot/Delta persistence, session replay, resume, and managed-file rewind.
 - **Layered AgentOps evaluation:** separates deterministic Runtime regression from live-model end-to-end behavior, with checked-in reports and sanitized execution traces.
+
+## Quick Start
+
+Requirements: Python 3.11+ and Git.
+
+```bash
+git clone https://github.com/llyyyq/RepoTerm.git
+cd RepoTerm
+python -m pip install -e ".[dev]"
+```
+
+Configure a live provider through the interactive installer, then launch RepoTerm:
+
+```bash
+repoterm --install
+repoterm
+```
+
+The installer writes the selected model, endpoint, and credential to `~/.repoterm/settings.json`. To inspect the product without a provider, start it in mock mode:
+
+```bash
+# PowerShell
+$env:REPOTERM_MODEL_MODE="mock"
+repoterm
+
+# macOS / Linux
+REPOTERM_MODEL_MODE=mock repoterm
+```
+
+Inside the TUI, use `/help` for commands and `/readiness` to inspect provider configuration.
 
 ## Architecture
 

@@ -9,6 +9,8 @@
   ·
   <a href="#core-highlights">核心亮点</a>
   ·
+  <a href="#quick-start">快速开始</a>
+  ·
   <a href="#architecture">Architecture</a>
   ·
   <a href="#implementation-index">实现索引</a>
@@ -38,11 +40,41 @@ AgentOps 评测快照：[`agentops-2026-07-28`](https://github.com/llyyyq/RepoTe
 
 ## Core Highlights
 
-- **分阶段 Agent Turn：**以 `explore → execute → verify` 路由任务；检索停滞时扩大范围，缺少证据时拒绝结束，达到步数上限后安全终止。
-- **分层上下文治理：**结合 Provider usage 与本地 Token 估算，对旧工具结果微压缩、对历史消息摘要压缩，并通过 `StableTaskPack` 保护任务关键状态。
-- **结构化工具运行时：**使用 JSON Schema 与 Python validator 校验参数，将失败统一为 `ToolResult`，并从超长输出中保留 head/error/tail 证据。
-- **受控写入与持久化恢复：**提供 Diff 审查、权限决策、Checkpoint、Snapshot/Delta、会话 replay/resume 和受管文件 rewind。
-- **分层 AgentOps 评测：**分别验证确定性 Runtime 控制逻辑与真实模型端到端行为，并保留评测报告和脱敏 Trace。
+- **分阶段 Agent Turn：** 以 `explore → execute → verify` 路由任务；检索停滞时扩大范围，缺少证据时拒绝结束，达到步数上限后安全终止。
+- **分层上下文治理：** 结合 Provider usage 与本地 Token 估算，对旧工具结果微压缩、对历史消息摘要压缩，并通过 `StableTaskPack` 保护任务关键状态。
+- **结构化工具运行时：** 使用 JSON Schema 与 Python validator 校验参数，将失败统一为 `ToolResult`，并从超长输出中保留 head/error/tail 证据。
+- **受控写入与持久化恢复：** 提供 Diff 审查、权限决策、Checkpoint、Snapshot/Delta、会话 replay/resume 和受管文件 rewind。
+- **分层 AgentOps 评测：** 分别验证确定性 Runtime 控制逻辑与真实模型端到端行为，并保留评测报告和脱敏 Trace。
+
+## Quick Start
+
+运行环境：Python 3.11+、Git。
+
+```bash
+git clone https://github.com/llyyyq/RepoTerm.git
+cd RepoTerm
+python -m pip install -e ".[dev]"
+```
+
+通过交互式安装向导配置真实模型，然后启动 RepoTerm：
+
+```bash
+repoterm --install
+repoterm
+```
+
+安装向导会把模型、API 地址和密钥保存到 `~/.repoterm/settings.json`。如果暂时没有模型凭据，可以用 mock 模式检查产品界面：
+
+```bash
+# PowerShell
+$env:REPOTERM_MODEL_MODE="mock"
+repoterm
+
+# macOS / Linux
+REPOTERM_MODEL_MODE=mock repoterm
+```
+
+进入 TUI 后，可以使用 `/help` 查看命令，使用 `/readiness` 检查 Provider 配置。
 
 ## Architecture
 

@@ -25,6 +25,7 @@ PUBLIC_EVIDENCE_PATHS = (
 )
 PROJECT_README_HEADINGS = (
     "## Core Highlights",
+    "## Quick Start",
     "## Architecture",
     "## Implementation Index",
     "## Evaluation",
