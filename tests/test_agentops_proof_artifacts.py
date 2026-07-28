@@ -18,7 +18,19 @@ PUBLIC_EVIDENCE_PATHS = (
     "benchmarks/runtime_regression_results.md",
     "benchmarks/llm_e2e_results.md",
     "benchmarks/traces/README.md",
-    "benchmarks/traces/memory-conflict-update-delete.md",
+    "benchmarks/traces/normal-edit.md",
+    "benchmarks/traces/tool-failure-recovery.md",
+    "benchmarks/traces/permission-denial.md",
+    "benchmarks/traces/session-resume.md",
+)
+INTERVIEWER_HEADINGS = (
+    "## Interviewer Quick Index",
+    "## Resume Claims → Evidence",
+    "## Architecture",
+    "## Evaluation",
+    "## Trace",
+    "## Failure Recovery",
+    "## Reproduce",
 )
 
 
@@ -117,3 +129,6 @@ def test_public_agentops_evidence_exists_and_is_linked_from_both_readmes():
         assert (REPOSITORY_ROOT / relative_path).is_file(), relative_path
         link = f"./{relative_path}"
         assert all(link in readme for readme in readmes), link
+
+    for heading in INTERVIEWER_HEADINGS:
+        assert all(heading in readme for readme in readmes), heading

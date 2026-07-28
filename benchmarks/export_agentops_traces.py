@@ -16,6 +16,7 @@ DEFAULT_OUTPUT_DIR = REPO_ROOT / "benchmarks" / "traces"
 
 TARGETS = (
     ("normal-edit", "code_modification", "正常修改"),
+    ("tool-failure-recovery", "test_failure_recovery", "工具失败与修复恢复"),
     ("permission-denial", "permission_denial", "权限拒绝与替代路径"),
     ("session-resume", "session_resume", "中断后的Session恢复"),
 )
@@ -23,6 +24,24 @@ TARGETS = (
 
 def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _normalize_project_identity(value: Any) -> Any:
+    """Rewrite legacy product labels in historical run artifacts."""
+    if isinstance(value, dict):
+        return {
+            key: _normalize_project_identity(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_normalize_project_identity(item) for item in value]
+    if isinstance(value, str):
+        return (
+            value.replace("MiniCode", "RepoTerm")
+            .replace("minicode", "repoterm")
+            .replace("mini-code", "repoterm")
+        )
+    return value
 
 
 def _compact(value: Any, limit: int = 220) -> str:
@@ -89,7 +108,7 @@ def _public_payload(trace: dict[str, Any], title_zh: str) -> dict[str, Any]:
         "graders": deepcopy(trace.get("graders", [])),
         "说明": "仅导出可观察事件，不包含模型隐藏思维；敏感字段和本地绝对路径已脱敏。",
     }
-    return redact_sensitive_payload(payload)
+    return _normalize_project_identity(redact_sensitive_payload(payload))
 
 
 def _timeline(payload: dict[str, Any]) -> list[dict[str, Any]]:

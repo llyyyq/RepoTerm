@@ -1,313 +1,233 @@
 # RepoTerm
 
 <p align="center">
-  <strong>A lightweight local coding agent for developers who want durable terminal workflows, not just a chat wrapper.</strong>
+  <strong>A local terminal AI Coding Agent with an observable, recoverable, and evaluable runtime.</strong>
 </p>
 
 <p align="center">
-  <a href="./README.zh-CN.md">Chinese</a>
-  |
-  <a href="#source-and-attribution">Source and Attribution</a>
+  <a href="./README.zh-CN.md">中文</a>
+  ·
+  <a href="#architecture">Architecture</a>
+  ·
+  <a href="#evaluation">Evaluation</a>
+  ·
+  <a href="#trace">Trace</a>
+  ·
+  <a href="#failure-recovery">Failure Recovery</a>
+  ·
+  <a href="#reproduce">Reproduce</a>
 </p>
 
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-1000%2B%20passed-brightgreen?style=flat-square">
-  <img alt="Package" src="https://img.shields.io/badge/package-repoterm-555?style=flat-square">
+  <img alt="Runtime regression" src="https://img.shields.io/badge/runtime%20regression-60%2F60-brightgreen?style=flat-square">
+  <img alt="Live E2E" src="https://img.shields.io/badge/live%20E2E-15%2F15-brightgreen?style=flat-square">
 </p>
 
-RepoTerm is a Python Coding Agent for local development where the agent needs to survive long sessions, keep its state inspectable, recover from bad edits, and show what it is doing while it works.
+RepoTerm is a Python terminal Coding Agent for local repositories. Inspired by the core interaction model of Claude Code, it focuses on five engineering problems: turn control, context governance, tool execution, safe editing and session recovery, and layered AgentOps evaluation.
 
-If Claude Code represents the polished terminal-agent experience, RepoTerm is the lightweight, local-first version that leans harder into runtime transparency, durable sessions, memory-backed continuity, rewindability, and verifiable behavior.
+> The numbers in this README refer to checked-in, controlled task sets. The deterministic and live-model layers test different failure surfaces and are not presented as an open-world repository success rate.
 
-## At a Glance
+Resume evidence snapshot: [`resume-2026-07-28`](https://github.com/llyyyq/RepoTerm/tree/resume-2026-07-28).
 
-RepoTerm is for you if you want:
+## Interviewer Quick Index
 
-- a terminal coding agent that behaves like a runtime, not a chat window;
-- durable sessions you can inspect, replay, resume, and summarize;
-- a memory stack that can protect working context and re-inject relevant project knowledge;
-- safe local editing with checkpoints, rewind preview, and recovery flows;
-- explicit signals for verification, widening, provider readiness, and failures.
-
-If you only remember one thing, remember this:
-
-> RepoTerm is optimized for local trust: you should be able to inspect the work, recover the edits, and understand why the agent stopped.
-
-## Why This Repo Exists
-
-Most coding-agent READMEs lead with model access and feature lists. RepoTerm is organized around a different promise:
-
-> the runtime should be observable, recoverable, and testable, not just clever.
-
-That changes the product priorities:
-
-| Priority | What it means here |
+| What to inspect | Direct entry |
 | --- | --- |
-| Session-first | Sessions can be inspected, replayed, resumed, and summarized. |
-| Recovery-first | File edits are checkpointed, previewable, and rewindable. |
-| Runtime-first | Widening, verification, compaction, and stop reasons are explicit. |
-| Local-first | The agent is built around real repos, local tools, and terminal workflows. |
+| Runtime and data flow | [Architecture](#architecture) |
+| 60 deterministic runs and 15 live-model runs | [Evaluation](#evaluation) |
+| Four reviewable execution records | [Trace](#trace) |
+| Error routing, permission denial, and resume boundaries | [Failure Recovery](#failure-recovery) |
+| Commands to reproduce the evidence | [Reproduce](#reproduce) |
+| Resume claim to source/test/report mapping | [Resume Claims → Evidence](#resume-claims--evidence) |
 
-## Why RepoTerm
+## Resume Claims → Evidence
 
-| Area | What RepoTerm emphasizes |
-| --- | --- |
-| Durable sessions | Inspect, replay, resume, and summarize live or saved sessions with local commands. |
-| Memory as a first-class system | Protect active task context, re-inject project knowledge, compact with memory awareness, and persist useful reflections over time. |
-| Safe recovery | Automatic checkpoints, rewind preview, rewind safety groups, and saved-session rewind flows. |
-| Runtime control | `single` and `single-deep` profiles, phase-aware execution, widening, verification gates, and structured stop reasons. |
-| Observable behavior | Runtime timelines, readiness reports, provider diagnostics, transcript summaries, and benchmark artifacts. |
-| Local product surface | CLI and TUI commands such as `/session`, `/session-replay`, `/memory`, `/checkpoints`, `/rewind`, and `/readiness`. |
-| Verifiable implementation | The root package is backed by an active test suite, not aspirational docs. |
-
-## What You Can Do Today
-
-With the current repository state, you can already:
-
-- run an interactive terminal agent with `repoterm`;
-- run a single-shot command with `repoterm-headless`;
-- run a provider/runtime readiness gate with `repoterm-readiness`;
-- inspect the current session with `/session`;
-- browse previous sessions with `/sessions`;
-- replay a session with `/session-replay`;
-- inspect memory state with `/memory`;
-- inspect checkpoints with `/checkpoints`;
-- preview or execute rewinds with `/rewind-preview` and `/rewind`;
-- inspect provider and fallback health with `/readiness`.
-
-## 3-Minute Demo
-
-### 0. What you need
-
-- Python 3.11+
-- a local terminal on Windows, macOS, or Linux
-- model/provider credentials if you want live model execution
-
-### 1. Install and launch
-
-```bash
-cd RepoTerm
-python -m pip install -e .[dev]
-repoterm
-```
-
-### 2. Ask it to do a real repo task
-
-```text
-Explain this repository and tell me which commands matter most for day-to-day use.
-```
-
-You should expect the normal RepoTerm loop here: inspect repo state, explain findings, then let you inspect, replay, or continue the session.
-
-### 3. Inspect what the runtime is doing
-
-```text
-/session
-/memory
-/readiness
-```
-
-### 4. Replay or recover if needed
-
-```text
-/session-replay
-/checkpoints
-/rewind-preview
-```
-
-### 5. Run one-shot headless mode
-
-```bash
-repoterm-headless "Explain what this repo does."
-```
-
-### 6. Run a readiness gate
-
-```bash
-repoterm-readiness --json --fail-on blocked
-```
-
-`--fail-on blocked` reports provider warnings without turning missing optional
-fallbacks into a hard failure. Real-provider behavior is verified separately by
-the end-to-end AgentOps tasks under `benchmarks/llm_e2e_eval.py`.
-
-## Typical Workflow
-
-```mermaid
-flowchart LR
-    Start["Start local task"] --> Run["Run repoterm"]
-    Run --> Work["Agent reads, edits, tests, and reports"]
-    Work --> Inspect["Inspect with /session, /memory, or /readiness"]
-    Inspect --> Replay["Replay with /session-replay"]
-    Inspect --> Recover["Preview or use /rewind if edits go wrong"]
-    Replay --> Continue["Resume or continue the next turn"]
-    Recover --> Continue
-```
-
-The main point is simple: RepoTerm is not trying to hide the runtime. It lets you see the work, inspect the state, and recover from mistakes without manually cleaning everything up.
-
-That same philosophy applies to memory: active task context is protected, durable project knowledge can be re-injected when it matters, and compaction is allowed to reuse memory instead of blindly dropping context.
-
-## Everyday Commands
-
-If you only use six commands at first, use these: `/session`, `/sessions`, `/session-replay`, `/memory`, `/rewind-preview`, and `/readiness`.
-
-| Command | What it does |
-| --- | --- |
-| `/session` | Show the current live session snapshot. |
-| `/sessions` | List saved sessions for the current workspace. |
-| `/session-replay` | Replay the current or a saved session with transcript and runtime context. |
-| `/memory` | Show memory system status for the current workspace. |
-| `/checkpoints` | Show checkpoint history for the current or a saved session. |
-| `/rewind-preview` | Preview what a rewind would restore before changing files. |
-| `/rewind` | Rewind the latest edit group, a step count, or a checkpoint id. |
-| `/readiness` | Inspect runtime/provider readiness, fallback coverage, and product surface status. |
-
-## Current Status
-
-This repository is past the prototype stage. It already behaves like a usable local product, but it is still being tightened into a more polished lightweight Claude Code style experience.
-
-The active package is the root `repoterm/` package configured by `pyproject.toml` as `repoterm`.
-
-Current local full-suite verification result after repository cleanup:
-
-```text
-1263 passed, 2 skipped
-```
-
-Verification command:
-
-```bash
-python -m compileall -q repoterm tests benchmarks Main Package
-python -m repoterm.structure_check --root . --hotspots 5 --max-dependency-upstream 4 --check-material-inventory --report .temp/structure-compliance.json
-python -m repoterm.readiness --json --fail-on blocked
-python -m pytest -q --import-mode=importlib
-```
-
-Current state, honestly:
-
-- core runtime, session, replay, checkpoint, rewind, readiness, and structure-compliance surfaces are in good shape;
-- memory is not bolted on: working memory, project memory, memory injection, and memory-aware compaction are already in the runtime path;
-- provider and fallback diagnostics include local preflight checks, structured live-smoke failure context, and a validated headless trace artifact;
-- real provider availability still depends on your local credentials and configured channels;
-- the project is usable today, but it is still evolving toward a more polished lightweight Claude Code experience.
-
-Live provider readiness still depends on configured credentials and channel
-availability, so the default CI readiness gate only fails when the runtime is
-blocked.
-
-## AgentOps Evidence
-
-RepoTerm publishes two evaluation layers instead of mixing deterministic Runtime correctness with nondeterministic model behavior:
-
-| Layer | Current result | What it validates |
-| --- | ---: | --- |
-| Deterministic Runtime regression | 20 scenarios × 3 rounds, 60/60 passed | State transitions, tool-result normalization, permission boundaries, context continuity, and session recovery |
-| Live-model end-to-end smoke | 5 task types × 3 runs, 15/15 passed | A real model selecting tools, reacting to failures, editing files, and obtaining test evidence in controlled repositories |
-
-Evidence entry points:
-
-- [Evaluation methodology and metric definitions](./benchmarks/eval-methodology.md)
-- [Deterministic Runtime regression report](./benchmarks/runtime_regression_results.md)
-- [Live-model end-to-end report](./benchmarks/llm_e2e_results.md)
-- [Curated traces: normal edit, permission denial, and session resume](./benchmarks/traces/README.md)
-- [Memory conflict, update, and deletion lifecycle trace](./benchmarks/traces/memory-conflict-update-delete.md)
-
-Reproduce the deterministic report without provider credentials:
-
-```bash
-python benchmarks/runtime_regression_eval.py --rounds 3
-```
-
-The live smoke calls the configured provider and therefore requires local credentials and explicit confirmation:
-
-```bash
-python benchmarks/llm_e2e_eval.py --all --runs 3 --confirm-live
-```
-
-These results describe the checked-in controlled task sets; they are not presented as an open-world repository success rate.
+| Resume claim | Main implementation | Regression tests | Public evidence |
+| --- | --- | --- | --- |
+| `explore → execute → verify` Agent Turn state machine | [`repoterm/agent_loop.py`](./repoterm/agent_loop.py), [`repoterm/turn_kernel.py`](./repoterm/turn_kernel.py), [`repoterm/runtime_profiles.py`](./repoterm/runtime_profiles.py) | [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [Normal-edit Trace](./benchmarks/traces/normal-edit.md), [Runtime report](./benchmarks/runtime_regression_results.md) |
+| Layered context governance and `StableTaskPack` | [`repoterm/context_manager.py`](./repoterm/context_manager.py), [`repoterm/micro_compact.py`](./repoterm/micro_compact.py), [`repoterm/context_compactor.py`](./repoterm/context_compactor.py), [`repoterm/turn_kernel.py`](./repoterm/turn_kernel.py) | [`tests/test_context_compactor.py`](./tests/test_context_compactor.py), [`tests/test_micro_compact.py`](./tests/test_micro_compact.py), [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [Methodology: context cases](./benchmarks/eval-methodology.md) |
+| `ToolDefinition` / `ToolRegistry`, schema validation and normalized `ToolResult` | [`repoterm/tooling.py`](./repoterm/tooling.py), [`repoterm/tools/`](./repoterm/tools/) | [`tests/test_tools.py`](./tests/test_tools.py), [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [Tool-failure Trace](./benchmarks/traces/tool-failure-recovery.md) |
+| Diff review, permission, checkpoint, snapshot/Delta, resume and rewind | [`repoterm/file_review.py`](./repoterm/file_review.py), [`repoterm/permissions.py`](./repoterm/permissions.py), [`repoterm/session.py`](./repoterm/session.py), [`repoterm/tui/session_flow.py`](./repoterm/tui/session_flow.py) | [`tests/test_permissions.py`](./tests/test_permissions.py), [`tests/test_session.py`](./tests/test_session.py), [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [Permission-denial Trace](./benchmarks/traces/permission-denial.md), [Resume Trace](./benchmarks/traces/session-resume.md) |
+| Layered AgentOps evaluation through a scripted and a live Model Adapter | [`benchmarks/runtime_regression_eval.py`](./benchmarks/runtime_regression_eval.py), [`repoterm/llm_e2e_eval.py`](./repoterm/llm_e2e_eval.py), [`benchmarks/llm_e2e_eval.py`](./benchmarks/llm_e2e_eval.py) | [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py), [`tests/test_agentops_proof_artifacts.py`](./tests/test_agentops_proof_artifacts.py) | [Methodology](./benchmarks/eval-methodology.md), [Runtime report](./benchmarks/runtime_regression_results.md), [Live E2E report](./benchmarks/llm_e2e_results.md) |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    User["User task"] --> Loop["agent_loop.py"]
-    Loop --> Kernel["turn_kernel.py<br/>phase policy, widening,<br/>verification gate"]
-    Loop --> Memory["Memory stack<br/>working_memory.py,<br/>memory.py, memory_pipeline.py"]
-    Kernel --> Tools["Local tools<br/>files, search, edit, shell"]
-    Tools --> Loop
-    Memory --> Loop
-
-    Loop --> Signals["Signals<br/>context, cost, errors,<br/>progress, provider state"]
-    Signals --> Orchestrator["CyberneticOrchestrator"]
-    Orchestrator --> Actions["Runtime actions<br/>compact, checkpoint, rewind,<br/>adjust budget, recover, reflect"]
-    Actions --> Loop
+    User["User / TUI / Headless"] --> Prompt["Instructions + memory + task state"]
+    Prompt --> Loop["Agent Loop"]
+    Loop --> Turn["Turn Kernel<br/>explore → execute → verify"]
+    Turn --> Adapter["Model Adapter<br/>real or scripted"]
+    Adapter --> Calls["Assistant output / tool calls"]
+    Calls --> Registry["ToolRegistry<br/>validate → dispatch → normalize"]
+    Registry --> Tools["File / Search / Shell / Test tools"]
+    Tools --> Result["ToolResult"]
+    Result --> Context["Context governance<br/>micro-compact / summary / StableTaskPack"]
+    Context --> Loop
+    Registry --> SafeWrite["Diff → permission → checkpoint → write"]
+    SafeWrite --> Session["Snapshot + Delta session store"]
+    Loop --> Events["Runtime events + transcript"]
+    Events --> Evidence["Trace export + graders + reports"]
 ```
 
-What matters is not the diagram itself. What matters is that runtime state is treated as something explicit:
+### 1. Agent Turn state machine
 
-- the loop can widen instead of silently stalling;
-- verification can block a premature "done";
-- memory can preserve task-critical context and re-inject project knowledge instead of relying only on the current chat window;
-- session state can survive process boundaries;
-- rewind can reverse local edits instead of asking you to clean them up by hand;
-- readiness can tell you whether failure is local logic or provider availability.
+`agent_loop.py` owns one model/tool feedback loop; `turn_kernel.py` owns the recurrent state and transition policy. The runtime injects phase guidance for `explore`, `execute`, and `verify`, then routes the next step from remaining-step budget, tool errors, empty responses, progress, and verification evidence.
+
+- A stalled path activates widening and grants a bounded search expansion.
+- A premature completion without tool evidence is rejected and routed back to execution or verification.
+- Empty output and recoverable thinking stops have bounded retry counters.
+- Reaching the step limit terminates with an explicit stop reason instead of looping indefinitely.
+
+### 2. Context governance
+
+Provider usage is preferred when available and local token estimation is the fallback. Pressure levels choose between micro-compacting old tool results and summarizing older history. `StableTaskPack` is kept outside ordinary summary prose and preserves the task objective, latest tool evidence, verification state, progress, and remaining budget.
+
+Regression cases assert that compaction still retains the error/edit evidence needed by the next model decision.
+
+### 3. Tool runtime
+
+`ToolDefinition` describes a tool contract; `ToolRegistry` discovers, validates, dispatches, and observes tool calls. JSON Schema constrains model-side argument generation, while Python validators enforce runtime rules. Unknown tools, invalid arguments, timeouts, non-zero exits, and ordinary exceptions are normalized into `ToolResult` so the model can reason about failure in the next turn.
+
+Oversized output is reduced with a head/error/tail strategy, preserving the beginning, error-bearing lines, and final status rather than keeping only a blind prefix.
+
+### 4. Safe editing and durable sessions
+
+Managed file writes follow this order:
+
+```text
+Diff preview → permission decision → checkpoint → file write
+```
+
+Sessions persist messages, transcript events, runtime state, permissions, and checkpoints through a full snapshot plus incremental Delta records. `inspect` and `replay` expose saved state; `resume` continues the task; `rewind-preview` and `rewind` restore managed file content from checkpoints.
+
+### 5. AgentOps evidence loop
+
+The same Agent Loop accepts two adapters:
+
+- `ScenarioModel` returns predefined assistant/tool-call steps for deterministic Runtime regression.
+- The configured live adapter lets a real model choose tools and react to observed results.
+
+Graders inspect tests, file content and hashes, forbidden-path access, permission outcomes, stop reasons, checkpoints, and restored session state. Reports and curated traces make the result inspectable without replaying every run.
+
+## Evaluation
+
+The evaluation is split because deterministic Runtime correctness and live-model behavior answer different questions.
+
+| Layer | Configuration | Result | What it validates |
+| --- | --- | ---: | --- |
+| Deterministic Runtime regression | 20 scenarios × 3 rounds; predefined `ScenarioModel` output | **60/60 passed** | State routing, schema/tool-result behavior, permission boundaries, compaction continuity, checkpoint and session recovery |
+| Live-model end-to-end evaluation | 5 controlled repository task types × 3 runs; configured real model | **15/15 passed** | Tool selection, reaction to failures, file modification, permission guidance, resume, and final test evidence |
+| Recovery subset | 3 recovery-related live task types × 3 runs; included in the 15 runs above | **9/9 passed** | Test-failure recovery, permission-denial recovery, and interrupted-session resume |
+
+The recovery result is a **subset of 15**, not an additional nine runs.
+
+Main graders:
+
+- test command exit code and expected output;
+- expected file content/hash and unchanged protected tests;
+- forbidden-path access and permission-denial result;
+- required tool sequence and final stop reason;
+- checkpoint count, restored session state, and idempotent resume behavior.
+
+Evidence:
+
+- [Evaluation methodology and metric definitions](./benchmarks/eval-methodology.md)
+- [Deterministic Runtime regression report](./benchmarks/runtime_regression_results.md)
+- [Live-model end-to-end report](./benchmarks/llm_e2e_results.md)
+
+## Trace
+
+RepoTerm uses two related observability layers:
+
+- The **session transcript** is the durable task record: user/assistant messages, tool calls/results, permissions, checkpoints, and runtime events are persisted with the session.
+- A **curated Trace** is a sanitized, task-focused export for evaluation and review. It combines the timeline, model/tool metadata, stop reason, recovery actions, and grader outcomes.
+
+Runtime events answer “which phase changed and why”; transcript/tool events answer “what actually happened”; graders answer “did the final repository state satisfy the task”.
+
+| Demo | What to look for | Markdown | Machine-readable |
+| --- | --- | --- | --- |
+| Successful edit | read → edit → test → `done`, with checkpoint and passing graders | [normal-edit.md](./benchmarks/traces/normal-edit.md) | [normal-edit.json](./benchmarks/traces/normal-edit.json) |
+| Tool failure and recovery | failing test result enters the next decision; model edits and reruns until success | [tool-failure-recovery.md](./benchmarks/traces/tool-failure-recovery.md) | [tool-failure-recovery.json](./benchmarks/traces/tool-failure-recovery.json) |
+| Permission denial | protected edit is denied; guidance routes the model to an allowed alternative | [permission-denial.md](./benchmarks/traces/permission-denial.md) | [permission-denial.json](./benchmarks/traces/permission-denial.json) |
+| Interrupted session recovery | checkpoint survives interruption; resume verifies state and remains idempotent | [session-resume.md](./benchmarks/traces/session-resume.md) | [session-resume.json](./benchmarks/traces/session-resume.json) |
+
+See the [curated Trace index](./benchmarks/traces/README.md) for generation rules and sanitization boundaries.
+
+## Failure Recovery
+
+| Failure signal | Runtime response | Safety boundary | Evidence |
+| --- | --- | --- | --- |
+| Empty model response or recoverable thinking stop | Retry within a dedicated counter; record the recovery action | Retry limit and remaining-step budget | Runtime scenarios in [the deterministic report](./benchmarks/runtime_regression_results.md) |
+| Test/tool failure | Normalize as failed `ToolResult`, feed it back, allow correction and re-verification | Maximum steps; tool error remains observable | [Tool-failure Trace](./benchmarks/traces/tool-failure-recovery.md) |
+| Permission denial | Return denial plus user guidance; model must choose an allowed path | Denied write is not applied and creates no checkpoint | [Permission-denial Trace](./benchmarks/traces/permission-denial.md) |
+| Context pressure | Micro-compact old tool output, then summarize history while preserving `StableTaskPack` | Circuit breaker and protected task evidence | Context scenarios in [the methodology](./benchmarks/eval-methodology.md) |
+| Process interruption | Persist session/checkpoint, load, resume, and optionally rewind | Rewind restores managed files/session state, not arbitrary external Shell side effects | [Resume Trace](./benchmarks/traces/session-resume.md) |
+| No verification evidence / exhausted steps | Reject premature `done`; return to execute/verify, then stop safely at the limit | Explicit `verification_failed` or `max_steps` stop reason | [Runtime report](./benchmarks/runtime_regression_results.md) |
+
+## Reproduce
+
+### Install
+
+```bash
+git clone https://github.com/llyyyq/RepoTerm.git
+cd RepoTerm
+python -m pip install -e ".[dev]"
+```
+
+Python 3.11+ is required. Start the interactive product with:
+
+```bash
+repoterm
+```
+
+### Reproduce deterministic Runtime evidence
+
+No provider credential is required:
+
+```bash
+python benchmarks/runtime_regression_eval.py --rounds 3
+python benchmarks/export_agentops_traces.py
+python -m pytest -q tests/test_agentops_scenarios.py tests/test_agentops_proof_artifacts.py
+```
+
+Outputs:
+
+- `benchmarks/runtime_regression_results.md`
+- `benchmarks/runtime_regression_results.json`
+- `benchmarks/traces/`
+
+### Reproduce live-model evidence
+
+Copy `.env.example`, configure one supported provider locally, and never commit the real credential. The following command makes 15 real task runs and may consume provider quota:
+
+```bash
+python benchmarks/llm_e2e_eval.py --all --runs 3 --confirm-live
+```
+
+Outputs:
+
+- `benchmarks/llm_e2e_results.md`
+- `benchmarks/llm_e2e_results.json`
+- raw run artifacts under `.temp/llm_e2e/runs/`
+
+Live-model results are provider- and model-dependent. The checked-in report records the model/task configuration used for the stated 15/15 result.
 
 ## Repository Guide
 
 | Path | Role |
 | --- | --- |
-| `repoterm/` | Canonical Python package used by install and tests. |
-| `tests/` | Active test suite. |
-| `benchmarks/` | AgentOps evaluation, deterministic Runtime regression, real-model tasks, and traces. |
-| `Docs/Documentation/` | Focused usage, memory, integration, and engineering-boundary documentation. |
-| `Main/`, `Package/` | Product entry contracts and engineering-structure support still used by the runtime. |
-
-## Core Modules
-
-| Module | Purpose |
-| --- | --- |
-| `repoterm/agent_loop.py` | Main model and tool loop, runtime event flow, and product integration. |
-| `repoterm/turn_kernel.py` | Step policy, phase transitions, widening, and verification gates. |
-| `repoterm/session.py` | Durable sessions, inspect and replay views, checkpoints, and rewind helpers. |
-| `repoterm/cli_commands.py` | Local product commands such as session, replay, rewind, and readiness. |
-| `repoterm/memory.py` | Long-term project memory manager and retrieval surface. |
-| `repoterm/working_memory.py` | Protected working-memory entries that survive compaction pressure. |
-| `repoterm/memory_pipeline.py` | Closed-loop memory retrieval, injection, reflection writeback, and optimization path. |
-| `repoterm/product_surfaces.py` | User-facing summaries for readiness, hooks, instructions, delegation, and extensions. |
-| `repoterm/readiness.py` | Standalone readiness CLI used by local checks and CI gates. |
-| `repoterm/evidence_safety.py` | Path normalization and credential redaction for public Trace and evaluation evidence. |
-| `repoterm/model_switcher.py` | Bounded fallback and failover selection. |
-| `repoterm/runtime_profiles.py` | Runtime profiles such as `single` and `single-deep`. |
-| `repoterm/cybernetic_orchestrator.py` | Runtime control lifecycle facade. |
+| `repoterm/` | Runtime, adapters, context, tools, permissions, memory, and session implementation |
+| `tests/` | Unit, integration, and deterministic AgentOps scenarios |
+| `benchmarks/` | Evaluation runners, methodology, reports, and public traces |
+| `Docs/Documentation/` | Product usage and deeper engineering documentation |
+| `.env.example` | Credential-free provider configuration template |
 
 ## Source and Attribution
 
-RepoTerm is a secondary-development project based on [MiniCode-Python](https://github.com/QUSETIONS/MiniCode-Python), whose upstream project is [MiniCode](https://github.com/LiuMengxuan04/MiniCode). We thank the original authors for the foundational Agent Loop, tool-calling, and terminal-interaction implementation.
+RepoTerm is a derivative work based on the open-source [MiniCode-Python](https://github.com/QUSETIONS/MiniCode-Python), whose upstream project is [MiniCode](https://github.com/LiuMengxuan04/MiniCode). Thanks to the original authors for the foundational Agent Loop, tool-calling, and terminal-interaction implementation.
 
-This repository extends and restructures that foundation with Agent Runtime state control, deterministic AgentOps regression, live-model end-to-end evaluation, Trace evidence, memory lifecycle management, safe writes, and failure recovery. Rights in upstream code and contributions remain with their respective authors; additions in this repository are represented by the actual Git history and file contents.
+This repository extends and restructures that base around Agent Runtime state control, deterministic and live-model AgentOps evaluation, public Trace evidence, memory lifecycle, safe writes, and failure recovery. Upstream code and contributions remain attributed to their respective authors; repository-specific changes are represented by the actual Git history and file contents.
 
-See the preserved [MIT License](./LICENSE) and the detailed [attribution notice](./NOTICE.md).
-
-## Documentation
-
-Start here if you want the deeper implementation and productization record:
-
-
-- [Chinese README](./README.zh-CN.md)
-- [AgentOps Evaluation Methodology](./benchmarks/eval-methodology.md)
-- [Curated Agent Traces](./benchmarks/traces/README.md)
-- [Usage Guide](./Docs/Documentation/USAGE_GUIDE.md)
-- [Integration Guide](./Docs/Documentation/INTEGRATION_GUIDE.md)
-- [Memory Theory](./Docs/Documentation/memory_theory.md)
-- [Source and Attribution](#source-and-attribution)
-
-## Design Principles
-
-- Keep the runtime inspectable.
-- Treat memory as a controllable runtime subsystem, not an afterthought.
-- Prefer measured signals over prompt folklore.
-- Make recovery a product feature, not a manual cleanup step.
-- Treat verification as part of execution, not just reporting.
-- Keep docs aligned with implemented behavior, not future ambition.
+See the [MIT License](./LICENSE) and [NOTICE.md](./NOTICE.md) for license and attribution details.
