@@ -7,6 +7,8 @@
 <p align="center">
   <a href="./README.zh-CN.md">中文</a>
   ·
+  <a href="#demo">Demo</a>
+  ·
   <a href="#core-highlights">Highlights</a>
   ·
   <a href="#quick-start">Quick Start</a>
@@ -32,15 +34,19 @@
   <img alt="Live E2E" src="https://img.shields.io/badge/live%20E2E-15%2F15-brightgreen?style=flat-square">
 </p>
 
-<p align="center">
-  <img alt="Demo" src="./Docs/demo.gif" width="720">
-</p>
-
 RepoTerm is a Python terminal Coding Agent for local repositories. Inspired by the core interaction model of Claude Code, it focuses on five engineering problems: turn control, context governance, tool execution, safe editing and session recovery, and layered AgentOps evaluation.
 
 > The numbers in this README refer to checked-in, controlled task sets. The deterministic and live-model layers test different failure surfaces and are not presented as an open-world repository success rate.
 
 AgentOps evaluation snapshot: [`agentops-2026-07-28`](https://github.com/llyyyq/RepoTerm/tree/agentops-2026-07-28).
+
+## Demo
+
+RepoTerm completes repository inspection, Diff review, controlled editing, and test verification in one Agent Turn:
+
+<p align="center">
+  <img src="./Docs/assets/repoterm-demo.gif" alt="RepoTerm coding agent demo" width="1000">
+</p>
 
 ## Core Highlights
 
