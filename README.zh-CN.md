@@ -32,6 +32,10 @@
   <img alt="Live E2E" src="https://img.shields.io/badge/live%20E2E-15%2F15-brightgreen?style=flat-square">
 </p>
 
+<p align="center">
+  <img alt="Demo" src="./Docs/demo.gif" width="720">
+</p>
+
 RepoTerm 是一个面向本地代码仓库的 Python 终端 Coding Agent。项目参考 Claude Code 的核心交互模式，重点解决五类工程问题：Agent Turn 控制、上下文治理、工具运行时、安全编辑与会话恢复，以及分层 AgentOps 评测。
 
 > README 中的数字只描述仓库内固定的受控任务集。确定性回归与真实模型评测验证的是不同故障面，不代表开放世界代码仓库任务成功率。
@@ -40,11 +44,11 @@ AgentOps 评测快照：[`agentops-2026-07-28`](https://github.com/llyyyq/RepoTe
 
 ## Core Highlights
 
-- **分阶段 Agent Turn：** 以 `explore → execute → verify` 路由任务；检索停滞时扩大范围，缺少证据时拒绝结束，达到步数上限后安全终止。
-- **分层上下文治理：** 结合 Provider usage 与本地 Token 估算，对旧工具结果微压缩、对历史消息摘要压缩，并通过 `StableTaskPack` 保护任务关键状态。
-- **结构化工具运行时：** 使用 JSON Schema 与 Python validator 校验参数，将失败统一为 `ToolResult`，并从超长输出中保留 head/error/tail 证据。
-- **受控写入与持久化恢复：** 提供 Diff 审查、权限决策、Checkpoint、Snapshot/Delta、会话 replay/resume 和受管文件 rewind。
-- **分层 AgentOps 评测：** 分别验证确定性 Runtime 控制逻辑与真实模型端到端行为，并保留评测报告和脱敏 Trace。
+- **分阶段 Agent Turn：** 以 `explore → execute → verify` 路由任务；检索停滞时扩大范围，缺少证据时拒绝结束，达到步数上限后安全终止——20 场景确定性回归（60/60）验证状态路由与安全检查逻辑。
+- **分层上下文治理：** 结合 Provider usage 与本地 Token 估算，对旧工具结果微压缩、对历史消息摘要压缩，并通过 `StableTaskPack` 保护任务关键状态——回归断言验证压缩后关键证据仍被保留。
+- **结构化工具运行时：** 使用 JSON Schema 与 Python validator 校验参数，将失败统一为 `ToolResult`，并从超长输出中保留 head/error/tail 证据——全部 26 个工具共享同一套 validate→dispatch→normalize→truncate 管道。
+- **受控写入与持久化恢复：** Diff 审查 → 权限决策 → Checkpoint → 文件写入；以全量 Snapshot + 增量 Delta 持久化会话——重复 resume 无状态漂移，rewind 可恢复受管文件。
+- **分层 AgentOps 评测：** 确定性 Runtime 回归（20 场景 × 3 轮 = 60/60）与真实模型端到端评测（5 类任务 × 3 轮 = 15/15，含 9/9 异常恢复），报告与脱敏 Trace 随仓库检入。
 
 ## Quick Start
 
@@ -105,6 +109,8 @@ flowchart LR
 - 空响应和可恢复 thinking stop 使用独立计数器进行有限重试。
 - 达到最大步数后以明确 stop reason 终止，避免无效循环。
 
+每次阶段变化、停止原因、扩宽触发和恢复动作都会产生一条 `RuntimeEvent`，持久化在 Session Transcript 中并导出为精选 Trace 证据。详见 [Trace](#trace) 与 [Failure Recovery](#failure-recovery) 章节。
+
 ### 2. 上下文治理
 
 Token 统计优先使用 Provider usage，缺失时使用本地估算。系统根据上下文压力选择对旧工具结果做微压缩，或对更早历史做摘要压缩。`StableTaskPack` 不依赖普通摘要文本，单独保留任务目标、最新工具证据、验证状态、任务进展和剩余预算。
@@ -140,11 +146,11 @@ Grader 根据测试结果、文件内容与 Hash、禁止路径、权限结果�
 
 | 能力 | 核心实现 | 回归测试 | 报告与 Trace |
 | --- | --- | --- | --- |
-| Agent Turn 状态机 | [`repoterm/agent_loop.py`](./repoterm/agent_loop.py)、[`repoterm/turn_kernel.py`](./repoterm/turn_kernel.py)、[`repoterm/runtime_profiles.py`](./repoterm/runtime_profiles.py) | [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [正常修改 Trace](./benchmarks/traces/normal-edit.md)、[Runtime 报告](./benchmarks/runtime_regression_results.md) |
-| 上下文治理与 `StableTaskPack` | [`repoterm/context_manager.py`](./repoterm/context_manager.py)、[`repoterm/micro_compact.py`](./repoterm/micro_compact.py)、[`repoterm/context_compactor.py`](./repoterm/context_compactor.py)、[`repoterm/turn_kernel.py`](./repoterm/turn_kernel.py) | [`tests/test_context_compactor.py`](./tests/test_context_compactor.py)、[`tests/test_micro_compact.py`](./tests/test_micro_compact.py)、[`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [评测方法中的上下文场景](./benchmarks/eval-methodology.md) |
-| 工具契约、调度与结果归一化 | [`repoterm/tooling.py`](./repoterm/tooling.py)、[`repoterm/tools/`](./repoterm/tools/) | [`tests/test_tools.py`](./tests/test_tools.py)、[`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [工具失败恢复 Trace](./benchmarks/traces/tool-failure-recovery.md) |
-| 安全编辑与会话持久化 | [`repoterm/file_review.py`](./repoterm/file_review.py)、[`repoterm/permissions.py`](./repoterm/permissions.py)、[`repoterm/session.py`](./repoterm/session.py)、[`repoterm/tui/session_flow.py`](./repoterm/tui/session_flow.py) | [`tests/test_permissions.py`](./tests/test_permissions.py)、[`tests/test_session.py`](./tests/test_session.py)、[`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [权限拒绝 Trace](./benchmarks/traces/permission-denial.md)、[中断恢复 Trace](./benchmarks/traces/session-resume.md) |
-| 确定性与真实模型评测 | [`benchmarks/runtime_regression_eval.py`](./benchmarks/runtime_regression_eval.py)、[`repoterm/llm_e2e_eval.py`](./repoterm/llm_e2e_eval.py)、[`benchmarks/llm_e2e_eval.py`](./benchmarks/llm_e2e_eval.py) | [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py)、[`tests/test_agentops_proof_artifacts.py`](./tests/test_agentops_proof_artifacts.py) | [评测方法](./benchmarks/eval-methodology.md)、[Runtime 报告](./benchmarks/runtime_regression_results.md)、[真实模型报告](./benchmarks/llm_e2e_results.md) |
+| **Agent Turn 状态机** — `explore → execute → verify` 阶段路由，widening 扩宽，verification guard 证据守卫，stop reasons 停止原因，`RuntimeEvent` 追踪 | [`repoterm/agent_loop.py`](./repoterm/agent_loop.py)、[`repoterm/turn_kernel.py`](./repoterm/turn_kernel.py)、[`repoterm/runtime_profiles.py`](./repoterm/runtime_profiles.py) | [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [正常修改 Trace](./benchmarks/traces/normal-edit.md)、[Runtime 报告](./benchmarks/runtime_regression_results.md) |
+| **上下文治理** — provider usage + 本地 token 估算，微压缩，历史摘要压缩，`StableTaskPack` | [`repoterm/context_manager.py`](./repoterm/context_manager.py)、[`repoterm/micro_compact.py`](./repoterm/micro_compact.py)、[`repoterm/context_compactor.py`](./repoterm/context_compactor.py)、[`repoterm/turn_kernel.py`](./repoterm/turn_kernel.py) | [`tests/test_context_compactor.py`](./tests/test_context_compactor.py)、[`tests/test_micro_compact.py`](./tests/test_micro_compact.py)、[`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [评测方法中的上下文场景](./benchmarks/eval-methodology.md) |
+| **工具运行时** — `ToolDefinition` + `ToolRegistry`，JSON Schema 校验，`ToolResult` 归一化，head/error/tail 截断 | [`repoterm/tooling.py`](./repoterm/tooling.py)、[`repoterm/tools/`](./repoterm/tools/) | [`tests/test_tools.py`](./tests/test_tools.py)、[`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [工具失败恢复 Trace](./benchmarks/traces/tool-failure-recovery.md) |
+| **安全编辑与会话持久化** — Diff → 权限 → checkpoint → 写入管道，Snapshot + Delta 持久化，resume/replay/rewind | [`repoterm/file_review.py`](./repoterm/file_review.py)、[`repoterm/permissions.py`](./repoterm/permissions.py)、[`repoterm/session.py`](./repoterm/session.py)、[`repoterm/tui/session_flow.py`](./repoterm/tui/session_flow.py) | [`tests/test_permissions.py`](./tests/test_permissions.py)、[`tests/test_session.py`](./tests/test_session.py)、[`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [权限拒绝 Trace](./benchmarks/traces/permission-denial.md)、[中断恢复 Trace](./benchmarks/traces/session-resume.md) |
+| **AgentOps 评测** — `ScenarioModel` adapter 注入，确定性回归（60/60）+ 真实模型 E2E（15/15，9/9 恢复），多维 Grader 判分 | [`benchmarks/runtime_regression_eval.py`](./benchmarks/runtime_regression_eval.py)、[`repoterm/llm_e2e_eval.py`](./repoterm/llm_e2e_eval.py)、[`benchmarks/llm_e2e_eval.py`](./benchmarks/llm_e2e_eval.py) | [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py)、[`tests/test_agentops_proof_artifacts.py`](./tests/test_agentops_proof_artifacts.py) | [评测方法](./benchmarks/eval-methodology.md)、[Runtime 报告](./benchmarks/runtime_regression_results.md)、[真实模型报告](./benchmarks/llm_e2e_results.md) |
 
 ## Evaluation
 
@@ -195,7 +201,7 @@ RepoTerm 的可观测性由两个相关层次组成：
 
 Runtime event 回答“阶段为什么改变”，Transcript/tool event 回答“任务实际做了什么”，Grader 回答“最终仓库状态是否满足任务”。
 
-| 参考场景 | 可观察行为 | 中文文档 | 机器可读 |
+| 参考场景 | 可观察行为 | Markdown | 机器可读 |
 | --- | --- | --- | --- |
 | 成功修改 | read → edit → test → `done`，包含 Checkpoint 和通过的 Grader | [normal-edit.md](./benchmarks/traces/normal-edit.md) | [normal-edit.json](./benchmarks/traces/normal-edit.json) |
 | 工具失败后恢复 | 测试失败作为下一轮观察，修改后再次测试直至成功 | [tool-failure-recovery.md](./benchmarks/traces/tool-failure-recovery.md) | [tool-failure-recovery.json](./benchmarks/traces/tool-failure-recovery.json) |
