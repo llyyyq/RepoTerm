@@ -13,6 +13,9 @@ REPOTERM_SETTINGS_PATH = REPOTERM_DIR / "settings.json"
 REPOTERM_HISTORY_PATH = REPOTERM_DIR / "history.json"
 REPOTERM_PERMISSIONS_PATH = REPOTERM_DIR / "permissions.json"
 REPOTERM_MCP_PATH = REPOTERM_DIR / "mcp.json"
+REPOTERM_MEMORY_DB_PATH = REPOTERM_DIR / "memory.sqlite3"
+DEFAULT_MEMORY_MAX_ENTRIES = 5
+DEFAULT_MEMORY_TOKEN_BUDGET = 800
 REPOTERM_USER_PROFILE_PATH = REPOTERM_DIR / "USER.md"
 REPOTERM_MANAGED_POLICY_PATH = REPOTERM_DIR / "MANAGED.md"
 REPOTERM_EXTENSIONS_DIR = REPOTERM_DIR / "extensions"
@@ -600,6 +603,33 @@ def load_runtime_config(
         except (TypeError, ValueError):
             max_output_tokens = None
 
+    # Persistent memory configuration is deliberately independent from
+    # provider configuration.  The memory package receives these values from
+    # the composition root and does not read global settings itself.
+    memory_db_path = (
+        os.environ.get("REPOTERM_MEMORY_DB_PATH")
+        or effective.get("memoryDbPath")
+        or str(REPOTERM_MEMORY_DB_PATH)
+    )
+    try:
+        memory_max_entries = int(
+            os.environ.get("REPOTERM_MEMORY_MAX_ENTRIES")
+            or effective.get("memoryMaxEntries")
+            or DEFAULT_MEMORY_MAX_ENTRIES
+        )
+    except (TypeError, ValueError):
+        memory_max_entries = DEFAULT_MEMORY_MAX_ENTRIES
+    try:
+        memory_token_budget = int(
+            os.environ.get("REPOTERM_MEMORY_TOKEN_BUDGET")
+            or effective.get("memoryTokenBudget")
+            or DEFAULT_MEMORY_TOKEN_BUDGET
+        )
+    except (TypeError, ValueError):
+        memory_token_budget = DEFAULT_MEMORY_TOKEN_BUDGET
+    memory_max_entries = max(0, memory_max_entries)
+    memory_token_budget = max(0, memory_token_budget)
+
     # Validate: at least one auth method must be available
     has_auth = any([
         auth_token, api_key, openai_api_key, openrouter_api_key, custom_api_key,
@@ -682,6 +712,9 @@ def load_runtime_config(
         "customBaseUrl": custom_base_url,
         "customApiKey": custom_api_key,
         "maxOutputTokens": max_output_tokens,
+        "memoryDbPath": str(memory_db_path),
+        "memoryMaxEntries": memory_max_entries,
+        "memoryTokenBudget": memory_token_budget,
         "mcpServers": effective.get("mcpServers", {}),
         "globalUserProfilePath": str(global_user_profile),
         "projectUserProfilePath": str(proj_user_profile),
