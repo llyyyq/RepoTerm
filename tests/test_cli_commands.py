@@ -598,6 +598,44 @@ def test_memory_command_uses_current_workspace(tmp_path) -> None:
     assert "Memory System Status" in result
 
 
+def test_memory_lifecycle_commands_use_new_service(tmp_path, monkeypatch) -> None:
+    import repoterm.config as config
+    from repoterm.memory import create_memory_service
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.setattr(config, "REPOTERM_DIR", tmp_path / "profile")
+    service = create_memory_service(workspace=workspace)
+    approved = service.propose("CLI lifecycle approval example.")
+    rejected = service.propose("CLI lifecycle rejection example.")
+
+    pending = try_handle_local_command("/memory pending", cwd=str(workspace))
+    assert approved.id in pending and rejected.id in pending
+    assert "Approved memory" in try_handle_local_command(
+        f"/memory approve {approved.id}", cwd=str(workspace)
+    )
+    assert "Rejected memory" in try_handle_local_command(
+        f"/memory reject {rejected.id}", cwd=str(workspace)
+    )
+    assert "Updated memory" in try_handle_local_command(
+        f"/memory update {approved.id} CLI lifecycle updated example.",
+        cwd=str(workspace),
+    )
+    updated_id = service.search("updated example")[0].id
+    assert "Archived memory" in try_handle_local_command(
+        f"/memory archive {updated_id}", cwd=str(workspace)
+    )
+    assert "Restored memory" in try_handle_local_command(
+        f"/memory restore {updated_id}", cwd=str(workspace)
+    )
+    assert "Confirmation required" in try_handle_local_command(
+        f"/memory delete {updated_id}", cwd=str(workspace)
+    )
+    assert "Deleted memory" in try_handle_local_command(
+        f"/memory delete {updated_id} --confirm", cwd=str(workspace)
+    )
+
+
 def test_cybernetics_command_shows_controller_inventory() -> None:
     result = try_handle_local_command("/cybernetics")
 

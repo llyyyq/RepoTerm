@@ -63,7 +63,7 @@ def format_slash_commands() -> str:
             ("/context", "Show context window usage"),
             ("/cybernetics", "Show control-system status"),
             ("/tasks", "Show current task list"),
-            ("/memory", "Show memory system status"),
+            ("/memory [status|list|pending|approve|reject|update|archive|restore|delete]", "Manage SQLite memory lifecycle"),
         ],
         "✏️ File Operations": [
             ("/ls [path]", "List files in directory"),
@@ -143,11 +143,124 @@ def complete_slash_command(line: str) -> tuple[list[str], str]:
     return (hits if hits else commands, line)
 
 
+def _format_memory_entries(entries) -> str:
+    if not entries:
+        return "No memories found."
+    lines = []
+    for entry in entries:
+        preview = entry.content.replace("\n", " ")
+        if len(preview) > 120:
+            preview = preview[:117] + "..."
+        lines.append(
+            f"{entry.id}  [{entry.status.value}] [{entry.scope.value}] "
+            f"[{entry.kind.value}] {preview}"
+        )
+    return "\n".join(lines)
+
+
+def _handle_memory_command(
+    user_input: str,
+    *,
+    cwd: str | None = None,
+    memory_service=None,
+) -> str:
+    """Handle the user-facing SQLite memory lifecycle commands.
+
+    ``/memory`` remains the status command.  Destructive deletion is routed
+    through ``purge(confirmed=True)`` and therefore cannot happen accidentally.
+    """
+
+    try:
+        from repoterm.memory import (
+            MemoryConfirmationRequired,
+            MemoryServiceError,
+            create_memory_service,
+        )
+
+        workspace = Path(cwd) if cwd else Path.cwd()
+        if memory_service is None:
+            from repoterm import config as config_module
+
+            configured_profile = Path(config_module.REPOTERM_DIR).expanduser()
+            default_profile = Path.home() / ".repoterm"
+            db_path = (
+                configured_profile / "memory.sqlite3"
+                if configured_profile != default_profile
+                else workspace / ".repoterm-memory-runtime" / "memory.sqlite3"
+            )
+            service = create_memory_service(workspace=workspace, db_path=db_path)
+        else:
+            service = memory_service
+        raw = user_input.strip()
+        if raw == "/memory":
+            action, rest = "status", ""
+        else:
+            action, _, rest = raw[len("/memory") :].strip().partition(" ")
+            action = action.lower()
+            rest = rest.strip()
+
+        if action in {"status", ""}:
+            return service.format_stats()
+        if action == "list":
+            query = rest.lower()
+            entries = service.store.list_entries()
+            context = service.context()
+            entries = [entry for entry in entries if service._visible(entry, context)]
+            if query:
+                entries = [
+                    entry for entry in entries
+                    if query in entry.content.lower() or query in (entry.key or "").lower()
+                ]
+            return _format_memory_entries(entries)
+        if action == "pending":
+            return _format_memory_entries(service.list_pending())
+
+        parts = rest.split(maxsplit=1)
+        if not parts or not parts[0]:
+            return f"Usage: /memory {action} <memory-id>"
+        entry_id = parts[0]
+
+        if action == "approve":
+            entry = service.approve(entry_id)
+            return f"Approved memory {entry.id} ({entry.status.value})."
+        if action == "reject":
+            entry = service.reject(entry_id)
+            return f"Rejected memory {entry.id} ({entry.status.value})."
+        if action == "update":
+            if len(parts) < 2 or not parts[1].strip():
+                return "Usage: /memory update <memory-id> <new-content>"
+            entry = service.update(entry_id, parts[1].strip())
+            return f"Updated memory {entry.id} ({entry.status.value})."
+        if action == "archive":
+            entry = service.archive(entry_id)
+            return f"Archived memory {entry.id} ({entry.status.value})."
+        if action == "restore":
+            entry = service.restore(entry_id)
+            return f"Restored memory {entry.id} ({entry.status.value})."
+        if action == "delete":
+            confirmation = len(parts) > 1 and parts[1].strip().lower() in {
+                "--confirm", "confirm", "confirmed", "yes"
+            }
+            service.purge(entry_id, confirmed=confirmation)
+            return f"Deleted memory {entry_id}."
+        return (
+            "Usage: /memory status|list|pending|approve|reject|update|"
+            "archive|restore|delete"
+        )
+    except MemoryConfirmationRequired as error:
+        return f"Confirmation required: {error}"
+    except MemoryServiceError as error:
+        return f"Memory command failed: {error}"
+    except Exception as error:  # noqa: BLE001 - local command boundary
+        return f"Memory command failed: {error}"
+
+
 def try_handle_local_command(
     user_input: str,
     tools=None,
     cwd: str | None = None,
     session=None,
+    memory_service=None,
 ) -> str | None:
     def _product_snapshot() -> dict:
         if session is not None:
@@ -700,14 +813,12 @@ def try_handle_local_command(
         except ImportError:
             return "State system not available. Please ensure state.py exists."
 
-    if user_input == "/memory":
-        # Memory system display
-        try:
-            from repoterm.memory import MemoryManager
-            memory_mgr = MemoryManager(project_root=Path(cwd) if cwd else Path.cwd())
-            return memory_mgr.format_stats()
-        except Exception as e:
-            return f"Error loading memory: {e}"
+    if user_input == "/memory" or user_input.startswith("/memory "):
+        return _handle_memory_command(
+            user_input,
+            cwd=cwd,
+            memory_service=memory_service,
+        )
 
     if user_input == "/context":
         # Context usage display

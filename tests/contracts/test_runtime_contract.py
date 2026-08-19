@@ -302,3 +302,31 @@ def test_checkpointed_session_resume_is_idempotent(
     assert second.checkpoints[0].previous_content == "before\n"
     assert target.read_text(encoding="utf-8") == "after\n"
     assert before_load == after_load
+
+
+def test_memory_pending_requires_approval_and_rejection_is_not_retrievable(
+    tmp_path: Path,
+) -> None:
+    """Model candidates stay out of retrieval until a human approves them."""
+
+    from repoterm.memory import MemoryService
+
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    service = MemoryService(
+        db_path=tmp_path / "memory.sqlite3",
+        workspace=workspace,
+    )
+
+    approved = service.propose("Use the contract test command for validation.")
+    rejected = service.propose("Do not use an unverified shortcut.")
+
+    assert approved.status.value == "pending"
+    assert service.search("contract test command") == []
+    service.approve(approved.id)
+    service.reject(rejected.id)
+
+    assert [entry.id for entry in service.search("contract test command")] == [
+        approved.id
+    ]
+    assert service.search("unverified shortcut") == []

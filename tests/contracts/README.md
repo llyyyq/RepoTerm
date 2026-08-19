@@ -23,11 +23,13 @@
 python -B -m pytest -q --tb=short -p no:cacheprovider tests/contracts
 ```
 
-当前覆盖 5 个聚合契约：Agent 阶段与 Verification Guard、ToolRegistry 参数拒绝与 `ToolResult`、关键上下文保留、权限拒绝且不落盘、Checkpoint 与 Session 恢复幂等。
+当前覆盖 6 个聚合契约：Agent 阶段与 Verification Guard、ToolRegistry 参数拒绝与 `ToolResult`、关键上下文保留、权限拒绝且不落盘、Checkpoint 与 Session 恢复幂等、记忆 pending/approve/reject 生命周期。
 
-当前结果：**5/5 passed**。
+当前结果：**6/6 passed**（以本轮实际运行结果为准）。
 
-第六项“AgentOps 场景入口”不再复制成第六个测试；L1 直接复用完整的 20 个确定性 AgentOps 场景，避免两套场景定义漂移。
+AgentOps 场景入口继续由 L1 的确定性场景覆盖，避免与 L0 重复定义。
+
+记忆 CLI 生命周期命令：`/memory status`、`/memory list`、`/memory pending`、`/memory approve <id>`、`/memory reject <id>`、`/memory update <id> <content>`、`/memory archive <id>`、`/memory restore <id>`、`/memory delete <id> --confirm`。`delete` 必须显式确认，实际调用 SQLite 服务的 `purge`。
 
 ### L1：P0 重构门禁
 
