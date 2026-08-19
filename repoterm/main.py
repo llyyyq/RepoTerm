@@ -36,10 +36,15 @@ from repoterm.tty_app import run_tty_app
 from repoterm.workspace import resolve_tool_path
 
 
-def _handle_local_command(user_input: str, tools) -> str | None:
+def _handle_local_command(user_input: str, tools, memory_service=None) -> str | None:
     if user_input == "/tools":
         return "\n".join(f"{tool.name}: {tool.description}" for tool in tools.list())
-    local_result = try_handle_local_command(user_input, tools=tools, cwd=str(Path.cwd()))
+    local_result = try_handle_local_command(
+        user_input,
+        tools=tools,
+        cwd=str(Path.cwd()),
+        memory_service=memory_service,
+    )
     return local_result
 
 
@@ -486,10 +491,12 @@ def main() -> None:
         context_mgr = ContextManager(model=runtime.get("model", "default"))
         logger.info("Context manager initialized for model: %s", runtime.get("model", "unknown"))
     
-    # Initialize MemoryManager for cross-session knowledge retention
-    from repoterm.memory import MemoryManager
-    memory_mgr = MemoryManager(project_root=Path(cwd))
-    logger.info("Memory manager initialized")
+    # Compose one SQLite-backed service for this runtime.  Agent Loop owns the
+    # single per-turn prompt injection; the composition root only passes the
+    # service through and does not pre-render a memory block.
+    from repoterm.memory import create_memory_service
+    memory_service = create_memory_service(cwd, runtime=runtime or {})
+    logger.info("Memory service initialized")
     
     # Initialize UserProfileManager for user preferences
     from repoterm.user_profile import UserProfileManager
@@ -516,7 +523,6 @@ def main() -> None:
         {
             "skills": tools.get_skills(),
             "mcpServers": tools.get_mcp_servers(),
-            "memory_context": memory_mgr.get_relevant_context(),  # Inject memory
             "runtime": runtime,
         },
     )
@@ -565,13 +571,13 @@ def main() -> None:
                     saved_path = _save_transcript_file(cwd, permissions, transcript, output_path)
                     print(f"Saved transcript to {saved_path}")
                     continue
-                memory_result = memory_mgr.handle_user_memory_input(user_input)
+                memory_result = memory_service.handle_user_memory_input(user_input)
                 if memory_result is not None:
                     _append_transcript(transcript, kind="user", body=user_input)
                     _append_transcript(transcript, kind="assistant", body=memory_result)
                     print(memory_result)
                     continue
-                local_result = _handle_local_command(user_input, tools)
+                local_result = _handle_local_command(user_input, tools, memory_service)
                 if local_result is not None:
                     _append_transcript(transcript, kind="user", body=user_input)
                     _append_transcript(transcript, kind="assistant", body=local_result)
@@ -604,7 +610,6 @@ def main() -> None:
                     {
                         "skills": tools.get_skills(),
                         "mcpServers": tools.get_mcp_servers(),
-                        "memory_context": memory_mgr.get_relevant_context(query=user_input),
                         "runtime": runtime,
                     },
                 )
@@ -621,7 +626,7 @@ def main() -> None:
                     permissions=permissions,
                     store=app_store,
                     context_manager=context_mgr,
-                    memory_manager=memory_mgr,
+                    memory_manager=memory_service,
                     runtime=runtime,
                 )
                 permissions.end_turn()
@@ -646,7 +651,7 @@ def main() -> None:
             resume_session=args.resume,
             list_sessions_only=args.list_sessions,
             list_workspace_sessions_only=args.list_workspace_sessions,
-            memory_manager=memory_mgr,
+            memory_manager=memory_service,
             context_manager=context_mgr,
             prompt_bundle=prompt_bundle,
             product_snapshot=prompt_bundle.product_snapshot,

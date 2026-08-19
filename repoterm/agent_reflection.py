@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from repoterm.logging_config import get_logger
-from repoterm.memory import MemoryManager, MemoryScope
+from repoterm.memory import Kind, MemoryService, Scope
 
 logger = get_logger("agent_reflection")
 
@@ -108,7 +108,7 @@ class ReflectionEngine:
 
     def __init__(
         self,
-        memory_manager: MemoryManager | None = None,
+        memory_manager: MemoryService | None = None,
         min_confidence_threshold: float = 0.5,
     ):
         self.memory = memory_manager
@@ -134,7 +134,20 @@ class ReflectionEngine:
         errors = [s for s in execution_trace if s.get("type") == "error"]
         assistant_msgs = [s for s in execution_trace if s.get("type") == "assistant"]
 
-        success = len(errors) == 0 and len(assistant_msgs) > 0
+        verification_evidence = any(
+            step.get("type") in {"tool_result", "tool_output", "verification", "tool_verification"}
+            and (
+                step.get("ok") is True
+                or step.get("success") is True
+                or step.get("isError") is False
+            )
+            for step in execution_trace
+        )
+        success = (
+            len(errors) == 0
+            and len(assistant_msgs) > 0
+            and verification_evidence
+        )
 
         key_decisions = self._extract_decisions(assistant_msgs)
         error_list = [e.get("content", "Unknown error") for e in errors]
@@ -156,7 +169,7 @@ class ReflectionEngine:
             task_context=task_context,
         )
 
-        if self.memory and confidence >= self.min_confidence:
+        if self.memory and success and verification_evidence and confidence >= self.min_confidence:
             self._persist_reflection(reflection)
 
         return reflection
@@ -301,22 +314,23 @@ class ReflectionEngine:
 
         entry = reflection.to_memory_entry()
         try:
-            # Use add_entry if available (new API), fallback to add (old API)
-            if hasattr(self.memory, "add_entry"):
-                self.memory.add_entry(
-                    scope=MemoryScope.PROJECT,
-                    category=entry["category"],
-                    content=entry["content"],
-                    tags=entry["tags"],
-                )
-            else:
-                self.memory.add(
-                    content=entry["content"],
-                    scope=MemoryScope.PROJECT,
-                    category=entry["category"],
-                    tags=entry["tags"],
-                    metadata=entry["metadata"],
-                )
-            logger.info("Reflection persisted to memory (confidence: %.2f)", reflection.confidence)
+            propose = getattr(self.memory, "propose", None)
+            if not callable(propose):
+                logger.warning("Reflection memory service does not support propose()")
+                return
+            task_context = entry["metadata"].get("task_context") or {}
+            memory_context = (
+                task_context
+                if task_context.get("project_key") or task_context.get("projectKey")
+                else self.memory.context()
+            )
+            propose(
+                content=entry["content"],
+                scope=Scope.PROJECT,
+                kind=Kind.LESSON,
+                context=memory_context,
+                verified=True,
+            )
+            logger.info("Reflection proposed as pending (confidence: %.2f)", reflection.confidence)
         except Exception as e:
             logger.warning("Failed to persist reflection: %s", e)

@@ -146,7 +146,7 @@ def run_headless(prompt: str | None = None, allow_edits: bool = False) -> str:
     """
     from repoterm.agent_loop import run_agent_turn
     from repoterm.config import load_runtime_config
-    from repoterm.memory import MemoryManager
+    from repoterm.memory import create_memory_service
     from repoterm.model_registry import create_model_adapter
     from repoterm.permissions import PermissionManager
     from repoterm.prompt import build_system_prompt
@@ -202,7 +202,10 @@ def run_headless(prompt: str | None = None, allow_edits: bool = False) -> str:
             "(non-interactive CI mode; approvals are session-scoped)."
         )
     permissions = PermissionManager(cwd, prompt=_make_auto_approve_prompt() if auto_approve else None)
-    memory_mgr = MemoryManager(project_root=Path(cwd))
+    # Agent Loop is the sole prompt-injection point.  The composition root
+    # creates one service and passes it through without adding memory_context
+    # to the startup prompt.
+    memory_service = create_memory_service(cwd, runtime=runtime)
 
     model = create_model_adapter(
         model=runtime.get("model", ""),
@@ -219,7 +222,6 @@ def run_headless(prompt: str | None = None, allow_edits: bool = False) -> str:
                 {
                     "skills": tools.get_skills(),
                     "mcpServers": tools.get_mcp_servers(),
-                    "memory_context": memory_mgr.get_relevant_context(),
                 },
             ),
         },
@@ -234,7 +236,7 @@ def run_headless(prompt: str | None = None, allow_edits: bool = False) -> str:
             messages=messages,
             cwd=cwd,
             permissions=permissions,
-            memory_manager=memory_mgr,
+            memory_manager=memory_service,
             runtime=runtime,
         )
 

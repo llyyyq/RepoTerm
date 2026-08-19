@@ -41,7 +41,7 @@ from repoterm.decoupling_controller import DecouplingController
 from repoterm.feedback_controller import FeedbackController
 from repoterm.feedforward_controller import FeedforwardController
 from repoterm.logging_config import get_logger
-from repoterm.memory import MemoryManager
+from repoterm.memory import MemoryInjector, MemoryService
 from repoterm.memory_injector import (
     MemoryInjectionController,
 )
@@ -96,7 +96,8 @@ class CyberneticOrchestrator:
         # Memory + routing (set via wire_ methods)
         self.memory_ctrl: MemoryInjectionController | None = None
         self.model_ctrl: ModelSelectionController | None = None
-        self.memory_pipeline: Any = None  # MemoryPipeline (unified facade)
+        self.memory_service: MemoryService | None = None
+        self.memory_injector: MemoryInjector | None = None
         self.smart_router = None
         self.model_switcher = None
         self.reflection = None
@@ -147,19 +148,16 @@ class CyberneticOrchestrator:
 
     def wire_memory(
         self,
-        memory_mgr: MemoryManager,
+        memory_mgr: MemoryService,
         context_usage: float = 0.0,
     ) -> None:
-        """Initialize unified memory pipeline."""
-        from repoterm.memory_pipeline import MemoryPipeline
+        """Attach the already-composed service without creating another path."""
 
-        self.memory_pipeline = MemoryPipeline(memory_mgr)
-        # Pass model adapter if available for reranker
-        model_for_pipeline = getattr(self, '_last_model', None)
-        self.memory_pipeline.initialize(
-            model_adapter=model_for_pipeline,
-            workspace_path=getattr(self, '_workspace', None),
-        )
+        del context_usage
+        self.memory_service = memory_mgr
+        self.memory_injector = MemoryInjector(service=memory_mgr)
+        if self.reflection is not None:
+            self.reflection.memory = memory_mgr
 
     def wire_healing(
         self,
@@ -345,10 +343,6 @@ class CyberneticOrchestrator:
             except Exception:
                 pass
 
-        # Background memory optimization via unified pipeline
-        if self.memory_pipeline:
-            self.memory_pipeline.maintain()
-
         return summary
 
     # ── MEMORY INJECTION ────────────────────────────────────────────
@@ -357,10 +351,15 @@ class CyberneticOrchestrator:
         self, task_description: str, current_messages: list[dict],
         current_files: list[str] | None = None,
     ) -> list[dict]:
-        """Inject relevant memories via unified pipeline."""
-        if not self.memory_pipeline:
+        """Inject relevant memories through the deterministic injector only."""
+        if self.memory_injector is None or self.memory_service is None:
             return current_messages
-        return self.memory_pipeline.inject(task_description, current_files, current_messages)
+        del current_files
+        return self.memory_injector.inject_once(
+            current_messages,
+            task_description,
+            context=self.memory_service.context(),
+        )
 
     # ── REFLECTION ──────────────────────────────────────────────────
 
@@ -368,16 +367,22 @@ class CyberneticOrchestrator:
         self, task_description: str, step: int, tool_error_count: int,
         execution_trace: list[dict[str, Any]] | None = None,
     ) -> None:
-        """Post-task reflection via unified pipeline."""
-        if not self.memory_pipeline:
+        """Post-task reflection; candidates are persisted as pending only."""
+        if self.reflection is None:
             return
         trace = execution_trace or [
             {"type": "tool_call", "count": step},
+            {
+                "type": "tool_result",
+                "ok": tool_error_count == 0,
+                "success": tool_error_count == 0,
+                "isError": tool_error_count > 0,
+            },
             {"type": "assistant", "steps": step},
         ]
         if tool_error_count > 0:
             trace.append({"type": "error", "count": tool_error_count})
-        self.memory_pipeline.write(task_description, trace)
+        self.reflection.reflect(task_description, trace)
 
     # ── MODEL ROUTING ───────────────────────────────────────────────
 

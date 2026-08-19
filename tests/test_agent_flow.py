@@ -172,10 +172,10 @@ class TestAgentFlowCybernetics:
             assert method in calls
 
 
-class TestAgentMemoryPipeline:
+class TestAgentMemoryIntegration:
     """Memory pipeline runs end-to-end within agent loop."""
 
-    def test_memory_pipeline_in_agent_loop(
+    def test_memory_in_agent_loop(
         self, mock_model, tools, messages, workspace, permissions
     ):
         """Memory pipeline (domain classify → BM25 → reranker → inject) must work."""

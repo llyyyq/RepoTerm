@@ -53,7 +53,6 @@ from repoterm.self_healing_engine import SelfHealingEngine
 from repoterm.progress_controller import ProgressSignal, ProgressAction
 
 # 记忆注入和模型选择控制
-from repoterm.memory_injector import MemoryInjectionSignal, MemoryInjector
 from repoterm.model_registry import ModelSelectionSignal
 
 # 智能路由与自省 (Phase 3 导入)
@@ -68,7 +67,7 @@ from repoterm.context_cybernetics import ContextCyberneticsOrchestrator
 from repoterm.cost_control import CostControlLoop
 from repoterm.micro_compact import MicroCompactor
 from repoterm.circuit_breaker import CompactionCircuitBreaker
-from repoterm.memory import MemoryManager
+from repoterm.memory import MemoryInjector, MemoryService, create_memory_service
 from repoterm.turn_kernel import (
     TurnPreludeState,
     TurnRecurrentState,
@@ -84,6 +83,10 @@ from repoterm.turn_kernel import (
 )
 
 logger = get_logger("agent_loop")
+
+# Compatibility name for callers/tests that still inspect the old seam.
+# Runtime code uses MemoryService and its single deterministic injector.
+MemoryManager = MemoryService
 
 # 甯搁噺锛氶伩鍏嶉噸澶嶇殑鎻愮ず鏂囨湰
 NUDGE_CONTINUE = (
@@ -751,7 +754,7 @@ def run_agent_turn(
     on_assistant_stream_chunk: Callable[[str], None] | None = None,
     on_thinking_chunk: Callable[[str], None] | None = None,
     context_manager: ContextManager | None = None,
-    memory_manager: MemoryManager | None = None,
+    memory_manager: MemoryService | None = None,
     runtime: dict | None = None,
     metrics_collector: AgentMetricsCollector | None = None,
     system_prompt: str = "",
@@ -832,13 +835,27 @@ def run_agent_turn(
     smart_router: Any = None
     reflection_engine: Any = None
     model_switcher: Any = None
-    memory_injector: Any = None
+    memory_injector: MemoryInjector | None = None
 
     # Optional work-chain components must exist for the whole turn because the
     # shared loop and its cleanup path also run when enable_work_chain is false.
     context_compactor: ContextCompactor | None = None
     context_cybernetics: ContextCyberneticsOrchestrator | None = None
-    memory_mgr: MemoryManager | None = None
+    # Compose one service and one deterministic injector for the whole turn.
+    # Compatibility callers may still pass ``memory_manager``; it is never
+    # wrapped in a second legacy pipeline.
+    memory_mgr: MemoryService = (
+        memory_manager
+        if memory_manager is not None
+        else create_memory_service(
+            workspace=cwd,
+            runtime=runtime,
+            db_path=Path(cwd) / ".repoterm-memory-runtime" / "memory.sqlite3",
+        )
+    )
+    memory_injector = MemoryInjector(service=memory_mgr)
+    if reflection_engine:
+        reflection_engine.memory = memory_mgr
     cost_control: CostControlLoop | None = None
 
     # Context-manager defenses belong to the core turn lifecycle rather than
@@ -847,6 +864,7 @@ def run_agent_turn(
     micro_compactor = MicroCompactor()
     compaction_breaker = CompactionCircuitBreaker()
 
+    task_desc = ""
     if enable_work_chain:
         prelude.task, prelude.task_metadata = _build_work_chain_task(current_messages)
         if prelude.task:
@@ -859,6 +877,31 @@ def run_agent_turn(
             slot = prelude.task_graph.assign_slot(graph_task.id, slot_name="turn")
             prelude.task_slot_key = f"{slot.slot_name}:{slot.task_id}"
             prelude.task_graph.start_task(prelude.task_slot_key)
+            task_desc = getattr(prelude.task, "raw_input", "") or ""
+    else:
+        task_desc = next(
+            (
+                str(message.get("content", ""))
+                for message in reversed(current_messages)
+                if message.get("role") == "user" and message.get("content")
+            ),
+            "",
+        )
+
+    # This is the only prompt-memory injection in the turn.  It deliberately
+    # runs outside the optional work-chain so headless/test callers cannot
+    # accidentally skip it or trigger a second legacy injection below.
+    if task_desc:
+        try:
+            current_messages = memory_injector.inject_once(
+                current_messages,
+                task_desc,
+                context=memory_mgr.context(),
+            )
+        except Exception as exc:
+            logger.warning("Memory injection skipped: %s", exc)
+
+    if enable_work_chain:
         prelude.layered_context, prelude.context_builder = _build_layered_context(
             current_messages, system_prompt, project_context, prelude.task,
         )
@@ -966,85 +1009,8 @@ def run_agent_turn(
                 circuit_breaker_limit=3,
                 session_memory_enabled=True,
             )
-            memory_mgr = (
-                memory_manager
-                if memory_manager is not None
-                else MemoryManager(project_root=cwd)
-            )
-            # 将 memory_mgr 注入 ReflectionEngine，使自省经验持久化
-            if reflection_engine:
-                reflection_engine.memory = memory_mgr
-            # 初始化 MemoryInjector，将控制论决策落地为实际记忆注入
-            # 同时创建 Reranker（使用真实 LLM 做记忆策展）
-            memory_reranker = None
-            try:
-                from repoterm.memory_reranker import MemoryReranker
-                # Use the agent's model for reranking (lightweight prompt, ~500 tokens)
-                memory_reranker = MemoryReranker(model_adapter=model)
-            except Exception:
-                pass
-            memory_injector = MemoryInjector(
-                memory_manager=memory_mgr,
-                controller=memory_injection_ctrl,
-                reranker=memory_reranker,
-            )
-            if orch:
-                orch._last_model = model
-                orch._workspace = cwd
-                orch.wire_memory(memory_mgr)
-                if orch.memory_pipeline is not None:
-                    memory_injector = getattr(orch.memory_pipeline, "_injector", memory_injector)
-            # 记忆注入控制器：根据上下文压力决定注入策略
-            if memory_injection_ctrl:
-                try:
-                    inj_signal = MemoryInjectionSignal(
-                        context_usage=context_manager.get_stats().usage_percentage / 100.0,
-                        retrieval_quality=0.5,
-                        recent_failure=False,
-                    )
-                    inj_decision = memory_injection_ctrl.decide(
-                        inj_signal,
-                        base_max_memories=5,
-                        base_min_relevance=0.3,
-                        base_max_tokens=200,
-                    )
-                    logger.info(
-                        "MemoryInjectionController: mode=%s max_mem=%d min_rel=%.2f max_tok=%d",
-                        inj_decision.mode.value, inj_decision.max_memories,
-                        inj_decision.min_relevance, inj_decision.max_tokens_per_memory,
-                    )
-                except Exception:
-                    pass
-            # 执行实际记忆注入：将相关记忆注入到系统 prompt 中
-            if orch and prelude.task:
-                try:
-                    task_desc = prelude.task.raw_input if hasattr(prelude.task, 'raw_input') else ""
-                    current_messages = orch.inject_memories(task_desc, current_messages)
-                except Exception:
-                    pass
-            elif memory_injector and prelude.task:
-                try:
-                    task_desc = prelude.task.raw_input if hasattr(prelude.task, 'raw_input') else ""
-                    injected = memory_injector.inject_for_task(task_desc)
-                    if injected:
-                        logger.info(
-                            "MemoryInjector: injected %d memories (mode=%s)",
-                            len(injected),
-                            memory_injector._last_decision.mode.value if memory_injector._last_decision else "?",
-                        )
-                        # 将注入的记忆追加到系统 prompt
-                        memory_context = "\n## Injected Memory\n" + "\n".join(
-                            f"- {m.content[:200]}" for m in injected[:5]
-                        )
-                        for i, msg in enumerate(current_messages):
-                            if msg.get("role") == "system":
-                                current_messages[i] = {
-                                    **msg,
-                                    "content": msg["content"] + memory_context,
-                                }
-                                break
-                except Exception:
-                    pass
+            # The shared service and injector were composed once at turn start.
+            # The shared deterministic injector already ran before this block.
             context_compactor = ContextCompactor(
                 context_window=context_manager.context_window,
                 workspace=cwd,
@@ -2073,35 +2039,19 @@ def run_agent_turn(
             )
 
             # 任务后自省：提取经验教训
-            if orch and prelude.task:
+            if reflection_engine and prelude.task:
                 try:
                     execution_trace: list[dict[str, Any]] = [
                         {"type": "tool_call", "count": turn_state.step},
                         {
-                            "type": "error",
-                            "count": turn_state.tool_error_count,
-                            "content": f"{turn_state.tool_error_count} errors",
+                            "type": "tool_result",
+                            "ok": turn_state.saw_tool_result and turn_state.tool_error_count == 0,
+                            "success": turn_state.saw_tool_result and turn_state.tool_error_count == 0,
+                            "isError": not (turn_state.saw_tool_result and turn_state.tool_error_count == 0),
+                            "content": turn_state.latest_tool_result_summary,
                         }
-                        if turn_state.tool_error_count > 0
+                        if turn_state.saw_tool_result
                         else {},
-                        {"type": "assistant", "steps": turn_state.step},
-                    ]
-                    orch.reflect_on_task(
-                        task_description=(
-                            prelude.task.raw_input
-                            if hasattr(prelude.task, "raw_input")
-                            else str(prelude.task.id)
-                        ),
-                        step=turn_state.step,
-                        tool_error_count=turn_state.tool_error_count,
-                        execution_trace=execution_trace,
-                    )
-                except Exception:
-                    pass
-            elif reflection_engine and prelude.task:
-                try:
-                    _trace: list[dict[str, Any]] = [
-                        {"type": "tool_call", "count": turn_state.step},
                         {
                             "type": "error",
                             "count": turn_state.tool_error_count,
@@ -2128,36 +2078,6 @@ def run_agent_turn(
                     pass
 
             # 记忆质量反馈：任务成功→注入的记忆 usage_count+1
-            if memory_injector and hasattr(memory_injector, '_cached_result'):
-                try:
-                    from repoterm.memory import MemoryScope
-                    for mem in memory_injector._cached_result:
-                        if not hasattr(mem, 'id'):
-                            continue
-                        try:
-                            _mgr = memory_mgr
-                        except NameError:
-                            continue
-                        for scope_name in ['project', 'local', 'user']:
-                            try:
-                                scope = MemoryScope(scope_name)
-                                if scope in _mgr.memories:
-                                    mem_store = _mgr.memories[scope]
-                                    if hasattr(mem_store, "_id_index"):
-                                        entry = mem_store._id_index.get(mem.id)
-                                        if entry:
-                                            entry.usage_count += (
-                                                2 if turn_state.tool_error_count == 0 else -1
-                                            )
-                                            entry.last_accessed = time.time()
-                                            break
-                                        entry.last_accessed = time.time()
-                                        break
-                            except (ValueError, KeyError):
-                                continue
-                except Exception:
-                    pass
-
             # 路由反馈学习：记录任务结果以优化未来路由
             if smart_router and prelude.task:
                 try:

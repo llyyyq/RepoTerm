@@ -18,12 +18,9 @@ class _DummyPermissions:
         return ["workspace writes allowed"]
 
 
-class _DummyMemoryManager:
-    def __init__(self, project_root: Path) -> None:
-        self.project_root = project_root
-
-    def get_relevant_context(self) -> dict[str, str]:
-        return {}
+class _DummyMemoryService:
+    def __init__(self, workspace: str | Path | None = None) -> None:
+        self.workspace = Path(workspace) if workspace is not None else None
 
 
 class _ProviderUnavailableModel(ModelAdapter):
@@ -60,7 +57,10 @@ def test_run_headless_forwards_runtime_to_agent_turn(monkeypatch, tmp_path: Path
         lambda cwd, runtime=None: ToolRegistry([]),
     )
     monkeypatch.setattr("repoterm.permissions.PermissionManager", _DummyPermissions)
-    monkeypatch.setattr("repoterm.memory.MemoryManager", _DummyMemoryManager)
+    monkeypatch.setattr(
+        "repoterm.memory.create_memory_service",
+        lambda workspace, runtime=None: _DummyMemoryService(workspace),
+    )
     monkeypatch.setattr(
         "repoterm.prompt.build_system_prompt",
         lambda cwd, permissions, context: "sys",
@@ -81,8 +81,8 @@ def test_run_headless_forwards_runtime_to_agent_turn(monkeypatch, tmp_path: Path
 
     assert response == "ok"
     assert captured["runtime"] is runtime
-    assert isinstance(captured["memory_manager"], _DummyMemoryManager)
-    assert captured["memory_manager"].project_root == tmp_path
+    assert isinstance(captured["memory_manager"], _DummyMemoryService)
+    assert captured["memory_manager"].workspace == tmp_path
 
 
 def test_run_headless_provider_failure_uses_runtime_channel_details(
@@ -111,7 +111,10 @@ def test_run_headless_provider_failure_uses_runtime_channel_details(
         lambda cwd, runtime=None: ToolRegistry([]),
     )
     monkeypatch.setattr("repoterm.permissions.PermissionManager", _DummyPermissions)
-    monkeypatch.setattr("repoterm.memory.MemoryManager", _DummyMemoryManager)
+    monkeypatch.setattr(
+        "repoterm.memory.create_memory_service",
+        lambda workspace, runtime=None: _DummyMemoryService(workspace),
+    )
     monkeypatch.setattr(
         "repoterm.prompt.build_system_prompt",
         lambda cwd, permissions, context: "sys",
@@ -206,7 +209,10 @@ def test_run_headless_writes_messages_trace_when_requested(monkeypatch, tmp_path
         lambda cwd, runtime=None: ToolRegistry([]),
     )
     monkeypatch.setattr("repoterm.permissions.PermissionManager", _DummyPermissions)
-    monkeypatch.setattr("repoterm.memory.MemoryManager", _DummyMemoryManager)
+    monkeypatch.setattr(
+        "repoterm.memory.create_memory_service",
+        lambda workspace, runtime=None: _DummyMemoryService(workspace),
+    )
     monkeypatch.setattr(
         "repoterm.prompt.build_system_prompt",
         lambda cwd, permissions, context: "sys",
@@ -285,7 +291,10 @@ def test_run_headless_failure_trace_includes_redacted_repair_context(monkeypatch
         lambda cwd, runtime=None: ToolRegistry([]),
     )
     monkeypatch.setattr("repoterm.permissions.PermissionManager", _DummyPermissions)
-    monkeypatch.setattr("repoterm.memory.MemoryManager", _DummyMemoryManager)
+    monkeypatch.setattr(
+        "repoterm.memory.create_memory_service",
+        lambda workspace, runtime=None: _DummyMemoryService(workspace),
+    )
     monkeypatch.setattr(
         "repoterm.prompt.build_system_prompt",
         lambda cwd, permissions, context: "sys",
