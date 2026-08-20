@@ -115,9 +115,13 @@ def test_round2_mcp_echo_end_to_end(tmp_path):
 
 def test_round3_memory_with_none_content(tmp_path):
     mgr = MemoryManager(project_root=tmp_path)
-    mf = mgr.memories[MemoryScope.PROJECT]
-    mf.entries.append(MemoryEntry(id="bad", content=None, scope=MemoryScope.PROJECT, category="c"))
-    mf.entries.append(MemoryEntry(id="good", content="how to configure logging level", scope=MemoryScope.PROJECT, category="convention"))
+    with pytest.raises(ValueError):
+        MemoryEntry(id="bad", content=None, scope=MemoryScope.PROJECT, category="c")
+    mgr.remember_explicit(
+        "how to configure logging level",
+        scope=MemoryScope.PROJECT,
+        key="logging_level",
+    )
     results = mgr.search("logging level")  # must not crash on None entry
     assert any("logging" in e.content for e in results)
 

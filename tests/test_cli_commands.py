@@ -600,14 +600,42 @@ def test_memory_command_uses_current_workspace(tmp_path) -> None:
 
 def test_memory_lifecycle_commands_use_new_service(tmp_path, monkeypatch) -> None:
     import repoterm.config as config
-    from repoterm.memory import create_memory_service
+    from repoterm.memory import (
+        EvidenceKind,
+        EvidenceLevel,
+        VerificationEvidence,
+        create_memory_service,
+    )
 
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     monkeypatch.setattr(config, "REPOTERM_DIR", tmp_path / "profile")
     service = create_memory_service(workspace=workspace)
-    approved = service.propose("CLI lifecycle approval example.")
-    rejected = service.propose("CLI lifecycle rejection example.")
+    def evidence(turn_id: str) -> tuple[VerificationEvidence, ...]:
+        return (
+            VerificationEvidence.create(
+                level=EvidenceLevel.VALIDATION,
+                kind=EvidenceKind.TEST,
+                tool_name="pytest",
+                ok=True,
+                summary="CLI lifecycle test passed",
+                source_session_id="cli-session",
+                source_turn_id=turn_id,
+            ),
+        )
+
+    approved = service.propose_experience(
+        "Applicable condition: CLI lifecycle approval is needed.\n"
+        "Effective action: retain the approved lifecycle memory.\n"
+        "Verification result: pytest passed.",
+        evidence=evidence("turn-approved"),
+    )
+    rejected = service.propose_experience(
+        "Applicable condition: CLI lifecycle rejection is needed.\n"
+        "Effective action: discard the rejected lifecycle memory.\n"
+        "Verification result: pytest passed.",
+        evidence=evidence("turn-rejected"),
+    )
 
     pending = try_handle_local_command("/memory pending", cwd=str(workspace))
     assert approved.id in pending and rejected.id in pending

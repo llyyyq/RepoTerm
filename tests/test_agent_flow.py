@@ -141,12 +141,16 @@ class TestAgentFlowCybernetics:
         for method in (
             "wire_memory",
             "wire_healing",
-            "inject_memories",
             "step_start",
             "step_end",
-            "reflect_on_task",
         ):
             monkeypatch.setattr(CyberneticOrchestrator, method, wrap(method))
+
+        from repoterm.memory import create_memory_service
+        memory_service = create_memory_service(
+            workspace=workspace,
+            db_path=workspace / "memory.sqlite3",
+        )
 
         messages.append({"role": "user", "content": "/ls"})
         result = run_agent_turn(
@@ -156,6 +160,7 @@ class TestAgentFlowCybernetics:
             cwd=str(workspace),
             permissions=permissions,
             context_manager=ContextManager(model="claude-sonnet-4-20250514"),
+            memory_manager=memory_service,
             enable_work_chain=True,
             max_steps=3,
         )
@@ -164,10 +169,8 @@ class TestAgentFlowCybernetics:
         for method in (
             "wire_memory",
             "wire_healing",
-            "inject_memories",
             "step_start",
             "step_end",
-            "reflect_on_task",
         ):
             assert method in calls
 
@@ -180,17 +183,18 @@ class TestAgentMemoryIntegration:
     ):
         """Memory pipeline (domain classify → BM25 → reranker → inject) must work."""
         # Create some memories first to have something to search
-        from repoterm.memory import MemoryManager, MemoryScope
-        mgr = MemoryManager(project_root=str(workspace))
-        mgr.add_entry(
-            scope=MemoryScope.PROJECT, category="pattern",
-            content="React forms use react-hook-form with zod validation",
-            tags=["react", "form", "validation"],
+        from repoterm.memory import create_memory_service
+        mgr = create_memory_service(
+            workspace=workspace,
+            db_path=workspace / "memory.sqlite3",
         )
-        mgr.add_entry(
-            scope=MemoryScope.PROJECT, category="convention",
-            content="Use functional components with hooks, avoid class components",
-            tags=["react", "component"],
+        mgr.remember_explicit(
+            "React forms use react-hook-form with zod validation",
+            key="react_forms_validation",
+        )
+        mgr.remember_explicit(
+            "Use functional components with hooks, avoid class components",
+            key="react_component_convention",
         )
 
         result = run_agent_turn(
@@ -200,6 +204,7 @@ class TestAgentMemoryIntegration:
             cwd=str(workspace),
             permissions=permissions,
             context_manager=ContextManager(model="claude-sonnet-4-20250514"),
+            memory_manager=mgr,
             enable_work_chain=True,
             max_steps=3,
         )

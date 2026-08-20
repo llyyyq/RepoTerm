@@ -418,28 +418,36 @@ class TestMicrocompactEngine:
 class TestSessionMemoryCompactEngine:
     """Test memory-linked session compact."""
 
-    def test_returns_none_without_memory_manager(self):
-        engine = SessionMemoryCompactEngine(memory_manager=None)
+    def test_compactor_does_not_require_or_lookup_memory_manager(self):
+        class ForbiddenMemory:
+            def __getattr__(self, name):
+                raise AssertionError(f"unexpected memory lookup: {name}")
+
+        engine = SessionMemoryCompactEngine(memory_manager=ForbiddenMemory())
         result = engine.try_session_memory_compact(
-            [{"role": "user", "content": "hi"}] * 20,
+            [{"role": "user", "content": "message " * 40}] * 20,
             context_window=100000,
         )
-        assert result is None
+        assert result is not None
+        assert result.effective is True
 
-    def test_returns_none_when_memory_empty(self):
-        class EmptyMemory:
-            def get_relevant_context(self, max_tokens=100):
-                return ""
-        engine = SessionMemoryCompactEngine(memory_manager=EmptyMemory())
+    def test_compactor_preserves_existing_persistent_memory_without_lookup(self):
+        class ForbiddenMemory:
+            def __getattr__(self, name):
+                raise AssertionError(f"unexpected memory lookup: {name}")
+
+        engine = SessionMemoryCompactEngine(memory_manager=ForbiddenMemory())
         msgs = [{"role": "user", "content": "x" * 100} for _ in range(30)]
+        msgs.insert(0, {"role": "system", "content": "## Persistent Memory (advisory)\n- Keep tests deterministic."})
         result = engine.try_session_memory_compact(msgs, context_window=10000)
-        assert result is None
+        assert result is not None
+        assert sum("## Persistent Memory" in str(message.get("content", "")) for message in result.messages) == 1
 
     def test_successful_session_memory_compact(self):
-        class FakeMemory:
-            def get_relevant_context(self, max_tokens=100):
-                return "# Project: test\n## Key decisions:\n- Use Python 3.11\n- Follow PEP8"
-        engine = SessionMemoryCompactEngine(memory_manager=FakeMemory())
+        class ForbiddenMemory:
+            def __getattr__(self, name):
+                raise AssertionError(f"unexpected memory lookup: {name}")
+        engine = SessionMemoryCompactEngine(memory_manager=ForbiddenMemory())
         msgs = []
         for i in range(40):
             role = "user" if i % 2 == 0 else "assistant"
@@ -454,7 +462,7 @@ class TestSessionMemoryCompactEngine:
         assert result.effective is True
         assert result.strategy == CompactStrategy.SESSION_MEMORY
         assert len(result.messages) < len(msgs)
-        assert "Project: test" in result.summary_text
+        assert result.summary_text == ""
 
     def test_boundary_has_correct_metadata(self):
         class FakeMemory:

@@ -22,7 +22,7 @@ class TestOrchestratorInit:
         assert orch.predictive is not None
         assert orch.progress is not None
         assert orch.cost_control is not None
-        assert orch.memory_ctrl is not None
+        assert orch.memory_service is None
         assert orch.model_ctrl is not None
         assert orch.smart_router is not None
         assert orch.model_switcher is not None
