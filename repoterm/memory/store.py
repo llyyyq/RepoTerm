@@ -6,15 +6,16 @@ knowledge of agents, prompts, tools, TUI state, or model adapters.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, Callable, TypeVar
 
-from .models import MemoryEntry, Scope, Status
+from .models import MemoryEntry, Scope, Status, VerificationEvidence
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 T = TypeVar("T")
 
 
@@ -83,6 +84,8 @@ class MemoryStore:
                     version INTEGER NOT NULL CHECK (version >= 1),
                     supersedes_id TEXT REFERENCES memory_entries(id) ON DELETE SET NULL,
                     content_hash TEXT NOT NULL,
+                    signal_count INTEGER NOT NULL DEFAULT 1 CHECK (signal_count >= 1),
+                    evidence_json TEXT NOT NULL DEFAULT '[]',
                     created_at REAL NOT NULL,
                     updated_at REAL NOT NULL,
                     expires_at REAL
@@ -104,10 +107,36 @@ class MemoryStore:
                     ON memory_entries(scope, project_key, branch_name, key);
                 """
             )
-            connection.execute(
-                "INSERT OR IGNORE INTO metadata(key, value) VALUES('schema_version', ?)",
-                (str(SCHEMA_VERSION),),
-            )
+            # Version 1 already exists in user installations.  Make the
+            # complete v1 -> v2 change and its metadata marker one explicit
+            # transaction.  SQLite cannot add the original CHECK constraint
+            # through ALTER TABLE, but the model and service enforce it too.
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                columns = {
+                    str(row["name"])
+                    for row in connection.execute("PRAGMA table_info(memory_entries)").fetchall()
+                }
+                if "signal_count" not in columns:
+                    connection.execute(
+                        "ALTER TABLE memory_entries ADD COLUMN signal_count INTEGER NOT NULL DEFAULT 1"
+                    )
+                if "evidence_json" not in columns:
+                    connection.execute(
+                        "ALTER TABLE memory_entries ADD COLUMN evidence_json TEXT NOT NULL DEFAULT '[]'"
+                    )
+                connection.execute(
+                    "INSERT OR IGNORE INTO metadata(key, value) VALUES('schema_version', ?)",
+                    (str(SCHEMA_VERSION),),
+                )
+                connection.execute(
+                    "UPDATE metadata SET value = ? WHERE key = 'schema_version'",
+                    (str(SCHEMA_VERSION),),
+                )
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
@@ -132,6 +161,15 @@ class MemoryStore:
     def _entry_from_row(row: sqlite3.Row | None) -> MemoryEntry | None:
         if row is None:
             return None
+        try:
+            raw_evidence = json.loads(str(row["evidence_json"] or "[]"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            raw_evidence = []
+        evidence = tuple(
+            VerificationEvidence.from_dict(item)
+            for item in raw_evidence
+            if isinstance(item, dict)
+        )
         return MemoryEntry(
             id=row["id"],
             scope=Scope(row["scope"]),
@@ -147,6 +185,8 @@ class MemoryStore:
             version=row["version"],
             supersedes_id=row["supersedes_id"],
             content_hash=row["content_hash"],
+            signal_count=row["signal_count"],
+            evidence=evidence,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             expires_at=row["expires_at"],
@@ -158,9 +198,9 @@ class MemoryStore:
             INSERT INTO memory_entries(
                 id, scope, kind, key, content, status, project_key,
                 branch_name, source_type, source_session_id, source_turn_id,
-                version, supersedes_id, content_hash, created_at, updated_at,
-                expires_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                version, supersedes_id, content_hash, signal_count, evidence_json,
+                created_at, updated_at, expires_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
     def insert(self, entry: MemoryEntry, connection: sqlite3.Connection | None = None) -> None:
@@ -179,6 +219,8 @@ class MemoryStore:
             entry.version,
             entry.supersedes_id,
             entry.content_hash,
+            entry.signal_count,
+            json.dumps([item.to_dict() for item in entry.evidence], ensure_ascii=False, separators=(",", ":")),
             entry.created_at,
             entry.updated_at,
             entry.expires_at,
@@ -272,6 +314,28 @@ class MemoryStore:
         with self._connection() as conn:
             return self._entry_from_row(conn.execute(query, params).fetchone())
 
+    def find_by_source(
+        self,
+        *,
+        source_type: str,
+        source_session_id: str,
+        source_turn_id: str,
+        connection: sqlite3.Connection | None = None,
+    ) -> MemoryEntry | None:
+        """Find the single durable system experience for one source turn."""
+
+        query = """
+            SELECT * FROM memory_entries
+            WHERE source_type = ? AND source_session_id = ? AND source_turn_id = ?
+            ORDER BY created_at ASC, id ASC
+            LIMIT 1
+        """
+        params = (source_type, source_session_id, source_turn_id)
+        if connection is not None:
+            return self._entry_from_row(connection.execute(query, params).fetchone())
+        with self._connection() as conn:
+            return self._entry_from_row(conn.execute(query, params).fetchone())
+
     def update_status(
         self,
         entry_id: str,
@@ -308,8 +372,8 @@ class MemoryStore:
                 scope = ?, kind = ?, key = ?, content = ?, status = ?,
                 project_key = ?, branch_name = ?, source_type = ?,
                 source_session_id = ?, source_turn_id = ?, version = ?,
-                supersedes_id = ?, content_hash = ?, created_at = ?,
-                updated_at = ?, expires_at = ?
+                supersedes_id = ?, content_hash = ?, signal_count = ?,
+                evidence_json = ?, created_at = ?, updated_at = ?, expires_at = ?
             WHERE id = ?
             """,
             (
@@ -326,6 +390,8 @@ class MemoryStore:
                 entry.version,
                 entry.supersedes_id,
                 entry.content_hash,
+                entry.signal_count,
+                json.dumps([item.to_dict() for item in entry.evidence], ensure_ascii=False, separators=(",", ":")),
                 entry.created_at,
                 entry.updated_at,
                 entry.expires_at,
@@ -333,13 +399,34 @@ class MemoryStore:
             ),
         )
 
+    def increment_signal_count(
+        self,
+        entry_id: str,
+        *,
+        updated_at: float,
+        connection: sqlite3.Connection,
+    ) -> MemoryEntry:
+        """Increase an existing candidate's corroborating-signal count."""
+
+        connection.execute(
+            "UPDATE memory_entries SET signal_count = signal_count + 1, updated_at = ? WHERE id = ?",
+            (updated_at, entry_id),
+        )
+        entry = self.get(entry_id, connection=connection)
+        if entry is None:
+            raise KeyError(entry_id)
+        return entry
+
     def delete(self, entry_id: str, connection: sqlite3.Connection | None = None) -> bool:
         query = "DELETE FROM memory_entries WHERE id = ?"
         if connection is not None:
             return connection.execute(query, (entry_id,)).rowcount == 1
         return bool(self.run_in_transaction(lambda conn: conn.execute(query, (entry_id,)).rowcount == 1))
 
-    def get_metadata(self, key: str) -> str | None:
+    def get_metadata(self, key: str, connection: sqlite3.Connection | None = None) -> str | None:
+        if connection is not None:
+            row = connection.execute("SELECT value FROM metadata WHERE key = ?", (key,)).fetchone()
+            return row["value"] if row is not None else None
         with self._connection() as connection:
             row = connection.execute("SELECT value FROM metadata WHERE key = ?", (key,)).fetchone()
         return row["value"] if row is not None else None

@@ -9,16 +9,113 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from statistics import mean
 from typing import Any
 
 from repoterm.agent_intelligence import ToolSchedulerController, ToolSchedulingSignal
 from repoterm.cybernetic_supervisor import CyberneticSupervisor
-from repoterm.memory_injector import MemoryInjectionController, MemoryInjectionSignal
 from repoterm.model_registry import ModelSelectionController, ModelSelectionSignal
 from repoterm.progress_controller import ProgressController, ProgressSignal
 from repoterm.verification_controller import VerificationController, VerificationSignal
+
+
+class _AblationMemoryInjectionMode(str, Enum):
+    """Offline-only labels for ablation metrics, not a runtime injector."""
+
+    NONE = "none"
+    SUMMARY = "summary"
+    STANDARD = "standard"
+    STRONG = "strong"
+
+
+@dataclass
+class _AblationMemoryInjectionSignal:
+    context_usage: float = 0.0
+    retrieval_quality: float = 0.5
+    user_correction_count: int = 0
+    recent_failure: bool = False
+    task_repetition: bool = False
+
+
+@dataclass
+class _AblationMemoryInjectionDecision:
+    mode: _AblationMemoryInjectionMode
+    max_memories: int
+    min_relevance: float
+    max_tokens_per_memory: int
+    reasons: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "mode": self.mode.value,
+            "max_memories": self.max_memories,
+            "min_relevance": round(self.min_relevance, 3),
+            "max_tokens_per_memory": self.max_tokens_per_memory,
+            "reasons": list(self.reasons),
+        }
+
+
+class _AblationMemoryInjectionController:
+    """Minimal deterministic metric controller kept inside the harness."""
+
+    def decide(
+        self,
+        signal: _AblationMemoryInjectionSignal,
+        *,
+        base_max_memories: int,
+        base_min_relevance: float,
+        base_max_tokens: int,
+    ) -> _AblationMemoryInjectionDecision:
+        reasons: list[str] = []
+        max_memories = base_max_memories
+        min_relevance = base_min_relevance
+        max_tokens = base_max_tokens
+        mode = _AblationMemoryInjectionMode.STANDARD
+
+        if signal.context_usage >= 0.90:
+            return _AblationMemoryInjectionDecision(
+                _AblationMemoryInjectionMode.NONE, 0, 1.0, 0, ["critical context pressure"]
+            )
+        if signal.context_usage >= 0.75:
+            mode = _AblationMemoryInjectionMode.SUMMARY
+            max_memories = max(1, min(max_memories, 2))
+            max_tokens = max(40, min(max_tokens, 80))
+            min_relevance = max(min_relevance, 0.55)
+            reasons.append("high context pressure")
+        if signal.retrieval_quality < 0.35:
+            max_memories = max(1, max_memories - 2)
+            min_relevance = max(min_relevance, 0.50)
+            reasons.append("low retrieval quality")
+        elif signal.retrieval_quality >= 0.75 and signal.context_usage < 0.65:
+            mode = _AblationMemoryInjectionMode.STRONG
+            max_memories = min(base_max_memories + 2, max_memories + 2)
+            min_relevance = max(0.15, min_relevance - 0.10)
+            reasons.append("high retrieval quality")
+        if signal.recent_failure:
+            mode = _AblationMemoryInjectionMode.STRONG if signal.context_usage < 0.75 else mode
+            max_memories = min(base_max_memories + 1, max_memories + 1)
+            min_relevance = max(0.15, min_relevance - 0.10)
+            reasons.append("recent failure recovery")
+        if signal.user_correction_count > 0:
+            max_memories = max(1, max_memories - signal.user_correction_count)
+            min_relevance = min(0.90, min_relevance + 0.10 * signal.user_correction_count)
+            reasons.append("user corrections indicate memory risk")
+        if signal.task_repetition and signal.context_usage < 0.80:
+            max_memories = min(base_max_memories + 1, max_memories + 1)
+            reasons.append("repeated task can reuse memory")
+
+        max_memories = max(0, min(base_max_memories + 2, max_memories))
+        if max_memories == 0:
+            mode = _AblationMemoryInjectionMode.NONE
+        return _AblationMemoryInjectionDecision(
+            mode=mode,
+            max_memories=max_memories,
+            min_relevance=max(0.0, min(1.0, min_relevance)),
+            max_tokens_per_memory=max(0, max_tokens),
+            reasons=reasons or ["standard memory injection"],
+        )
 
 
 @dataclass(frozen=True)
@@ -196,7 +293,7 @@ class CyberneticAblationRunner:
     def __init__(self) -> None:
         self.verification = VerificationController()
         self.tools = ToolSchedulerController()
-        self.memory = MemoryInjectionController()
+        self.memory = _AblationMemoryInjectionController()
         self.models = ModelSelectionController()
         self.progress = ProgressController()
         self.supervisor = CyberneticSupervisor()
@@ -292,7 +389,7 @@ class CyberneticAblationRunner:
             recent_failures=task.recent_failures,
         ))
         memory_decision = self.memory.decide(
-            MemoryInjectionSignal(
+            _AblationMemoryInjectionSignal(
                 context_usage=task.context_usage,
                 retrieval_quality=task.retrieval_quality,
                 recent_failure=task.tests_passed is False,

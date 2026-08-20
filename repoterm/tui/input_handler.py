@@ -362,6 +362,7 @@ def _handle_input(
         tools=args.tools,
         cwd=args.cwd,
         session=state.session,
+        memory_service=memory_mgr,
     )
     if local_result is not None:
         _push_transcript_entry(state, kind="assistant", body=local_result)
@@ -428,7 +429,6 @@ def _handle_input(
         {
             "skills": args.tools.get_skills(),
             "mcpServers": args.tools.get_mcp_servers(),
-            "memory_context": memory_mgr.get_relevant_context(query=input_text) if memory_mgr is not None else "",
             "runtime": args.runtime,
         },
     )

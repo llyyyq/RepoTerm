@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from math import ceil
+import re
 from typing import Any, Callable, Literal
 
 from repoterm.layered_context import ContextBuilder, LayeredContext
+from repoterm.memory.models import EvidenceKind, EvidenceLevel, VerificationEvidence
 from repoterm.task_object import TaskState
 from repoterm.types import RuntimeEventCategory
 
@@ -18,6 +20,137 @@ TurnStopReason = Literal[
 ]
 
 TurnStepPhase = Literal["explore", "execute", "verify"]
+
+_TEST_COMMAND_RE = re.compile(
+    r"(?:^|\s)(?:pytest|py\.test|python(?:3(?:\.\d+)?)?\s+-m\s+pytest|"
+    r"npm\s+(?:test|run\s+test)|yarn\s+test|pnpm\s+test|cargo\s+test|"
+    r"go\s+test|mvn\s+test|gradle\s+test|tox|nox|make\s+test)(?:\s|$)",
+    re.IGNORECASE,
+)
+_BUILD_COMMAND_RE = re.compile(
+    r"(?:^|\s)(?:python(?:3(?:\.\d+)?)?\s+-m\s+build|npm\s+run\s+build|"
+    r"yarn\s+build|pnpm\s+build|cargo\s+build|go\s+build|mvn\s+(?:package|verify)|"
+    r"gradle\s+(?:build|assemble)|make(?:\s+build)?)(?:\s|$)",
+    re.IGNORECASE,
+)
+_STATIC_CHECK_COMMAND_RE = re.compile(
+    r"(?:^|\s)(?:ruff(?:\s+check)?|flake8|mypy|pyright|pylint|eslint|"
+    r"black\s+--check|isort\s+--check|python(?:3(?:\.\d+)?)?\s+-m\s+(?:ruff|mypy))(?:\s|$)",
+    re.IGNORECASE,
+)
+
+
+def _tool_input_text(tool_input: object) -> str:
+    """Extract command semantics without retaining the original input."""
+
+    if isinstance(tool_input, dict):
+        for key in ("cmd", "command", "script", "args"):
+            value = tool_input.get(key)
+            if isinstance(value, str):
+                return value
+            if isinstance(value, (list, tuple)):
+                return " ".join(str(item) for item in value)
+    return str(tool_input or "")
+
+
+def _validation_category(tool_name: str, tool_input: object) -> tuple[EvidenceLevel, EvidenceKind]:
+    """Classify a tool semantically; command exit status alone is insufficient."""
+
+    normalized_name = str(tool_name or "").strip().lower()
+    command = _tool_input_text(tool_input)
+    combined = f"{normalized_name} {command}".lower()
+    if (
+        "pytest" in combined
+        or "test_runner" in combined
+        or "verification" in normalized_name
+        or _TEST_COMMAND_RE.search(command)
+    ):
+        return EvidenceLevel.VALIDATION, EvidenceKind.TEST
+    if "build" in normalized_name or _BUILD_COMMAND_RE.search(command):
+        return EvidenceLevel.VALIDATION, EvidenceKind.BUILD
+    if (
+        any(token in normalized_name for token in ("lint", "typecheck", "type_check", "static"))
+        or _STATIC_CHECK_COMMAND_RE.search(command)
+    ):
+        return EvidenceLevel.VALIDATION, EvidenceKind.STATIC_CHECK
+    if "schema" in normalized_name or "migration" in normalized_name:
+        return EvidenceLevel.VALIDATION, EvidenceKind.SCHEMA
+    if any(token in normalized_name for token in ("file_assert", "assert_file", "check_file")):
+        return EvidenceLevel.VALIDATION, EvidenceKind.FILE_ASSERT
+    if "recovery" in normalized_name:
+        return EvidenceLevel.VALIDATION, EvidenceKind.RECOVERY
+    if any(token in normalized_name for token in ("read", "grep", "search", "list", "glob")):
+        if "search" in normalized_name or "grep" in normalized_name:
+            return EvidenceLevel.OBSERVATION, EvidenceKind.SEARCH
+        if "list" in normalized_name or "glob" in normalized_name:
+            return EvidenceLevel.OBSERVATION, EvidenceKind.LIST_FILES
+        return EvidenceLevel.OBSERVATION, EvidenceKind.READ_FILE
+    if any(token in normalized_name for token in ("edit", "write", "patch")):
+        return EvidenceLevel.CHANGE, EvidenceKind.EDIT_FILE
+    if "diff" in normalized_name:
+        return EvidenceLevel.CHANGE, EvidenceKind.DIFF
+    if "checkpoint" in normalized_name:
+        return EvidenceLevel.CHANGE, EvidenceKind.CHECKPOINT
+    return EvidenceLevel.OBSERVATION, EvidenceKind.SHELL
+
+
+def _safe_evidence_summary(
+    *,
+    level: EvidenceLevel,
+    kind: EvidenceKind,
+    tool_name: str,
+    ok: bool,
+    result_output: str,
+) -> str:
+    """Produce a digest, not a raw stdout/stderr/diff/code payload."""
+
+    label = str(tool_name or "tool").strip().lower() or "tool"
+    if level == EvidenceLevel.VALIDATION:
+        outcome = "succeeded" if ok else "failed"
+        normalized = " ".join(str(result_output or "").split())
+        count = re.search(
+            r"\b(\d+)\s+(passed|failed|error(?:s)?)\b",
+            normalized,
+            re.I,
+        )
+        if count:
+            timing = re.search(r"\bin\s+(\d+(?:\.\d+)?)s\b", normalized, re.I)
+            detail = f"{count.group(1)} {count.group(2).lower()}"
+            if timing:
+                detail += f" in {timing.group(1)}s"
+            return f"{label}: {detail}"
+        return f"{label}: {kind.value} {outcome}"
+    return f"{label}: {kind.value} {'succeeded' if ok else 'failed'}"
+
+
+def classify_tool_result(
+    *,
+    tool_name: str,
+    tool_input: object,
+    ok: bool,
+    result_output: str,
+    source_session_id: str | None,
+    source_turn_id: str | None,
+) -> VerificationEvidence:
+    """Build the single structured record shared by guard, trace and reflection."""
+
+    level, kind = _validation_category(tool_name, tool_input)
+    return VerificationEvidence.create(
+        level=level,
+        kind=kind,
+        tool_name=tool_name,
+        ok=ok,
+        summary=_safe_evidence_summary(
+            level=level,
+            kind=kind,
+            tool_name=tool_name,
+            ok=ok,
+            result_output=result_output,
+        ),
+        tool_input=tool_input,
+        source_session_id=source_session_id,
+        source_turn_id=source_turn_id,
+    )
 
 
 @dataclass(slots=True)
@@ -36,6 +169,29 @@ class TurnVerificationState:
     evidence_ready: bool = False
     evidence_summary: str = ""
     last_verification_note: str = ""
+    evidence_items: list[VerificationEvidence] = field(default_factory=list)
+
+    def record_evidence(self, evidence: VerificationEvidence) -> None:
+        """Record a classified tool result; only valid levels open the gate."""
+
+        self.evidence_items.append(evidence)
+        # Keep per-turn state bounded while retaining the most recent outcome
+        # history for recovery-aware reflection.  Experience persistence has a
+        # stricter three-digest cap below.
+        if len(self.evidence_items) > 24:
+            del self.evidence_items[:-24]
+        supporting = self.supporting_evidence()
+        self.evidence_ready = bool(supporting)
+        if supporting:
+            self.evidence_summary = supporting[-1].summary
+
+    def supporting_evidence(self) -> tuple[VerificationEvidence, ...]:
+        return tuple(item for item in self.evidence_items if item.supports_experience)
+
+    def evidence_for_experience(self) -> tuple[VerificationEvidence, ...]:
+        """Return at most three successful, source-backed verification digests."""
+
+        return self.supporting_evidence()[-3:]
 
 
 @dataclass(slots=True)
@@ -178,6 +334,13 @@ class TurnRecurrentState:
         self.recoverable_thinking_retry_count += 1
 
     def record_tool_result(self, ok: bool, summary: str | None = None) -> None:
+        """Record tool observations and errors only.
+
+        This method must not decide that a tool result is validation evidence:
+        semantic classification happens in :func:`classify_tool_result`, then
+        :meth:`record_verification_evidence` receives the explicit result.
+        """
+
         self.saw_tool_result = True
         self.tool_observation_count += 1
         if ok:
@@ -187,9 +350,10 @@ class TurnRecurrentState:
         if summary:
             normalized = " ".join(summary.split())
             self.latest_tool_result_summary = normalized[:280]
-            self.verification_state.evidence_summary = normalized[:200]
-            self.verification_state.evidence_ready = True
         self._refresh_budget_signals()
+
+    def record_verification_evidence(self, evidence: VerificationEvidence) -> None:
+        self.verification_state.record_evidence(evidence)
 
     def set_progress_summary(self, summary: str) -> None:
         self.progress_state["summary"] = summary[:280]
@@ -199,7 +363,7 @@ class TurnRecurrentState:
         self._refresh_budget_signals()
 
     def has_verification_evidence(self) -> bool:
-        return self.tool_observation_count > 0 and bool(self.latest_tool_result_summary)
+        return bool(self.verification_state.supporting_evidence())
 
     def activate_widening(self, *, extra_steps: int = 0) -> bool:
         if self.widening_active:

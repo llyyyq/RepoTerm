@@ -19,12 +19,11 @@ Architecture:
           ├── CostControlLoop          (budget PID)
           ├── CyberneticSupervisor     (aggregation)
           ├── ProgressController       (stall detection)
-          ├── MemoryInjectionController
           ├── ModelSelectionController
           ├── SmartRouter              (task → model)
           ├── ReflectionEngine         (post-task learning)
           ├── ModelSwitcher            (runtime hot-swap)
-          └── MemoryInjector           (memory → prompt)
+          └── MemoryService            (wired through Agent Loop)
 """
 from __future__ import annotations
 
@@ -41,10 +40,7 @@ from repoterm.decoupling_controller import DecouplingController
 from repoterm.feedback_controller import FeedbackController
 from repoterm.feedforward_controller import FeedforwardController
 from repoterm.logging_config import get_logger
-from repoterm.memory import MemoryInjector, MemoryService
-from repoterm.memory_injector import (
-    MemoryInjectionController,
-)
+from repoterm.memory import MemoryService
 from repoterm.model_registry import ModelSelectionController, ModelSelectionSignal
 from repoterm.predictive_controller import PredictiveController
 from repoterm.progress_controller import ProgressAction, ProgressController, ProgressSignal
@@ -94,10 +90,8 @@ class CyberneticOrchestrator:
         self.context_compactor: ContextCompactor | None = None
 
         # Memory + routing (set via wire_ methods)
-        self.memory_ctrl: MemoryInjectionController | None = None
         self.model_ctrl: ModelSelectionController | None = None
         self.memory_service: MemoryService | None = None
-        self.memory_injector: MemoryInjector | None = None
         self.smart_router = None
         self.model_switcher = None
         self.reflection = None
@@ -125,7 +119,6 @@ class CyberneticOrchestrator:
         self.predictive = PredictiveController()
         self.progress = ProgressController()
         self.cost_control = CostControlLoop()
-        self.memory_ctrl = MemoryInjectionController()
         self.model_ctrl = ModelSelectionController()
 
         # Import-heavy modules (lazy to avoid circular imports)
@@ -155,7 +148,6 @@ class CyberneticOrchestrator:
 
         del context_usage
         self.memory_service = memory_mgr
-        self.memory_injector = MemoryInjector(service=memory_mgr)
         if self.reflection is not None:
             self.reflection.memory = memory_mgr
 
@@ -347,42 +339,7 @@ class CyberneticOrchestrator:
 
     # ── MEMORY INJECTION ────────────────────────────────────────────
 
-    def inject_memories(
-        self, task_description: str, current_messages: list[dict],
-        current_files: list[str] | None = None,
-    ) -> list[dict]:
-        """Inject relevant memories through the deterministic injector only."""
-        if self.memory_injector is None or self.memory_service is None:
-            return current_messages
-        del current_files
-        return self.memory_injector.inject_once(
-            current_messages,
-            task_description,
-            context=self.memory_service.context(),
-        )
-
     # ── REFLECTION ──────────────────────────────────────────────────
-
-    def reflect_on_task(
-        self, task_description: str, step: int, tool_error_count: int,
-        execution_trace: list[dict[str, Any]] | None = None,
-    ) -> None:
-        """Post-task reflection; candidates are persisted as pending only."""
-        if self.reflection is None:
-            return
-        trace = execution_trace or [
-            {"type": "tool_call", "count": step},
-            {
-                "type": "tool_result",
-                "ok": tool_error_count == 0,
-                "success": tool_error_count == 0,
-                "isError": tool_error_count > 0,
-            },
-            {"type": "assistant", "steps": step},
-        ]
-        if tool_error_count > 0:
-            trace.append({"type": "error", "count": tool_error_count})
-        self.reflection.reflect(task_description, trace)
 
     # ── MODEL ROUTING ───────────────────────────────────────────────
 

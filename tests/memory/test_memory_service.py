@@ -2,20 +2,26 @@ from __future__ import annotations
 
 import json
 import shutil
+import sqlite3
 from pathlib import Path
 
 import pytest
 
 from repoterm.memory import (
     BranchScopeError,
+    EvidenceKind,
+    EvidenceLevel,
     Kind,
     MemoryConfirmationRequired,
     MemoryConflictError,
     MemoryContext,
+    MemoryEvidenceRequired,
     MemoryService,
     Scope,
     SensitiveMemoryError,
     Status,
+    VerificationEvidence,
+    WriteDecision,
     project_key_for,
 )
 from repoterm.memory.legacy import _marker_key
@@ -30,9 +36,51 @@ def make_service(tmp_path: Path, workspace: Path | None = None) -> MemoryService
     )
 
 
+def experience_content(condition: str = "a verified project change") -> str:
+    return (
+        f"Applicable condition: {condition}.\n"
+        "Effective action: run the targeted pytest command.\n"
+        "Verification result: pytest completed successfully."
+    )
+
+
+def verification_evidence(
+    *,
+    session_id: str = "session-1",
+    turn_id: str = "turn-1",
+    summary: str = "pytest: 1 passed",
+) -> VerificationEvidence:
+    return VerificationEvidence.create(
+        level=EvidenceLevel.VALIDATION,
+        kind=EvidenceKind.TEST,
+        tool_name="pytest",
+        ok=True,
+        summary=summary,
+        source_session_id=session_id,
+        source_turn_id=turn_id,
+    )
+
+
+def propose_experience(
+    service: MemoryService,
+    *,
+    session_id: str = "session-1",
+    turn_id: str = "turn-1",
+    content: str | None = None,
+    key: str | None = "test_command",
+    evidence: tuple[VerificationEvidence, ...] | None = None,
+):
+    evidence = evidence or (verification_evidence(session_id=session_id, turn_id=turn_id),)
+    return service.propose_experience(
+        content or experience_content(),
+        key=key,
+        evidence=evidence,
+    )
+
+
 def test_pending_is_not_searchable_or_injected(tmp_path: Path) -> None:
     service = make_service(tmp_path)
-    candidate = service.propose("pytest is the project test command", key="test_command")
+    candidate = propose_experience(service)
 
     assert candidate.status == Status.PENDING
     assert service.search("pytest") == []
@@ -41,7 +89,7 @@ def test_pending_is_not_searchable_or_injected(tmp_path: Path) -> None:
 
 def test_approve_makes_candidate_searchable_and_injectable(tmp_path: Path) -> None:
     service = make_service(tmp_path)
-    candidate = service.propose("pytest is the project test command", key="test_command")
+    candidate = propose_experience(service)
     approved = service.approve(candidate.id)
 
     assert approved.status == Status.ACTIVE
@@ -157,7 +205,7 @@ def test_migration_is_idempotent_and_reports_invalid_records(tmp_path: Path) -> 
     assert source.read_text(encoding="utf-8").startswith("{")
 
 
-def test_migration_skips_sensitive_records_but_imports_valid_records(tmp_path: Path) -> None:
+def test_migration_rejects_a_sensitive_source_without_marker_and_allows_retry(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     home = tmp_path / "home"
     source = workspace / ".repoterm-memory" / "memory.json"
@@ -177,12 +225,25 @@ def test_migration_skips_sensitive_records_but_imports_valid_records(tmp_path: P
     service = make_service(tmp_path, workspace)
 
     report = service.migrate_legacy(workspace=workspace, home=home)
+    raw = source.read_bytes()
+    marker = _marker_key(source, __import__("hashlib").sha256(raw).hexdigest())
 
-    assert report.imported == 1
+    assert report.imported == 0
     assert report.skipped == 1
-    assert service.search("pytest")
+    assert report.markers_written == 0
+    assert service.store.get_metadata(marker) is None
+    assert service.search("pytest") == []
     assert service.search("sk-test-secret-value") == []
-    assert service.stats()[Scope.PROJECT.value][Status.ACTIVE.value] == 1
+    assert service.stats()[Scope.PROJECT.value][Status.ACTIVE.value] == 0
+
+    source.write_text(
+        json.dumps({"scope": "project", "entries": [{"id": "valid", "content": "Use pytest for tests"}]}),
+        encoding="utf-8",
+    )
+    retried = service.migrate_legacy(workspace=workspace, home=home)
+    assert retried.imported == 1
+    assert retried.markers_written == 1
+    assert service.search("pytest")
 
 
 def test_failed_source_import_rolls_back_and_can_retry(
@@ -284,3 +345,176 @@ def test_restore_detects_same_key_conflict(tmp_path: Path) -> None:
     with pytest.raises(MemoryConflictError):
         service.restore(first.id)
     assert second.status == Status.ACTIVE
+
+
+def test_propose_experience_rejects_boolean_or_observation_only_evidence(tmp_path: Path) -> None:
+    service = make_service(tmp_path)
+    with pytest.raises(MemoryEvidenceRequired):
+        service.propose(experience_content(), verified=True)
+
+    observation = VerificationEvidence.create(
+        level=EvidenceLevel.OBSERVATION,
+        kind=EvidenceKind.READ_FILE,
+        tool_name="read_file",
+        ok=True,
+        summary="read a file",
+        source_session_id="session-1",
+        source_turn_id="turn-1",
+    )
+    with pytest.raises(MemoryEvidenceRequired):
+        propose_experience(service, evidence=(observation,))
+    assert service.list_pending() == []
+
+
+def test_experience_evidence_is_bounded_redacted_and_survives_restart(tmp_path: Path) -> None:
+    service = make_service(tmp_path)
+    evidence = (
+        VerificationEvidence.create(
+            level=EvidenceLevel.OBSERVATION,
+            kind=EvidenceKind.SEARCH,
+            tool_name="rg",
+            ok=True,
+            summary="found the target test",
+            source_session_id="session-2",
+            source_turn_id="turn-2",
+        ),
+        verification_evidence(
+            session_id="session-2",
+            turn_id="turn-2",
+            summary="pytest: 1 passed api_key=sk-1234567890abcdefghi",
+        ),
+        VerificationEvidence.create(
+            level=EvidenceLevel.CONFIRMATION,
+            kind=EvidenceKind.USER,
+            tool_name="user",
+            ok=True,
+            summary="user confirmed the workflow",
+            source_session_id="session-2",
+            source_turn_id="turn-2",
+        ),
+    )
+
+    candidate = propose_experience(
+        service,
+        session_id="session-2",
+        turn_id="turn-2",
+        evidence=evidence,
+    )
+    restored = MemoryService(db_path=service.db_path, workspace=tmp_path / "workspace").store.get(candidate.id)
+
+    assert restored is not None
+    assert len(restored.evidence) == 3
+    assert all(len(item.summary) <= 240 for item in restored.evidence)
+    assert "sk-1234567890abcdefghi" not in restored.evidence[1].summary
+    assert "[redacted]" in restored.evidence[1].summary
+    assert restored.evidence[1].fingerprint == evidence[1].fingerprint
+
+
+def test_one_experience_candidate_per_turn_and_changed_body_clears_old_evidence(tmp_path: Path) -> None:
+    service = make_service(tmp_path)
+    candidate = propose_experience(service, session_id="session-3", turn_id="turn-3")
+    duplicate_turn = propose_experience(
+        service,
+        session_id="session-3",
+        turn_id="turn-3",
+        content=experience_content("a different but same-turn conclusion"),
+    )
+
+    assert duplicate_turn.id == candidate.id
+    assert service.last_write_decision is WriteDecision.NOOP
+    assert len(service.list_pending()) == 1
+
+    active = service.approve(candidate.id)
+    updated = service.update(active.id, "User-confirmed replacement lesson")
+    assert updated.evidence == ()
+    assert updated.source_session_id is None
+    assert updated.source_turn_id is None
+
+
+def test_duplicate_is_noop_and_accumulates_signal_count(tmp_path: Path) -> None:
+    service = make_service(tmp_path)
+    first = service.remember_explicit("Use pytest -q", key="test-command")
+    duplicate = service.remember_explicit(" Use   pytest -q ", key="ignored")
+
+    assert duplicate.id == first.id
+    assert duplicate.signal_count == 2
+    assert service.last_write_decision is WriteDecision.NOOP
+
+
+def test_implicit_preference_requires_two_distinct_signals_and_stays_pending(tmp_path: Path) -> None:
+    service = make_service(tmp_path)
+    first = service.observe_implicit_preference(
+        "Prefer concise Chinese responses",
+        source_session_id="session-a",
+        source_turn_id="turn-a",
+    )
+    same_turn = service.observe_implicit_preference(
+        "Prefer concise Chinese responses",
+        source_session_id="session-a",
+        source_turn_id="turn-a",
+    )
+    second = service.observe_implicit_preference(
+        "Prefer concise Chinese responses",
+        source_session_id="session-b",
+        source_turn_id="turn-b",
+    )
+    third = service.observe_implicit_preference(
+        "Prefer concise Chinese responses",
+        source_session_id="session-c",
+        source_turn_id="turn-c",
+    )
+
+    assert first is None and same_turn is None
+    assert second is not None and second.status is Status.PENDING
+    assert third is not None and third.id == second.id
+    assert third.signal_count == 3
+    assert len(service.list_pending()) == 1
+
+
+def test_v1_database_is_upgraded_to_v2_atomically(tmp_path: Path) -> None:
+    db_path = tmp_path / "memory.sqlite3"
+    with sqlite3.connect(db_path) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            INSERT INTO metadata(key, value) VALUES('schema_version', '1');
+            CREATE TABLE memory_entries (
+                id TEXT PRIMARY KEY,
+                scope TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                key TEXT,
+                content TEXT NOT NULL,
+                status TEXT NOT NULL,
+                project_key TEXT,
+                branch_name TEXT,
+                source_type TEXT NOT NULL,
+                source_session_id TEXT,
+                source_turn_id TEXT,
+                version INTEGER NOT NULL,
+                supersedes_id TEXT,
+                content_hash TEXT NOT NULL,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                expires_at REAL
+            );
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO memory_entries VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "legacy-row", "project", "lesson", None, "legacy pytest rule", "active",
+                project_key_for(tmp_path / "workspace"), None, "migration", None, None,
+                1, None, "legacy-hash", 1.0, 1.0, None,
+            ),
+        )
+
+    store = MemoryStore(db_path)
+    with sqlite3.connect(db_path) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(memory_entries)")}
+
+    upgraded = store.get("legacy-row")
+    assert {"signal_count", "evidence_json"} <= columns
+    assert store.get_metadata("schema_version") == "2"
+    assert upgraded is not None and upgraded.signal_count == 1 and upgraded.evidence == ()

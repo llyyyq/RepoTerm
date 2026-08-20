@@ -443,12 +443,10 @@ class MicrocompactEngine:
 
 
 class SessionMemoryCompactEngine:
-    """Uses existing MemoryManager entries as compaction summary base.
+    """Compact conversation while preserving the pre-injected memory block.
 
-    Instead of calling the model to generate a summary, this leverages
-    already-maintained memory entries (project decisions, conventions,
-    patterns) to form the compact summary, preserving recent messages
-    verbatim as a tail.
+    Persistent Memory is owned by Agent Loop.  This component keeps system
+    messages intact and never performs a second memory search or injection.
     """
 
     TAIL_MIN_TOKENS = 10000
@@ -472,13 +470,10 @@ class SessionMemoryCompactEngine:
         if not config.session_memory_enabled:
             return None
 
-        if self._memory is None:
-            return None
-
-        # Get memory context as summary base
-        memory_context = self._memory.get_relevant_context(max_tokens=6000)
-        if not memory_context.strip():
-            return None  # No memory available, fall back to Full Compact
+        # Persistent Memory is injected once by Agent Loop before this
+        # compactor runs.  Do not issue a second retrieval here: existing
+        # system messages are preserved below, so any single injected block
+        # remains intact through compaction.
 
         # Find where to cut: keep recent tail
         system_msgs = [m for m in messages if m.get("role") == "system"]
@@ -516,7 +511,6 @@ class SessionMemoryCompactEngine:
             "content": (
                 f"[Context compacted at {time.strftime('%H:%M:%S')} via Session Memory]\n"
                 f"Messages removed: {tail_start}. Tokens before: ~{boundary.tokens_before}\n\n"
-                f"## Project Memory & Context\n\n{memory_context}\n\n"
                 "--- Recent conversation continues below ---"
             ),
             "_compact_boundary": True,
@@ -551,7 +545,7 @@ class SessionMemoryCompactEngine:
             messages=final,
             boundary=boundary,
             tokens_freed=boundary.tokens_before - boundary.tokens_after,
-            summary_text=memory_context,
+            summary_text="",
         )
 
     @staticmethod

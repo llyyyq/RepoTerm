@@ -309,7 +309,12 @@ def test_memory_pending_requires_approval_and_rejection_is_not_retrievable(
 ) -> None:
     """Model candidates stay out of retrieval until a human approves them."""
 
-    from repoterm.memory import MemoryService
+    from repoterm.memory import (
+        EvidenceKind,
+        EvidenceLevel,
+        MemoryService,
+        VerificationEvidence,
+    )
 
     workspace = tmp_path / "repo"
     workspace.mkdir()
@@ -318,8 +323,31 @@ def test_memory_pending_requires_approval_and_rejection_is_not_retrievable(
         workspace=workspace,
     )
 
-    approved = service.propose("Use the contract test command for validation.")
-    rejected = service.propose("Do not use an unverified shortcut.")
+    def evidence(turn_id: str) -> tuple[VerificationEvidence, ...]:
+        return (
+            VerificationEvidence.create(
+                level=EvidenceLevel.VALIDATION,
+                kind=EvidenceKind.TEST,
+                tool_name="pytest",
+                ok=True,
+                summary="contract test passed",
+                source_session_id="contract-session",
+                source_turn_id=turn_id,
+            ),
+        )
+
+    approved = service.propose_experience(
+        "Applicable condition: contract validation is required.\n"
+        "Effective action: use the contract test command for validation.\n"
+        "Verification result: pytest passed.",
+        evidence=evidence("turn-approved"),
+    )
+    rejected = service.propose_experience(
+        "Applicable condition: an unverified shortcut is proposed.\n"
+        "Effective action: do not use the unverified shortcut.\n"
+        "Verification result: pytest passed.",
+        evidence=evidence("turn-rejected"),
+    )
 
     assert approved.status.value == "pending"
     assert service.search("contract test command") == []

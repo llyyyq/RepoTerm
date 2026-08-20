@@ -86,6 +86,13 @@ def migrate_legacy(
         raw = _read_bytes(path, report)
         if raw is None:
             continue
+        # A legacy source is an indivisible migration unit.  If it contains a
+        # credential-looking value anywhere, import none of its records and do
+        # not write its marker so the user can remediate and retry later.
+        if looks_like_sensitive_content(raw.decode("utf-8", errors="replace")):
+            report.skipped += 1
+            report.errors.append(f"{path}: sensitive source was not imported")
+            continue
         source_hash = hashlib.sha256(raw).hexdigest()
         marker = _marker_key(path, source_hash)
         if service.store.get_metadata(marker) is not None:
@@ -96,13 +103,14 @@ def migrate_legacy(
         else:
             entries = _parse_json(raw, path, source_kind, source_workspace, report)
 
-        safe_entries: list[tuple[MemoryEntry, bool]] = []
-        for entry, is_local in entries:
-            if looks_like_sensitive_content(entry.content):
-                report.skipped += 1
-                report.errors.append(f"{path}: sensitive record skipped")
-                continue
-            safe_entries.append((entry, is_local))
+        # Parsing can construct records from sources with mixed encodings or
+        # legacy shapes.  Keep a second structured check as a defence in
+        # depth; one sensitive record still rejects the whole source.
+        if any(looks_like_sensitive_content(entry.content) for entry, _ in entries):
+            report.skipped += max(1, len(entries))
+            report.errors.append(f"{path}: sensitive source was not imported")
+            continue
+        safe_entries = entries
 
         try:
             results = service._import_migrated_batch(
@@ -269,9 +277,5 @@ def _parse_user_md(
             status=Status.ACTIVE,
             source_type=SourceType.MIGRATION,
         )
-        if looks_like_sensitive_content(entry.content):
-            report.skipped += 1
-            report.errors.append(f"{path}: sensitive preference skipped")
-            continue
         result.append((entry, False))
     return result

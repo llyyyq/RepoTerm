@@ -67,7 +67,8 @@ from repoterm.context_cybernetics import ContextCyberneticsOrchestrator
 from repoterm.cost_control import CostControlLoop
 from repoterm.micro_compact import MicroCompactor
 from repoterm.circuit_breaker import CompactionCircuitBreaker
-from repoterm.memory import MemoryInjector, MemoryService, create_memory_service
+from repoterm.memory import MemoryInjector, MemoryService
+from repoterm.memory.models import sanitize_evidence_summary
 from repoterm.turn_kernel import (
     TurnPreludeState,
     TurnRecurrentState,
@@ -75,6 +76,7 @@ from repoterm.turn_kernel import (
     build_stable_task_pack,
     build_turn_coda_summary,
     build_widening_transition_nudge,
+    classify_tool_result,
     decide_tool_turn,
     decide_assistant_turn,
     derive_turn_step_policy,
@@ -83,6 +85,17 @@ from repoterm.turn_kernel import (
 )
 
 logger = get_logger("agent_loop")
+
+
+def _bounded_runtime_tool_summary(tool_name: str, output: object) -> str:
+    """Keep a short runtime digest separate from persistent evidence."""
+
+    normalized = " ".join(str(output or "").split())
+    if not normalized:
+        normalized = "(no output)"
+    return sanitize_evidence_summary(
+        f"{str(tool_name or 'tool').strip()}: {normalized[:240]}"
+    )[:280]
 
 # Compatibility name for callers/tests that still inspect the old seam.
 # Runtime code uses MemoryService and its single deterministic injector.
@@ -830,7 +843,6 @@ def run_agent_turn(
     predictive_controller: Any = None
     self_healing_engine: Any = None
     progress_controller: Any = None
-    memory_injection_ctrl: Any = None
     model_selection_ctrl: Any = None
     smart_router: Any = None
     reflection_engine: Any = None
@@ -841,21 +853,14 @@ def run_agent_turn(
     # shared loop and its cleanup path also run when enable_work_chain is false.
     context_compactor: ContextCompactor | None = None
     context_cybernetics: ContextCyberneticsOrchestrator | None = None
-    # Compose one service and one deterministic injector for the whole turn.
-    # Compatibility callers may still pass ``memory_manager``; it is never
-    # wrapped in a second legacy pipeline.
-    memory_mgr: MemoryService = (
-        memory_manager
-        if memory_manager is not None
-        else create_memory_service(
-            workspace=cwd,
-            runtime=runtime,
-            db_path=Path(cwd) / ".repoterm-memory-runtime" / "memory.sqlite3",
-        )
-    )
-    memory_injector = MemoryInjector(service=memory_mgr)
-    if reflection_engine:
-        reflection_engine.memory = memory_mgr
+    # Composition roots provide the sole MemoryService.  A loop without one
+    # is explicitly memory-disabled; it must never manufacture a workspace
+    # fallback database that diverges from Main/Headless/TUI state.
+    memory_mgr: MemoryService | None = memory_manager
+    if memory_mgr is None:
+        logger.warning("MemoryService unavailable; persistent memory is disabled for this turn")
+    else:
+        memory_injector = MemoryInjector(service=memory_mgr)
     cost_control: CostControlLoop | None = None
 
     # Context-manager defenses belong to the core turn lifecycle rather than
@@ -888,10 +893,15 @@ def run_agent_turn(
             "",
         )
 
+    memory_source_session_id = str(getattr(session, "session_id", "") or "").strip() or None
+    memory_source_turn_id = (
+        str(getattr(prelude.task, "id", "") or "").strip() or None
+    )
+
     # This is the only prompt-memory injection in the turn.  It deliberately
     # runs outside the optional work-chain so headless/test callers cannot
     # accidentally skip it or trigger a second legacy injection below.
-    if task_desc:
+    if task_desc and memory_injector is not None and memory_mgr is not None:
         try:
             current_messages = memory_injector.inject_once(
                 current_messages,
@@ -919,11 +929,14 @@ def run_agent_turn(
         decoupling_controller = orch.decoupling
         predictive_controller = orch.predictive
         progress_controller = orch.progress
-        memory_injection_ctrl = orch.memory_ctrl
         model_selection_ctrl = orch.model_ctrl
         smart_router = orch.smart_router
         reflection_engine = orch.reflection
         model_switcher = orch.model_switcher
+        if memory_mgr is not None:
+            # Wire only the already-composed service; the orchestrator has no
+            # prompt-injection path of its own.
+            orch.wire_memory(memory_mgr)
         logger.info("CyberneticOrchestrator: %d controllers initialized", 15)
         if smart_router and prelude.task:
             try:
@@ -1794,8 +1807,24 @@ def run_agent_turn(
                     if on_tool_result:
                         on_tool_result(call["toolName"], result.output, not result.ok)
                 
-                tool_summary = f"{call['toolName']}: {result.output[:200]}"
-                turn_state.record_tool_result(result.ok, summary=tool_summary)
+                evidence = classify_tool_result(
+                    tool_name=call["toolName"],
+                    tool_input=call.get("input", {}),
+                    ok=result.ok,
+                    result_output=result.output,
+                    source_session_id=memory_source_session_id,
+                    source_turn_id=memory_source_turn_id,
+                )
+                # Raw tool output remains in the transcript.  The recurrent
+                # state retains only a classified, bounded digest and never
+                # treats ordinary observation as verification automatically.
+                turn_state.record_tool_result(
+                    result.ok,
+                    summary=_bounded_runtime_tool_summary(
+                        call["toolName"], result.output
+                    ),
+                )
+                turn_state.record_verification_evidence(evidence)
                 tool_decision = decide_tool_turn(
                     tool_name=call["toolName"],
                     result_output=result.output,
@@ -2041,26 +2070,21 @@ def run_agent_turn(
             # 任务后自省：提取经验教训
             if reflection_engine and prelude.task:
                 try:
+                    # Trace is diagnostic only.  Reflection receives the
+                    # original TurnVerificationState instead of a synthetic
+                    # aggregate tool result that could turn observations into
+                    # false validation evidence.
                     execution_trace: list[dict[str, Any]] = [
-                        {"type": "tool_call", "count": turn_state.step},
-                        {
-                            "type": "tool_result",
-                            "ok": turn_state.saw_tool_result and turn_state.tool_error_count == 0,
-                            "success": turn_state.saw_tool_result and turn_state.tool_error_count == 0,
-                            "isError": not (turn_state.saw_tool_result and turn_state.tool_error_count == 0),
-                            "content": turn_state.latest_tool_result_summary,
-                        }
-                        if turn_state.saw_tool_result
-                        else {},
-                        {
-                            "type": "error",
-                            "count": turn_state.tool_error_count,
-                            "content": f"{turn_state.tool_error_count} errors",
-                        }
-                        if turn_state.tool_error_count > 0
-                        else {},
-                        {"type": "assistant", "steps": turn_state.step},
+                        {"type": "assistant", "content": "turn finalized"},
                     ]
+                    if turn_state.tool_error_count > 0:
+                        execution_trace.append(
+                            {
+                                "type": "error",
+                                "count": turn_state.tool_error_count,
+                                "content": "tool errors were observed",
+                            }
+                        )
                     reflection = reflection_engine.reflect(
                         task_description=(
                             prelude.task.raw_input
@@ -2068,6 +2092,8 @@ def run_agent_turn(
                             else str(prelude.task.id)
                         ),
                         execution_trace=execution_trace,
+                        verification_state=turn_state.verification_state,
+                        stop_reason=coda_summary.stop_reason,
                     )
                     logger.info(
                         "AgentReflection: success=%s confidence=%.2f lessons=%d improvements=%d",

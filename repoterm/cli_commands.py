@@ -181,13 +181,10 @@ def _handle_memory_command(
         if memory_service is None:
             from repoterm import config as config_module
 
-            configured_profile = Path(config_module.REPOTERM_DIR).expanduser()
-            default_profile = Path.home() / ".repoterm"
-            db_path = (
-                configured_profile / "memory.sqlite3"
-                if configured_profile != default_profile
-                else workspace / ".repoterm-memory-runtime" / "memory.sqlite3"
-            )
+            # Standalone CLI invocation is its own composition root.  It must
+            # still use the production profile database, never a workspace
+            # fallback that can diverge from Main/TUI/Headless.
+            db_path = Path(config_module.REPOTERM_DIR).expanduser() / "memory.sqlite3"
             service = create_memory_service(workspace=workspace, db_path=db_path)
         else:
             service = memory_service
@@ -930,7 +927,6 @@ def format_cybernetics_status() -> str:
         ("CostControlLoop", "budget PID for tool-result persistence"),
         ("VerificationController", "risk-adaptive verification planning"),
         ("ToolSchedulerController", "error/latency-aware concurrency control"),
-        ("MemoryInjectionController", "context-aware memory injection"),
         ("ModelSelectionController", "cost/latency/failure-aware model routing"),
         ("ProgressController", "health/stall task progress control"),
         ("CyberneticSupervisor", "global health and risk aggregation"),

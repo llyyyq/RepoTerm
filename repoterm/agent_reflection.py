@@ -14,7 +14,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from repoterm.logging_config import get_logger
-from repoterm.memory import Kind, MemoryService, Scope
+from repoterm.memory import Kind, MemoryService, Scope, VerificationEvidence
+from repoterm.turn_kernel import TurnVerificationState
 
 logger = get_logger("agent_reflection")
 
@@ -119,39 +120,39 @@ class ReflectionEngine:
         task_description: str,
         execution_trace: list[dict[str, Any]],
         metrics: Any | None = None,
+        *,
+        verification_state: TurnVerificationState | None = None,
+        stop_reason: str | None = None,
     ) -> ReflectionResult:
-        """Generate reflection from execution trace.
+        """Generate reflection using the turn's structured evidence source.
 
-        Args:
-            task_description: Original task
-            execution_trace: List of step records (tool calls, responses, errors)
-            metrics: Optional metrics collector for performance data
-
-        Returns:
-            Reflection result
+        ``execution_trace`` remains useful for a user-visible diagnostic, but
+        it is never reinterpreted as verification proof.  The runtime-owned
+        :class:`TurnVerificationState` is the sole authority for a durable
+        experience candidate.
         """
         tool_calls = [s for s in execution_trace if s.get("type") == "tool_call"]
         errors = [s for s in execution_trace if s.get("type") == "error"]
         assistant_msgs = [s for s in execution_trace if s.get("type") == "assistant"]
 
-        verification_evidence = any(
-            step.get("type") in {"tool_result", "tool_output", "verification", "tool_verification"}
-            and (
-                step.get("ok") is True
-                or step.get("success") is True
-                or step.get("isError") is False
-            )
-            for step in execution_trace
+        evidence = (
+            verification_state.evidence_for_experience()
+            if verification_state is not None
+            else ()
         )
-        success = (
-            len(errors) == 0
-            and len(assistant_msgs) > 0
-            and verification_evidence
+        success = self._experience_is_eligible(
+            task_description=task_description,
+            verification_state=verification_state,
+            stop_reason=stop_reason,
         )
 
         key_decisions = self._extract_decisions(assistant_msgs)
         error_list = [e.get("content", "Unknown error") for e in errors]
-        lessons = self._generate_lessons(tool_calls, errors, success)
+        lessons = self._generate_lessons(
+            verification_state=verification_state,
+            task_description=task_description,
+            eligible=success,
+        )
         improvements = self._generate_improvements(tool_calls, errors, metrics)
         confidence = self._calculate_confidence(success, len(errors), len(tool_calls))
 
@@ -169,10 +170,83 @@ class ReflectionEngine:
             task_context=task_context,
         )
 
-        if self.memory and success and verification_evidence and confidence >= self.min_confidence:
-            self._persist_reflection(reflection)
+        if self.memory and success and evidence and confidence >= self.min_confidence:
+            content = self._experience_content(verification_state, task_description)
+            if content:
+                self._persist_reflection(reflection, content=content, evidence=evidence)
 
         return reflection
+
+    @staticmethod
+    def _experience_is_eligible(
+        *,
+        task_description: str,
+        verification_state: TurnVerificationState | None,
+        stop_reason: str | None,
+    ) -> bool:
+        """Apply the terminal and recovery gates before any memory proposal."""
+
+        if not str(task_description or "").strip() or verification_state is None:
+            return False
+        if stop_reason != "done":
+            return False
+        successful = verification_state.evidence_for_experience()
+        if not successful:
+            return False
+        source_sessions = {item.source_session_id for item in successful}
+        source_turns = {item.source_turn_id for item in successful}
+        if None in source_sessions or None in source_turns or len(source_sessions) != 1 or len(source_turns) != 1:
+            return False
+        items = verification_state.evidence_items
+        failed_indices = [
+            index
+            for index, item in enumerate(items)
+            if item.level.value == "validation" and not item.ok
+        ]
+        if not failed_indices:
+            return True
+        # A failed validation can only teach a recovery when an actual change
+        # follows it and a later validation then succeeds.
+        latest_failure = failed_indices[-1]
+        changed_after_failure = any(
+            item.level.value == "change" for item in items[latest_failure + 1 :]
+        )
+        validated_after_failure = any(
+            item.supports_experience for item in items[latest_failure + 1 :]
+        )
+        return changed_after_failure and validated_after_failure
+
+    @staticmethod
+    def _experience_content(
+        verification_state: TurnVerificationState | None,
+        task_description: str,
+    ) -> str | None:
+        if verification_state is None:
+            return None
+        evidence = verification_state.evidence_for_experience()
+        if not evidence:
+            return None
+        strongest = evidence[-1]
+        has_failed_validation = any(
+            item.level.value == "validation" and not item.ok
+            for item in verification_state.evidence_items
+        )
+        condition = (
+            f"when a repository change needs {strongest.tool_name} {strongest.kind.value} before delivery"
+        )
+        action = (
+            f"after a failed validation, apply a scoped repair and rerun {strongest.tool_name}"
+            if has_failed_validation
+            else f"run the targeted {strongest.tool_name} validation after the scoped change"
+        )
+        # Do not store the task transcript.  The evidence digest remains the
+        # traceable, bounded result reference.
+        del task_description
+        return (
+            f"Applicable condition: {condition}.\n"
+            f"Effective action: {action}.\n"
+            f"Verification result: {strongest.summary}."
+        )
 
     def _extract_task_context(
         self, tool_calls: list[dict[str, Any]], assistant_msgs: list[dict[str, Any]]
@@ -243,30 +317,17 @@ class ReflectionEngine:
 
     def _generate_lessons(
         self,
-        tool_calls: list[dict[str, Any]],
-        errors: list[dict[str, Any]],
-        success: bool,
+        *,
+        verification_state: TurnVerificationState | None,
+        task_description: str,
+        eligible: bool,
     ) -> list[str]:
-        """Generate lessons learned from execution."""
-        lessons = []
+        """Return at most one reusable, evidence-backed lesson preview."""
 
-        if success:
-            lessons.append("Task completed successfully with the chosen approach.")
-        else:
-            lessons.append("Task encountered errors. Review error patterns for future avoidance.")
-
-        tool_names = [t.get("tool_name", "unknown") for t in tool_calls]
-        if tool_names:
-            unique_tools = set(tool_names)
-            lessons.append(f"Used {len(unique_tools)} unique tool(s): {', '.join(unique_tools)}.")
-
-        if errors:
-            error_tools = {e.get("tool_name", "unknown") for e in errors}
-            lessons.append(
-                f"Errors occurred with tool(s): {', '.join(error_tools)}. Consider alternative approaches."
-            )
-
-        return lessons
+        if not eligible:
+            return []
+        content = self._experience_content(verification_state, task_description)
+        return [content] if content else []
 
     def _generate_improvements(
         self,
@@ -307,29 +368,28 @@ class ReflectionEngine:
         tool_bonus = min(tool_count * 0.02, 0.1)
         return max(0.0, min(1.0, base - error_penalty + tool_bonus))
 
-    def _persist_reflection(self, reflection: ReflectionResult) -> None:
+    def _persist_reflection(
+        self,
+        reflection: ReflectionResult,
+        *,
+        content: str,
+        evidence: tuple[VerificationEvidence, ...],
+    ) -> None:
         """Save reflection to long-term memory."""
         if self.memory is None:
             return
 
-        entry = reflection.to_memory_entry()
         try:
-            propose = getattr(self.memory, "propose", None)
+            propose = getattr(self.memory, "propose_experience", None)
             if not callable(propose):
-                logger.warning("Reflection memory service does not support propose()")
+                logger.warning("Reflection memory service does not support propose_experience()")
                 return
-            task_context = entry["metadata"].get("task_context") or {}
-            memory_context = (
-                task_context
-                if task_context.get("project_key") or task_context.get("projectKey")
-                else self.memory.context()
-            )
             propose(
-                content=entry["content"],
+                content=content,
                 scope=Scope.PROJECT,
                 kind=Kind.LESSON,
-                context=memory_context,
-                verified=True,
+                context=self.memory.context(),
+                evidence=evidence,
             )
             logger.info("Reflection proposed as pending (confidence: %.2f)", reflection.confidence)
         except Exception as e:

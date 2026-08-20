@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import re
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from .injector import MemoryInjector, TokenEstimator
 from .models import (
@@ -17,6 +19,9 @@ from .models import (
     Scope,
     SourceType,
     Status,
+    VerificationEvidence,
+    WriteDecision,
+    contains_sensitive_text,
     coerce_kind,
     coerce_scope,
     content_hash,
@@ -54,21 +59,39 @@ class MemoryConfirmationRequired(MemoryServiceError):
     """Raised when purge is attempted without explicit confirmation."""
 
 
+class MemoryEvidenceRequired(MemoryServiceError):
+    """Raised when a system experience lacks successful verification evidence."""
+
+
 _TOKEN_RE = re.compile(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]")
-_SECRET_PATTERNS = (
-    re.compile(r"(?i)\b(?:api[_ -]?key|auth[_ -]?token|access[_ -]?token|password|passwd|cookie|secret)\b\s*[:=]\s*\S+"),
-    re.compile(r"\bsk-[A-Za-z0-9]{16,}\b"),
-    re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
-    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-    re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._-]{20,}\b"),
+_EXPERIENCE_TEMPLATE_FIELDS = (
+    ("Applicable condition:", "有效条件：", "适用条件："),
+    ("Effective action:", "有效动作："),
+    ("Verification result:", "验证结果："),
+)
+_GENERIC_EXPERIENCE_PATTERNS = (
+    "task completed successfully",
+    "used n tools",
+    "consider alternative approaches",
+    "本次任务已完成",
 )
 
 
 def looks_like_sensitive_content(content: str) -> bool:
     """Return whether content resembles a credential without logging it."""
 
-    text = str(content or "")
-    return any(pattern.search(text) for pattern in _SECRET_PATTERNS)
+    return contains_sensitive_text(content)
+
+
+def _is_reusable_experience(content: str) -> bool:
+    """Reject generic reflections that cannot guide a future turn."""
+
+    normalized = " ".join(str(content or "").split())
+    lowered = normalized.lower()
+    return (
+        all(any(marker in normalized for marker in alternatives) for alternatives in _EXPERIENCE_TEMPLATE_FIELDS)
+        and not any(pattern in lowered for pattern in _GENERIC_EXPERIENCE_PATTERNS)
+    )
 
 
 def _legacy_auto_category(content: str) -> str:
@@ -151,10 +174,17 @@ class MemoryService:
             token_budget=self.token_budget,
             token_estimator=token_estimator,
         )
+        self._last_write_decision = WriteDecision.NOOP
 
     @property
     def db_path(self) -> Path:
         return self.store.db_path
+
+    @property
+    def last_write_decision(self) -> WriteDecision:
+        """Expose the deterministic decision made by the latest write call."""
+
+        return self._last_write_decision
 
     @property
     def project_key(self) -> str | None:
@@ -219,16 +249,77 @@ class MemoryService:
         source_session_id: str | None = None,
         source_turn_id: str | None = None,
         expires_at: float | None = None,
-        verified: bool = True,
+        evidence: Sequence[VerificationEvidence] = (),
+        verified: bool | None = None,
     ) -> MemoryEntry:
-        """Create a pending candidate; pending records are never injected.
+        """Compatibility name for :meth:`propose_experience`.
 
-        ``verified`` documents the caller's evidence gate.  The service keeps
-        the candidate pending either way, while Runtime reflection only calls
-        this operation after a successful turn.
+        The former ``verified=True`` flag is deliberately non-authoritative:
+        callers must provide actual structured evidence.  Keeping the keyword
+        avoids a misleading silent compatibility break while removing its
+        ability to bypass the service gate.
         """
 
-        del verified  # The lifecycle state, rather than caller metadata, is the contract.
+        del verified
+        return self.propose_experience(
+            content,
+            scope=scope,
+            kind=kind,
+            key=key,
+            context=context,
+            project_key=project_key,
+            branch_name=branch_name,
+            source_session_id=source_session_id,
+            source_turn_id=source_turn_id,
+            expires_at=expires_at,
+            evidence=evidence,
+        )
+
+    def propose_experience(
+        self,
+        content: str,
+        *,
+        evidence: Sequence[VerificationEvidence],
+        scope: Scope | str = Scope.PROJECT,
+        kind: Kind | str = Kind.LESSON,
+        key: str | None = None,
+        context: MemoryContext | Mapping[str, Any] | None = None,
+        project_key: str | None = None,
+        branch_name: str | None = None,
+        source_session_id: str | None = None,
+        source_turn_id: str | None = None,
+        expires_at: float | None = None,
+    ) -> MemoryEntry:
+        """Persist one evidence-backed, reviewable task experience.
+
+        System-generated experiences can never become active directly.  The
+        evidence and source identifiers are mandatory so approval remains
+        auditable after restart.
+        """
+
+        normalized_evidence = tuple(evidence)
+        if not normalized_evidence:
+            raise MemoryEvidenceRequired("experience requires validation or confirmation evidence")
+        if len(normalized_evidence) > 3:
+            raise MemoryEvidenceRequired("an experience may retain at most three evidence digests")
+        if not all(isinstance(item, VerificationEvidence) for item in normalized_evidence):
+            raise MemoryEvidenceRequired("experience evidence must be VerificationEvidence")
+        if not any(item.supports_experience for item in normalized_evidence):
+            raise MemoryEvidenceRequired("experience requires successful validation or confirmation evidence")
+        if not _is_reusable_experience(content):
+            raise MemoryEvidenceRequired("experience content must use the reusable condition/action/result template")
+
+        evidence_sessions = {item.source_session_id for item in normalized_evidence}
+        evidence_turns = {item.source_turn_id for item in normalized_evidence}
+        if None in evidence_sessions or None in evidence_turns or len(evidence_sessions) != 1 or len(evidence_turns) != 1:
+            raise MemoryEvidenceRequired("experience evidence requires one source session and turn")
+        evidence_session_id = next(iter(evidence_sessions))
+        evidence_turn_id = next(iter(evidence_turns))
+        if source_session_id not in (None, evidence_session_id):
+            raise MemoryEvidenceRequired("evidence session does not match candidate session")
+        if source_turn_id not in (None, evidence_turn_id):
+            raise MemoryEvidenceRequired("evidence turn does not match candidate turn")
+
         return self._create(
             content,
             scope=scope,
@@ -239,9 +330,90 @@ class MemoryService:
             context=context,
             project_key=project_key,
             branch_name=branch_name,
+            source_session_id=evidence_session_id,
+            source_turn_id=evidence_turn_id,
+            expires_at=expires_at,
+            evidence=normalized_evidence,
+        )
+
+    def observe_implicit_preference(
+        self,
+        content: str,
+        *,
+        scope: Scope | str = Scope.PROJECT,
+        key: str | None = None,
+        context: MemoryContext | Mapping[str, Any] | None = None,
+        project_key: str | None = None,
+        branch_name: str | None = None,
+        source_session_id: str | None = None,
+        source_turn_id: str | None = None,
+    ) -> MemoryEntry | None:
+        """Accumulate user preference signals without silently activating one.
+
+        A single incidental preference is deliberately not durable memory.
+        Only a second distinct turn/session creates one pending candidate.
+        """
+
+        if looks_like_sensitive_content(content):
+            raise SensitiveMemoryError("memory content resembles a credential and was not stored")
+        if not source_session_id and not source_turn_id:
+            raise MemoryServiceError("implicit preference requires a source session or turn")
+        normalized_scope = coerce_scope(scope)
+        resolved_context = self._resolve_context(
+            normalized_scope,
+            context=context,
+            project_key=project_key,
+            branch_name=branch_name,
+        )
+        normalized_key = str(key).strip() if key not in (None, "") else None
+        marker_input = "\x1f".join(
+            (
+                normalized_scope.value,
+                resolved_context.project_key or "",
+                resolved_context.branch_name if normalized_scope == Scope.BRANCH else "",
+                normalized_key or "",
+                content_hash(content),
+            )
+        )
+        marker = "implicit-preference:" + hashlib.sha256(marker_input.encode("utf-8")).hexdigest()
+        signal = json.dumps([source_session_id or "", source_turn_id or ""], ensure_ascii=False)
+
+        def record_signal(connection):
+            raw_state = self.store.get_metadata(marker, connection=connection)
+            try:
+                state = json.loads(raw_state) if raw_state else {"signals": []}
+            except (TypeError, ValueError, json.JSONDecodeError):
+                state = {"signals": []}
+            signals = state.get("signals") if isinstance(state, dict) else []
+            signals = [str(item) for item in signals] if isinstance(signals, list) else []
+            if signal in signals:
+                return len(signals), False
+            signals.append(signal)
+            self.store.set_metadata(
+                marker,
+                json.dumps({"signals": signals}, ensure_ascii=False, separators=(",", ":")),
+                connection=connection,
+            )
+            return len(signals), True
+
+        signal_count, is_new_signal = self.store.run_in_transaction(record_signal)
+        if not is_new_signal or signal_count < 2:
+            self._last_write_decision = WriteDecision.NOOP
+            return None
+        return self._create(
+            content,
+            scope=normalized_scope,
+            kind=Kind.PREFERENCE,
+            key=normalized_key,
+            status=Status.PENDING,
+            source_type=SourceType.EXPLICIT_USER,
+            context=resolved_context,
+            project_key=None,
+            branch_name=None,
             source_session_id=source_session_id,
             source_turn_id=source_turn_id,
-            expires_at=expires_at,
+            expires_at=None,
+            signal_count=signal_count,
         )
 
     def _create(
@@ -259,6 +431,8 @@ class MemoryService:
         source_session_id: str | None,
         source_turn_id: str | None,
         expires_at: float | None,
+        evidence: Sequence[VerificationEvidence] = (),
+        signal_count: int = 1,
     ) -> MemoryEntry:
         if looks_like_sensitive_content(content):
             raise SensitiveMemoryError("memory content resembles a credential and was not stored")
@@ -283,12 +457,25 @@ class MemoryService:
             source_type=source_type,
             source_session_id=source_session_id,
             source_turn_id=source_turn_id,
+            signal_count=signal_count,
+            evidence=tuple(evidence),
             created_at=now,
             updated_at=now,
             expires_at=expires_at,
         )
 
         def write(connection):
+            if source_type == SourceType.VERIFIED_TASK:
+                if not source_session_id or not source_turn_id:
+                    raise MemoryEvidenceRequired("system experience requires source session and turn")
+                existing_turn = self.store.find_by_source(
+                    source_type=source_type.value,
+                    source_session_id=source_session_id,
+                    source_turn_id=source_turn_id,
+                    connection=connection,
+                )
+                if existing_turn is not None:
+                    return existing_turn, WriteDecision.NOOP
             duplicate = self.store.find_by_hash(
                 scope=candidate.scope,
                 content_hash=candidate.content_hash,
@@ -297,8 +484,13 @@ class MemoryService:
                 connection=connection,
             )
             if duplicate is not None:
-                return duplicate
-            if candidate.key and candidate.status == Status.ACTIVE:
+                return self.store.increment_signal_count(
+                    duplicate.id,
+                    updated_at=now,
+                    connection=connection,
+                ), WriteDecision.NOOP
+            decision = WriteDecision.CREATE
+            if candidate.key:
                 conflict = self.store.find_active_by_key(
                     scope=candidate.scope,
                     key=candidate.key,
@@ -307,13 +499,16 @@ class MemoryService:
                     connection=connection,
                 )
                 if conflict is not None:
-                    # Explicit confirmation is enough for a new fact, but not
-                    # for silently overwriting an established keyed decision.
+                    # A conflicting value is a reviewable update candidate;
+                    # no active fact is silently overwritten.
                     candidate.status = Status.PENDING
+                    decision = WriteDecision.UPDATE
             self.store.insert(candidate, connection=connection)
-            return candidate
+            return candidate, decision
 
-        return self._legacy_fields(self.store.run_in_transaction(write))
+        result, decision = self.store.run_in_transaction(write)
+        self._last_write_decision = decision
+        return self._legacy_fields(result)
 
     def approve(self, entry_id: str) -> MemoryEntry:
         """Activate a pending record and resolve an explicitly approved key."""
@@ -350,7 +545,9 @@ class MemoryService:
             self.store.replace(entry, connection=connection)
             return entry
 
-        return self._legacy_fields(self.store.run_in_transaction(transition))
+        result = self._legacy_fields(self.store.run_in_transaction(transition))
+        self._last_write_decision = WriteDecision.UPDATE
+        return result
 
     def reject(self, entry_id: str) -> MemoryEntry:
         return self._transition(entry_id, expected=Status.PENDING, target=Status.REJECTED)
@@ -377,7 +574,7 @@ class MemoryService:
                 connection=connection,
             )
             if duplicate is not None and duplicate.id != old.id:
-                return duplicate
+                return duplicate, WriteDecision.NOOP
             if old.key:
                 conflict = self.store.find_active_by_key(
                     scope=old.scope,
@@ -397,11 +594,15 @@ class MemoryService:
                 status=Status.ACTIVE,
                 project_key=old.project_key,
                 branch_name=old.branch_name,
-                source_type=old.source_type,
-                source_session_id=old.source_session_id,
-                source_turn_id=old.source_turn_id,
+                # A user-directed body change is a new explicit assertion;
+                # prior task evidence must never prove different content.
+                source_type=SourceType.EXPLICIT_USER,
+                source_session_id=None,
+                source_turn_id=None,
                 version=old.version + 1,
                 supersedes_id=old.id,
+                evidence=(),
+                signal_count=1,
                 created_at=now,
                 updated_at=now,
                 expires_at=old.expires_at,
@@ -413,9 +614,11 @@ class MemoryService:
                 connection=connection,
             )
             self.store.insert(new_entry, connection=connection)
-            return new_entry
+            return new_entry, WriteDecision.UPDATE
 
-        return self._legacy_fields(self.store.run_in_transaction(transition))
+        result, decision = self.store.run_in_transaction(transition)
+        self._last_write_decision = decision
+        return self._legacy_fields(result)
 
     def archive(self, entry_id: str) -> MemoryEntry:
         return self._transition(entry_id, expected=None, target=Status.ARCHIVED)
@@ -446,7 +649,9 @@ class MemoryService:
             self.store.replace(entry, connection=connection)
             return entry
 
-        return self._legacy_fields(self.store.run_in_transaction(transition))
+        result = self._legacy_fields(self.store.run_in_transaction(transition))
+        self._last_write_decision = WriteDecision.UPDATE
+        return result
 
     def purge(self, entry_id: str, *, confirmed: bool = False) -> None:
         if not confirmed:
@@ -457,6 +662,7 @@ class MemoryService:
                 raise MemoryNotFoundError(f"memory not found: {entry_id}")
 
         self.store.run_in_transaction(delete)
+        self._last_write_decision = WriteDecision.DELETE
 
     def _transition(
         self,
@@ -480,7 +686,11 @@ class MemoryService:
             self.store.replace(entry, connection=connection)
             return entry
 
-        return self._legacy_fields(self.store.run_in_transaction(transition))
+        result = self._legacy_fields(self.store.run_in_transaction(transition))
+        self._last_write_decision = (
+            WriteDecision.ARCHIVE if target == Status.ARCHIVED else WriteDecision.UPDATE
+        )
+        return result
 
     # ------------------------------------------------------------------
     # Deterministic search and injection

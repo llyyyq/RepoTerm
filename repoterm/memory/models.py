@@ -8,8 +8,10 @@ graphs are intentionally not part of the new persistence model.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
+import time
 import unicodedata
 import uuid
 from dataclasses import dataclass, field
@@ -58,6 +60,44 @@ class SourceType(str, Enum):
     MIGRATION = "migration"
 
 
+class EvidenceLevel(str, Enum):
+    """How strongly a bounded evidence digest supports a memory candidate."""
+
+    OBSERVATION = "observation"
+    CHANGE = "change"
+    VALIDATION = "validation"
+    CONFIRMATION = "confirmation"
+
+
+class EvidenceKind(str, Enum):
+    """The semantic category of a tool result or user confirmation."""
+
+    READ_FILE = "read_file"
+    SEARCH = "search"
+    LIST_FILES = "list_files"
+    SHELL = "shell"
+    EDIT_FILE = "edit_file"
+    DIFF = "diff"
+    CHECKPOINT = "checkpoint"
+    TEST = "test"
+    BUILD = "build"
+    STATIC_CHECK = "static_check"
+    SCHEMA = "schema"
+    FILE_ASSERT = "file_assert"
+    RECOVERY = "recovery"
+    USER = "user"
+
+
+class WriteDecision(str, Enum):
+    """The only decisions allowed before a durable candidate is written."""
+
+    CREATE = "create"
+    UPDATE = "update"
+    ARCHIVE = "archive"
+    DELETE = "delete"
+    NOOP = "noop"
+
+
 class MemoryTier(str, Enum):
     """Compatibility-only enum for callers of the removed tiered system."""
 
@@ -65,6 +105,178 @@ class MemoryTier(str, Enum):
     SHORT_TERM = "short_term"
     LONG_TERM = "long_term"
     ARCHIVAL = "archival"
+
+
+_SENSITIVE_TEXT_PATTERNS = (
+    re.compile(
+        r"(?i)\b(?:api[_ -]?key|auth[_ -]?token|access[_ -]?token|password|passwd|cookie|secret)\b\s*[:=]\s*\S+"
+    ),
+    re.compile(r"\bsk-[A-Za-z0-9]{16,}\b"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._-]{20,}\b"),
+)
+
+
+def contains_sensitive_text(value: object) -> bool:
+    """Return whether a value resembles a credential without logging it."""
+
+    text = str(value or "")
+    return any(pattern.search(text) for pattern in _SENSITIVE_TEXT_PATTERNS)
+
+
+def sanitize_evidence_summary(value: object, *, limit: int = 240) -> str:
+    """Produce a bounded evidence digest without retaining secret-looking text."""
+
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    for pattern in _SENSITIVE_TEXT_PATTERNS:
+        text = pattern.sub("[redacted]", text)
+    return text[: max(0, int(limit))]
+
+
+def _normalize_evidence_input(value: object) -> str:
+    """Build a bounded fingerprint input without storing raw tool input."""
+
+    try:
+        rendered = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        rendered = repr(value)
+    return sanitize_evidence_summary(rendered, limit=512)
+
+
+def evidence_fingerprint(
+    *,
+    level: EvidenceLevel | str,
+    kind: EvidenceKind | str,
+    tool_name: str,
+    ok: bool,
+    summary: str,
+    tool_input: object = None,
+) -> str:
+    """Hash normalized evidence metadata without persisting raw tool output."""
+
+    payload = "\x1f".join(
+        (
+            EvidenceLevel(level).value,
+            EvidenceKind(kind).value,
+            str(tool_name or "").strip().lower(),
+            "1" if bool(ok) else "0",
+            sanitize_evidence_summary(summary),
+            _normalize_evidence_input(tool_input),
+        )
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class VerificationEvidence:
+    """A bounded digest that can support a pending system experience.
+
+    Raw stdout, stderr, diffs, source code and transcript payloads remain in
+    Trace/Transcript.  The source ids are the stable references back to those
+    authoritative records.
+    """
+
+    level: EvidenceLevel
+    kind: EvidenceKind
+    tool_name: str
+    ok: bool
+    summary: str
+    fingerprint: str = ""
+    source_session_id: str | None = None
+    source_turn_id: str | None = None
+    created_at: float = field(default_factory=time.time)
+
+    def __post_init__(self) -> None:
+        level = self.level if isinstance(self.level, EvidenceLevel) else EvidenceLevel(str(self.level))
+        kind = self.kind if isinstance(self.kind, EvidenceKind) else EvidenceKind(str(self.kind))
+        tool_name = str(self.tool_name or "").strip().lower() or "unknown"
+        summary = sanitize_evidence_summary(self.summary)
+        session_id = str(self.source_session_id).strip() if self.source_session_id not in (None, "") else None
+        turn_id = str(self.source_turn_id).strip() if self.source_turn_id not in (None, "") else None
+        fingerprint = str(self.fingerprint or "").strip() or evidence_fingerprint(
+            level=level,
+            kind=kind,
+            tool_name=tool_name,
+            ok=bool(self.ok),
+            summary=summary,
+        )
+        object.__setattr__(self, "level", level)
+        object.__setattr__(self, "kind", kind)
+        object.__setattr__(self, "tool_name", tool_name)
+        object.__setattr__(self, "ok", bool(self.ok))
+        object.__setattr__(self, "summary", summary)
+        object.__setattr__(self, "fingerprint", fingerprint)
+        object.__setattr__(self, "source_session_id", session_id)
+        object.__setattr__(self, "source_turn_id", turn_id)
+        object.__setattr__(self, "created_at", float(self.created_at))
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        level: EvidenceLevel | str,
+        kind: EvidenceKind | str,
+        tool_name: str,
+        ok: bool,
+        summary: str,
+        tool_input: object = None,
+        source_session_id: str | None = None,
+        source_turn_id: str | None = None,
+        created_at: float | None = None,
+    ) -> "VerificationEvidence":
+        normalized_level = EvidenceLevel(level)
+        normalized_kind = EvidenceKind(kind)
+        bounded_summary = sanitize_evidence_summary(summary)
+        return cls(
+            level=normalized_level,
+            kind=normalized_kind,
+            tool_name=tool_name,
+            ok=ok,
+            summary=bounded_summary,
+            fingerprint=evidence_fingerprint(
+                level=normalized_level,
+                kind=normalized_kind,
+                tool_name=tool_name,
+                ok=ok,
+                summary=bounded_summary,
+                tool_input=tool_input,
+            ),
+            source_session_id=source_session_id,
+            source_turn_id=source_turn_id,
+            created_at=time.time() if created_at is None else created_at,
+        )
+
+    @property
+    def supports_experience(self) -> bool:
+        return self.ok and self.level in {EvidenceLevel.VALIDATION, EvidenceLevel.CONFIRMATION}
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "level": self.level.value,
+            "kind": self.kind.value,
+            "tool_name": self.tool_name,
+            "ok": self.ok,
+            "summary": self.summary,
+            "fingerprint": self.fingerprint,
+            "source_session_id": self.source_session_id,
+            "source_turn_id": self.source_turn_id,
+            "created_at": self.created_at,
+        }
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "VerificationEvidence":
+        return cls(
+            level=EvidenceLevel(str(value.get("level", EvidenceLevel.OBSERVATION.value))),
+            kind=EvidenceKind(str(value.get("kind", EvidenceKind.SHELL.value))),
+            tool_name=str(value.get("tool_name", "unknown")),
+            ok=bool(value.get("ok", False)),
+            summary=str(value.get("summary", "")),
+            fingerprint=str(value.get("fingerprint", "")),
+            source_session_id=value.get("source_session_id"),
+            source_turn_id=value.get("source_turn_id"),
+            created_at=float(value.get("created_at", time.time())),
+        )
 
 
 def normalize_content(content: str) -> str:
@@ -145,6 +357,8 @@ class MemoryEntry:
     version: int = 1
     supersedes_id: str | None = None
     content_hash: str = ""
+    signal_count: int = 1
+    evidence: tuple[VerificationEvidence, ...] = field(default_factory=tuple)
     created_at: float = field(default_factory=lambda: __import__("time").time())
     updated_at: float = field(default_factory=lambda: __import__("time").time())
     expires_at: float | None = None
@@ -177,6 +391,12 @@ class MemoryEntry:
             self.key = str(self.key).strip() or None
         self.content_hash = self.content_hash or content_hash(self.content)
         self.version = max(1, int(self.version))
+        self.signal_count = max(1, int(self.signal_count))
+        self.evidence = tuple(
+            item if isinstance(item, VerificationEvidence) else VerificationEvidence.from_dict(item)
+            for item in tuple(self.evidence or ())
+            if isinstance(item, VerificationEvidence) or isinstance(item, Mapping)
+        )[:3]
         self.created_at = float(self.created_at)
         self.updated_at = float(self.updated_at)
         self._validate_scope_context()
@@ -217,6 +437,8 @@ class MemoryEntry:
             "version": self.version,
             "supersedes_id": self.supersedes_id,
             "content_hash": self.content_hash,
+            "signal_count": self.signal_count,
+            "evidence": [item.to_dict() for item in self.evidence],
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "expires_at": self.expires_at,
@@ -243,6 +465,8 @@ class MemoryEntry:
             version=data.get("version", 1),
             supersedes_id=data.get("supersedes_id"),
             content_hash=data.get("content_hash", ""),
+            signal_count=data.get("signal_count", 1),
+            evidence=tuple(data.get("evidence", ()) if isinstance(data.get("evidence", ()), (list, tuple)) else ()),
             created_at=data.get("created_at", __import__("time").time()),
             updated_at=data.get("updated_at", __import__("time").time()),
             expires_at=data.get("expires_at"),
