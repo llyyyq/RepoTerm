@@ -22,19 +22,19 @@ TurnStopReason = Literal[
 TurnStepPhase = Literal["explore", "execute", "verify"]
 
 _TEST_COMMAND_RE = re.compile(
-    r"(?:^|\s)(?:pytest|py\.test|python(?:3(?:\.\d+)?)?\s+-m\s+pytest|"
+    r"^\s*(?:pytest|py\.test|python(?:3(?:\.\d+)?)?\s+-m\s+pytest|"
     r"npm\s+(?:test|run\s+test)|yarn\s+test|pnpm\s+test|cargo\s+test|"
     r"go\s+test|mvn\s+test|gradle\s+test|tox|nox|make\s+test)(?:\s|$)",
     re.IGNORECASE,
 )
 _BUILD_COMMAND_RE = re.compile(
-    r"(?:^|\s)(?:python(?:3(?:\.\d+)?)?\s+-m\s+build|npm\s+run\s+build|"
+    r"^\s*(?:python(?:3(?:\.\d+)?)?\s+-m\s+build|npm\s+run\s+build|"
     r"yarn\s+build|pnpm\s+build|cargo\s+build|go\s+build|mvn\s+(?:package|verify)|"
     r"gradle\s+(?:build|assemble)|make(?:\s+build)?)(?:\s|$)",
     re.IGNORECASE,
 )
 _STATIC_CHECK_COMMAND_RE = re.compile(
-    r"(?:^|\s)(?:ruff(?:\s+check)?|flake8|mypy|pyright|pylint|eslint|"
+    r"^\s*(?:ruff(?:\s+check)?|flake8|mypy|pyright|pylint|eslint|"
     r"black\s+--check|isort\s+--check|python(?:3(?:\.\d+)?)?\s+-m\s+(?:ruff|mypy))(?:\s|$)",
     re.IGNORECASE,
 )
@@ -50,6 +50,7 @@ def _tool_input_text(tool_input: object) -> str:
                 return value
             if isinstance(value, (list, tuple)):
                 return " ".join(str(item) for item in value)
+        return ""
     return str(tool_input or "")
 
 
@@ -58,11 +59,17 @@ def _validation_category(tool_name: str, tool_input: object) -> tuple[EvidenceLe
 
     normalized_name = str(tool_name or "").strip().lower()
     command = _tool_input_text(tool_input)
-    combined = f"{normalized_name} {command}".lower()
+    test_tool_names = {
+        "pytest",
+        "pytest_probe",
+        "test_runner",
+        "run_tests",
+        "test",
+        "verification",
+    }
     if (
-        "pytest" in combined
-        or "test_runner" in combined
-        or "verification" in normalized_name
+        normalized_name in test_tool_names
+        or normalized_name.endswith("_verification")
         or _TEST_COMMAND_RE.search(command)
     ):
         return EvidenceLevel.VALIDATION, EvidenceKind.TEST

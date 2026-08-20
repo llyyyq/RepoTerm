@@ -287,6 +287,26 @@ def test_only_semantic_validation_commands_open_the_evidence_gate() -> None:
     assert turn_state.has_verification_evidence() is True
 
 
+def test_observation_text_does_not_open_the_evidence_gate() -> None:
+    cases = (
+        ("read_file", {"path": "pytest.ini"}),
+        ("grep_files", {"query": "pytest"}),
+        ("run_command", {"cmd": "echo pytest"}),
+    )
+
+    for tool_name, tool_input in cases:
+        evidence = classify_tool_result(
+            tool_name=tool_name,
+            tool_input=tool_input,
+            ok=True,
+            result_output="pytest text was observed",
+            source_session_id="session-1",
+            source_turn_id="turn-1",
+        )
+        assert evidence.level is EvidenceLevel.OBSERVATION
+        assert evidence.supports_experience is False
+
+
 def test_decide_tool_turn_keeps_await_user_typed() -> None:
     decision = decide_tool_turn(
         tool_name="ask_user",
