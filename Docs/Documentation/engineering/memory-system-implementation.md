@@ -216,3 +216,4 @@ D:\Programfiles\Anacondafiles\envs\agent-env\python.exe benchmarks/runtime_regre
 - 检索是标准库确定性关键词检索，不使用 Embedding、向量数据库或第三方依赖。
 - 证据摘要用于审计引用，不单独作为可检索 Prompt 内容。
 - 用户明确记忆仍可能是用户主观偏好；系统只负责敏感信息、作用域和生命周期边界，不替用户重新解释授权。
+- `service.py` 当前超过 500 行，主要原因是它同时承载生命周期业务规则和迁移期的 `MemoryManager` 兼容委托；兼容方法仍写入同一个 SQLite Service，没有恢复第二套存储或检索。后续若移除兼容 API，可再将兼容委托拆出或删除。

@@ -136,37 +136,6 @@ def create_memory_service(
     )
 
 
-class MemoryFile:
-    """Compatibility-only in-memory collection used by old unit callers."""
-
-    def __init__(self, scope: Scope = Scope.PROJECT, entries: list[MemoryEntry] | None = None) -> None:
-        self.scope = Scope(scope)
-        self.entries = list(entries or [])
-        self.max_entries = 200
-        self.max_size_bytes = 25 * 1024
-
-    @property
-    def size_bytes(self) -> int:
-        return sum(len(str(entry.content).encode("utf-8")) for entry in self.entries)
-
-    def add_entry(self, entry: MemoryEntry) -> None:
-        self.entries.append(entry)
-
-    def get_entries_by_category(self, category: str) -> list[MemoryEntry]:
-        return [entry for entry in self.entries if entry.category == category or entry.kind.value == category]
-
-    def search(self, query: str, **_: Any) -> list[MemoryEntry]:
-        query_terms = {part.lower() for part in str(query or "").split() if part}
-        if not query_terms:
-            return list(self.entries)
-        matches = []
-        for entry in self.entries:
-            text = entry.content.lower()
-            if any(term in text for term in query_terms):
-                matches.append(entry)
-        return matches
-
-
 class MemoryManager(MemoryService):
     """Thin compatibility facade over :class:`MemoryService`.
 
@@ -235,7 +204,6 @@ __all__ = [
     "MemoryEvidenceRequired",
     "MemoryContext",
     "MemoryEntry",
-    "MemoryFile",
     "MemoryInjector",
     "MemoryManager",
     "MemoryScope",
