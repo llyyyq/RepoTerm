@@ -1,8 +1,8 @@
-"""Data model for RepoTerm's persistent memory subsystem.
+"""RepoTerm 持久化记忆的数据模型。
 
-The model deliberately contains only durable, user-meaningful memory data.
-Session transcript details, tool output, usage counters, tiers, and related
-graphs are intentionally not part of the new persistence model.
+本模块只描述可以跨回合保存、且用户能够理解和审计的数据。Session
+Transcript、原始工具输出、使用计数、旧版 tier 和关系图都不属于新的
+持久化模型；这些内容应留在运行时 Trace 或兼容层中。
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from typing import Any, Mapping
 
 
 class Scope(str, Enum):
-    """The three durable memory scopes."""
+    """三种实际持久化作用域；`user`/`local` 只是兼容别名。"""
 
     GLOBAL = "global"
     PROJECT = "project"
@@ -34,7 +34,7 @@ class Scope(str, Enum):
 
 
 class Kind(str, Enum):
-    """The small, auditable set of memory meanings."""
+    """受限且可审计的记忆含义集合。"""
 
     PREFERENCE = "preference"
     DECISION = "decision"
@@ -43,7 +43,7 @@ class Kind(str, Enum):
 
 
 class Status(str, Enum):
-    """Memory lifecycle states."""
+    """记忆候选从产生到归档、拒绝或被替代的生命周期状态。"""
 
     PENDING = "pending"
     ACTIVE = "active"
@@ -53,7 +53,7 @@ class Status(str, Enum):
 
 
 class SourceType(str, Enum):
-    """How a memory entered the system."""
+    """记录进入系统的来源；来源决定默认写入门禁。"""
 
     EXPLICIT_USER = "explicit_user"
     VERIFIED_TASK = "verified_task"
@@ -61,7 +61,7 @@ class SourceType(str, Enum):
 
 
 class EvidenceLevel(str, Enum):
-    """How strongly a bounded evidence digest supports a memory candidate."""
+    """有界证据摘要的强度；只有验证/确认可以支撑经验。"""
 
     OBSERVATION = "observation"
     CHANGE = "change"
@@ -70,7 +70,7 @@ class EvidenceLevel(str, Enum):
 
 
 class EvidenceKind(str, Enum):
-    """The semantic category of a tool result or user confirmation."""
+    """工具结果或用户确认的语义类别。"""
 
     READ_FILE = "read_file"
     SEARCH = "search"
@@ -89,7 +89,7 @@ class EvidenceKind(str, Enum):
 
 
 class WriteDecision(str, Enum):
-    """The only decisions allowed before a durable candidate is written."""
+    """写入前允许对外报告的有限决策集合。"""
 
     CREATE = "create"
     UPDATE = "update"
@@ -99,7 +99,7 @@ class WriteDecision(str, Enum):
 
 
 class MemoryTier(str, Enum):
-    """Compatibility-only enum for callers of the removed tiered system."""
+    """已删除的分层系统留下的兼容枚举，不参与新存储和检索。"""
 
     WORKING = "working"
     SHORT_TERM = "short_term"
@@ -119,14 +119,14 @@ _SENSITIVE_TEXT_PATTERNS = (
 
 
 def contains_sensitive_text(value: object) -> bool:
-    """Return whether a value resembles a credential without logging it."""
+    """判断文本是否像凭据，但绝不记录或回显原文。"""
 
     text = str(value or "")
     return any(pattern.search(text) for pattern in _SENSITIVE_TEXT_PATTERNS)
 
 
 def sanitize_evidence_summary(value: object, *, limit: int = 240) -> str:
-    """Produce a bounded evidence digest without retaining secret-looking text."""
+    """把证据摘要压缩、脱敏并限制长度，避免长期保存密钥或大段输出。"""
 
     text = re.sub(r"\s+", " ", str(value or "")).strip()
     for pattern in _SENSITIVE_TEXT_PATTERNS:
@@ -135,7 +135,7 @@ def sanitize_evidence_summary(value: object, *, limit: int = 240) -> str:
 
 
 def _normalize_evidence_input(value: object) -> str:
-    """Build a bounded fingerprint input without storing raw tool input."""
+    """构造指纹输入；只用于哈希，不把完整工具输入写入数据库。"""
 
     try:
         rendered = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
@@ -153,7 +153,7 @@ def evidence_fingerprint(
     summary: str,
     tool_input: object = None,
 ) -> str:
-    """Hash normalized evidence metadata without persisting raw tool output."""
+    """对规范化证据元数据计算哈希，不持久化原始工具输出。"""
 
     payload = "\x1f".join(
         (
@@ -170,11 +170,14 @@ def evidence_fingerprint(
 
 @dataclass(frozen=True, slots=True)
 class VerificationEvidence:
-    """A bounded digest that can support a pending system experience.
+    """可支持 pending 经验的有界证据摘要。
 
     Raw stdout, stderr, diffs, source code and transcript payloads remain in
     Trace/Transcript.  The source ids are the stable references back to those
     authoritative records.
+
+    原始 stdout、stderr、Diff、源码和 Transcript 仍保留在 Trace/Transcript；
+    本对象只保存清洗后的摘要和回溯来源所需的 session/turn 标识。
     """
 
     level: EvidenceLevel
@@ -188,6 +191,7 @@ class VerificationEvidence:
     created_at: float = field(default_factory=time.time)
 
     def __post_init__(self) -> None:
+        """统一枚举、工具名、摘要和来源字段，保证对象可安全序列化。"""
         level = self.level if isinstance(self.level, EvidenceLevel) else EvidenceLevel(str(self.level))
         kind = self.kind if isinstance(self.kind, EvidenceKind) else EvidenceKind(str(self.kind))
         tool_name = str(self.tool_name or "").strip().lower() or "unknown"
@@ -225,6 +229,7 @@ class VerificationEvidence:
         source_turn_id: str | None = None,
         created_at: float | None = None,
     ) -> "VerificationEvidence":
+        """从一次工具/用户结果创建证据，并在创建时完成摘要脱敏和指纹计算。"""
         normalized_level = EvidenceLevel(level)
         normalized_kind = EvidenceKind(kind)
         bounded_summary = sanitize_evidence_summary(summary)
@@ -249,9 +254,11 @@ class VerificationEvidence:
 
     @property
     def supports_experience(self) -> bool:
+        """返回该证据是否能打开经验写入门禁。"""
         return self.ok and self.level in {EvidenceLevel.VALIDATION, EvidenceLevel.CONFIRMATION}
 
     def to_dict(self) -> dict[str, object]:
+        """转换为可写入 `evidence_json` 的稳定字典。"""
         return {
             "level": self.level.value,
             "kind": self.kind.value,
@@ -266,6 +273,7 @@ class VerificationEvidence:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "VerificationEvidence":
+        """从 SQLite/旧数据中的字典恢复证据对象并重新执行规范化。"""
         return cls(
             level=EvidenceLevel(str(value.get("level", EvidenceLevel.OBSERVATION.value))),
             kind=EvidenceKind(str(value.get("kind", EvidenceKind.SHELL.value))),
@@ -280,7 +288,7 @@ class VerificationEvidence:
 
 
 def normalize_content(content: str) -> str:
-    """Return the canonical text used for exact duplicate detection."""
+    """生成用于精确去重的规范正文：Unicode 归一化并折叠空白。"""
 
     if not isinstance(content, str):
         content = "" if content is None else str(content)
@@ -289,13 +297,13 @@ def normalize_content(content: str) -> str:
 
 
 def content_hash(content: str) -> str:
-    """Hash canonical content without exposing the content itself."""
+    """对规范正文计算哈希；哈希值用于去重，不暴露正文。"""
 
     return hashlib.sha256(normalize_content(content).encode("utf-8")).hexdigest()
 
 
 def project_key_for(workspace: str | Path) -> str:
-    """Create the first-version stable key for an absolute workspace path."""
+    """把绝对 workspace 路径转换为稳定项目 key，用于项目级隔离。"""
 
     resolved = Path(workspace).expanduser().resolve(strict=False)
     normalized = os.path.normcase(str(resolved))
@@ -303,13 +311,13 @@ def project_key_for(workspace: str | Path) -> str:
 
 
 def new_memory_id() -> str:
-    """Generate the UUID identifier used by new records."""
+    """生成新记忆记录使用的 UUID。"""
 
     return str(uuid.uuid4())
 
 
 def migration_memory_id(source_path: str, source_id: str, index: int, content: str) -> str:
-    """Generate a stable UUID for an imported legacy record."""
+    """根据旧来源和正文生成可重复的迁移 UUID，保证迁移幂等。"""
 
     seed = "\x1f".join((source_path, source_id, str(index), normalize_content(content)))
     return str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
@@ -317,13 +325,14 @@ def migration_memory_id(source_path: str, source_id: str, index: int, content: s
 
 @dataclass(frozen=True)
 class MemoryContext:
-    """Runtime context used to isolate project and branch memories."""
+    """运行时用于隔离项目记忆和分支记忆的最小上下文。"""
 
     project_key: str | None = None
     branch_name: str | None = None
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any] | None) -> "MemoryContext":
+        """兼容 snake_case/camelCase 输入并丢弃空上下文值。"""
         if not value:
             return cls()
         project = value.get("project_key", value.get("projectKey"))
@@ -336,11 +345,14 @@ class MemoryContext:
 
 @dataclass
 class MemoryEntry:
-    """One durable memory record.
+    """一条可持久化的记忆记录。
 
     ``category``, ``tags``, ``domains`` and the ``tier`` field are accepted as
     compatibility inputs for the old public import.  They are not persisted by
     the new SQLite schema and do not participate in retrieval.
+
+    旧接口中的 ``category``、``tags``、``domains`` 和 ``tier`` 只为兼容旧
+    调用者保留，不写入新 schema，也不参与确定性检索。
     """
 
     id: str = field(default_factory=new_memory_id)
@@ -372,6 +384,7 @@ class MemoryEntry:
     last_accessed: float | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
+        """规范化字段并校验 scope 与 project/branch 上下文是否匹配。"""
         self.scope = coerce_scope(self.scope)
         self.status = coerce_status(self.status)
         self.source_type = coerce_source_type(self.source_type)
@@ -402,6 +415,7 @@ class MemoryEntry:
         self._validate_scope_context()
 
     def _validate_scope_context(self) -> None:
+        """执行作用域约束：global 无项目，branch 必须同时有项目和分支。"""
         if self.scope == Scope.GLOBAL:
             self.project_key = None
             self.branch_name = None
@@ -415,12 +429,12 @@ class MemoryEntry:
 
     @property
     def category_name(self) -> str:
-        """Return a legacy category-like display value."""
+        """返回旧 CLI 需要的类别展示值，不改变新模型的 kind。"""
 
         return self.category or self.kind.value
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize only the new core model fields."""
+        """只序列化新核心字段，供迁移、测试和审计展示使用。"""
 
         return {
             "id": self.id,
@@ -446,7 +460,7 @@ class MemoryEntry:
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "MemoryEntry":
-        """Build a record from the new format or a legacy-shaped dictionary."""
+        """从新格式或旧形状字典构造记录，并交给构造器统一校验。"""
 
         category = data.get("category")
         kind = data.get("kind", category or Kind.LESSON.value)
@@ -477,28 +491,32 @@ class MemoryEntry:
 
 
 def coerce_scope(value: Scope | str) -> Scope:
+    """把作用域字符串和兼容别名转换成正式 `Scope`。"""
     value = value.value if isinstance(value, Scope) else str(value).strip().lower()
     aliases = {"user": Scope.GLOBAL.value, "local": Scope.PROJECT.value}
     return Scope(aliases.get(value, value))
 
 
 def coerce_kind(value: Kind | str) -> Kind:
+    """把 kind 输入转换成受限枚举，非法值交给上层处理。"""
     value = value.value if isinstance(value, Kind) else str(value).strip().lower()
     return Kind(value)
 
 
 def coerce_status(value: Status | str) -> Status:
+    """把状态输入转换成正式 `Status`。"""
     value = value.value if isinstance(value, Status) else str(value).strip().lower()
     return Status(value)
 
 
 def coerce_source_type(value: SourceType | str) -> SourceType:
+    """把来源输入转换成正式 `SourceType`。"""
     value = value.value if isinstance(value, SourceType) else str(value).strip().lower()
     return SourceType(value)
 
 
 def kind_from_legacy_category(category: str | None) -> Kind:
-    """Map old free-form categories into the bounded new kind vocabulary."""
+    """把旧版自由类别映射到新的有限 kind 词汇。"""
 
     normalized = str(category or "").strip().lower()
     if normalized in {"preference", "directive", "user_preference", "style"}:
@@ -511,7 +529,7 @@ def kind_from_legacy_category(category: str | None) -> Kind:
 
 
 def context_for_workspace(workspace: str | Path | None) -> MemoryContext:
-    """Build project context from a workspace without probing Git."""
+    """只根据 workspace 构造项目上下文；Git 分支由 Service 按需查询。"""
 
     if workspace is None:
         return MemoryContext()

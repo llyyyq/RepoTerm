@@ -1,7 +1,8 @@
-"""SQLite persistence for the persistent memory subsystem.
+"""记忆系统的 SQLite 持久化层。
 
-This module knows only about SQLite and :class:`MemoryEntry`.  It has no
-knowledge of agents, prompts, tools, TUI state, or model adapters.
+本模块只认识 SQLite 和 :class:`MemoryEntry`，不认识 Agent、Prompt、工具、
+TUI 状态或模型适配器。所有连接都必须在本模块内关闭，所有跨多条 SQL
+的业务写入都必须由显式事务包住。
 """
 
 from __future__ import annotations
@@ -20,9 +21,10 @@ T = TypeVar("T")
 
 
 class MemoryStore:
-    """Small transactional SQLite repository."""
+    """提供确定性连接生命周期和事务语义的轻量 SQLite 仓库。"""
 
     def __init__(self, db_path: str | Path) -> None:
+        """初始化数据库路径并确保 schema 已创建或升级。"""
         if not db_path:
             raise ValueError("db_path must be explicit")
         self.db_path = Path(db_path).expanduser()
@@ -30,6 +32,7 @@ class MemoryStore:
         self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
+        """打开一条配置好外键和 busy timeout 的独立 SQLite 连接。"""
         connection = sqlite3.connect(
             str(self.db_path),
             timeout=5.0,
@@ -42,7 +45,7 @@ class MemoryStore:
 
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
-        """Yield a connection and close it deterministically.
+        """打开一条连接并保证退出时确定性关闭。
 
         ``sqlite3.Connection`` implements a transaction context manager, but
         that context manager does not close the connection.  Keeping this
@@ -57,6 +60,7 @@ class MemoryStore:
             connection.close()
 
     def _initialize(self) -> None:
+        """创建表和索引，并在同一事务内完成旧 schema 的升级。"""
         with self._connection() as connection:
             connection.executescript(
                 """
@@ -140,7 +144,7 @@ class MemoryStore:
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
-        """Open an immediate transaction and always commit or roll it back."""
+        """打开 `BEGIN IMMEDIATE` 事务，成功提交、异常回滚，最后关闭连接。"""
 
         connection = self._connect()
         try:
@@ -154,6 +158,7 @@ class MemoryStore:
             connection.close()
 
     def run_in_transaction(self, callback: Callable[[sqlite3.Connection], T]) -> T:
+        """在完整的提交/回滚/关闭边界内执行一个数据库回调。"""
         with self.transaction() as connection:
             return callback(connection)
 
@@ -204,6 +209,7 @@ class MemoryStore:
         """
 
     def insert(self, entry: MemoryEntry, connection: sqlite3.Connection | None = None) -> None:
+        """插入一条已经由 Service 校验过的记录，可复用调用方事务。"""
         values = (
             entry.id,
             entry.scope.value,
@@ -231,6 +237,7 @@ class MemoryStore:
         self.run_in_transaction(lambda conn: conn.execute(self._insert_sql(), values))
 
     def get(self, entry_id: str, connection: sqlite3.Connection | None = None) -> MemoryEntry | None:
+        """按 ID 读取记录；传入连接时不自行提交或关闭调用方事务。"""
         query = "SELECT * FROM memory_entries WHERE id = ?"
         if connection is not None:
             return self._entry_from_row(connection.execute(query, (entry_id,)).fetchone())
@@ -246,6 +253,7 @@ class MemoryStore:
         branch_name: str | None = None,
         connection: sqlite3.Connection | None = None,
     ) -> list[MemoryEntry]:
+        """按状态、作用域和上下文读取记录，并使用稳定时间/ID顺序返回。"""
         clauses: list[str] = []
         params: list[object] = []
         if statuses:
@@ -279,6 +287,7 @@ class MemoryStore:
         branch_name: str | None,
         connection: sqlite3.Connection | None = None,
     ) -> MemoryEntry | None:
+        """查找同 scope/context 下正文哈希相同的记录，用于幂等去重。"""
         query = """
             SELECT * FROM memory_entries
             WHERE scope = ? AND content_hash = ?
@@ -301,6 +310,7 @@ class MemoryStore:
         branch_name: str | None,
         connection: sqlite3.Connection | None = None,
     ) -> MemoryEntry | None:
+        """查找同 scope/context/key 的 active 记录，保护现有真值不被覆盖。"""
         query = """
             SELECT * FROM memory_entries
             WHERE scope = ? AND key = ? AND status = 'active'
@@ -323,7 +333,7 @@ class MemoryStore:
         branch_name: str | None,
         connection: sqlite3.Connection | None = None,
     ) -> MemoryEntry | None:
-        """Find the current review candidate for one scoped business key."""
+        """查找同 scope/context/key 当前唯一的 pending 审核候选。"""
 
         query = """
             SELECT * FROM memory_entries
@@ -346,7 +356,7 @@ class MemoryStore:
         source_turn_id: str,
         connection: sqlite3.Connection | None = None,
     ) -> MemoryEntry | None:
-        """Find the single durable system experience for one source turn."""
+        """按来源 session/turn 查找系统经验，防止一个 Turn 重复生成候选。"""
 
         query = """
             SELECT * FROM memory_entries
@@ -368,6 +378,7 @@ class MemoryStore:
         updated_at: float,
         connection: sqlite3.Connection | None = None,
     ) -> bool:
+        """更新状态字段；传入连接时由调用方决定事务边界。"""
         query = "UPDATE memory_entries SET status = ?, updated_at = ? WHERE id = ?"
         params = (status.value, updated_at, entry_id)
         if connection is not None:
@@ -382,13 +393,14 @@ class MemoryStore:
         updated_at: float,
         connection: sqlite3.Connection,
     ) -> None:
+        """在调用方事务内更新旧版本的状态链接。"""
         connection.execute(
             "UPDATE memory_entries SET status = ?, updated_at = ? WHERE id = ?",
             (status.value, updated_at, entry_id),
         )
 
     def replace(self, entry: MemoryEntry, *, connection: sqlite3.Connection) -> None:
-        """Persist a full record replacement inside the caller's transaction."""
+        """在调用方事务内完整替换一条记录，不自行提交事务。"""
 
         connection.execute(
             """
@@ -430,7 +442,7 @@ class MemoryStore:
         updated_at: float,
         connection: sqlite3.Connection,
     ) -> MemoryEntry:
-        """Increase an existing candidate's corroborating-signal count."""
+        """增加候选的独立佐证信号数，并在同一事务中读回最新对象。"""
 
         connection.execute(
             "UPDATE memory_entries SET signal_count = signal_count + 1, updated_at = ? WHERE id = ?",
@@ -442,12 +454,14 @@ class MemoryStore:
         return entry
 
     def delete(self, entry_id: str, connection: sqlite3.Connection | None = None) -> bool:
+        """物理删除记录；Service 只有在明确确认 purge 时才会调用。"""
         query = "DELETE FROM memory_entries WHERE id = ?"
         if connection is not None:
             return connection.execute(query, (entry_id,)).rowcount == 1
         return bool(self.run_in_transaction(lambda conn: conn.execute(query, (entry_id,)).rowcount == 1))
 
     def get_metadata(self, key: str, connection: sqlite3.Connection | None = None) -> str | None:
+        """读取 schema/migration 等元数据，不把 marker 混入记忆记录。"""
         if connection is not None:
             row = connection.execute("SELECT value FROM metadata WHERE key = ?", (key,)).fetchone()
             return row["value"] if row is not None else None
@@ -456,6 +470,7 @@ class MemoryStore:
         return row["value"] if row is not None else None
 
     def set_metadata(self, key: str, value: str, connection: sqlite3.Connection | None = None) -> None:
+        """写入或覆盖 metadata；迁移时必须复用当前事务连接。"""
         query = """
             INSERT INTO metadata(key, value) VALUES(?, ?)
             ON CONFLICT(key) DO UPDATE SET value = excluded.value
@@ -467,6 +482,7 @@ class MemoryStore:
             self.run_in_transaction(lambda conn: conn.execute(query, params))
 
     def count_by_scope_and_status(self) -> dict[str, dict[str, int]]:
+        """统计各作用域和状态的记录数量，用于状态页与验收。"""
         with self._connection() as connection:
             rows = connection.execute(
                 """

@@ -130,6 +130,7 @@ def _safe_evidence_summary(
     return f"{label}: {kind.value} {'succeeded' if ok else 'failed'}"
 
 
+# 将工具结果转换为 CHANGE/VALIDATION 证据；read/search/list 等普通观察返回 None。
 def classify_tool_result(
     *,
     tool_name: str,
@@ -139,7 +140,7 @@ def classify_tool_result(
     source_session_id: str | None,
     source_turn_id: str | None,
 ) -> VerificationEvidence | None:
-    """Build validation/change evidence; ordinary observations stay in Trace.
+    """构造 CHANGE/VALIDATION 证据；普通观察只留在 Trace。
 
     ``read_file``, search and listing results are useful runtime observations,
     but they are not evidence objects.  The caller records their bounded
@@ -187,7 +188,7 @@ class TurnVerificationState:
     evidence_items: list[VerificationEvidence] = field(default_factory=list)
 
     def record_evidence(self, evidence: VerificationEvidence) -> None:
-        """Record a classified tool result; only valid levels open the gate."""
+        """记录分类后的证据；只有支持经验的等级才能打开当前 Turn 门禁。"""
 
         self.evidence_items.append(evidence)
         # Keep per-turn state bounded while retaining the most recent outcome
@@ -201,10 +202,11 @@ class TurnVerificationState:
             self.evidence_summary = supporting[-1].summary
 
     def supporting_evidence(self) -> tuple[VerificationEvidence, ...]:
+        """返回当前 Turn 中所有成功的 VALIDATION/CONFIRMATION 证据。"""
         return tuple(item for item in self.evidence_items if item.supports_experience)
 
     def evidence_for_experience(self) -> tuple[VerificationEvidence, ...]:
-        """Return at most three successful, source-backed verification digests."""
+        """返回最多三条可写入经验、且带稳定来源引用的成功证据摘要。"""
 
         return self.supporting_evidence()[-3:]
 

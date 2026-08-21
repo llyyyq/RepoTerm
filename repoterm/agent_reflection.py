@@ -105,8 +105,9 @@ class ReflectionResult:
 
 
 class ReflectionEngine:
-    """Engine for agent self-reflection."""
+    """负责把经过验证的反思转换为 pending 经验候选。"""
 
+    # 反思只持有运行时传入的 MemoryService，不创建自己的存储或注入路径。
     def __init__(
         self,
         memory_manager: MemoryService | None = None,
@@ -115,6 +116,7 @@ class ReflectionEngine:
         self.memory = memory_manager
         self.min_confidence = min_confidence_threshold
 
+    # 反思可以生成诊断，但只有共享验证状态满足门禁时才提交 pending 经验。
     def reflect(
         self,
         task_description: str,
@@ -177,6 +179,7 @@ class ReflectionEngine:
 
         return reflection
 
+    # 任务必须正常结束、拥有成功验证，并满足失败恢复顺序，才能进入经验候选。
     @staticmethod
     def _experience_is_eligible(
         *,
@@ -216,6 +219,7 @@ class ReflectionEngine:
         )
         return changed_after_failure and validated_after_failure
 
+    # 只生成条件/动作/验证结果模板，不把完整任务 Transcript 写入记忆。
     @staticmethod
     def _experience_content(
         verification_state: TurnVerificationState | None,
@@ -368,6 +372,7 @@ class ReflectionEngine:
         tool_bonus = min(tool_count * 0.02, 0.1)
         return max(0.0, min(1.0, base - error_penalty + tool_bonus))
 
+    # 通过 propose_experience 保存 pending；绝不能使用旧 add_entry 直接 active。
     def _persist_reflection(
         self,
         reflection: ReflectionResult,

@@ -1,4 +1,8 @@
-"""Public lifecycle and retrieval service for persistent memory."""
+"""持久化记忆的公共生命周期与检索服务。
+
+MemoryService 是业务层唯一入口：显式记忆、隐式偏好、经验候选、审批、
+迁移、搜索和兼容 API 都在这里收口。调用方不应绕过它直接写 SQLite。
+"""
 
 from __future__ import annotations
 
@@ -36,31 +40,31 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryServiceError(ValueError):
-    """Base class for expected memory operation errors."""
+    """记忆操作可以预期、且可安全展示给用户的错误基类。"""
 
 
 class SensitiveMemoryError(MemoryServiceError):
-    """Raised when content appears to contain a credential or secret."""
+    """正文疑似包含凭据或密钥时抛出。"""
 
 
 class BranchScopeError(MemoryServiceError):
-    """Raised when a branch memory has no trustworthy Git context."""
+    """创建分支记忆但没有可信 Git 上下文时抛出。"""
 
 
 class MemoryConflictError(MemoryServiceError):
-    """Raised when a requested lifecycle transition would overwrite a key."""
+    """生命周期操作会覆盖另一个 active key 时抛出。"""
 
 
 class MemoryNotFoundError(MemoryServiceError):
-    """Raised when an operation references an unknown record."""
+    """操作引用不存在的记录时抛出。"""
 
 
 class MemoryConfirmationRequired(MemoryServiceError):
-    """Raised when purge is attempted without explicit confirmation."""
+    """未提供明确确认却尝试 purge 时抛出。"""
 
 
 class MemoryEvidenceRequired(MemoryServiceError):
-    """Raised when a system experience lacks successful verification evidence."""
+    """系统经验缺少成功验证或确认时抛出。"""
 
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]")
@@ -102,18 +106,21 @@ _IMPLICIT_PREFERENCE_EXPLICIT_MARKER = re.compile(
 
 
 def looks_like_sensitive_content(content: str) -> bool:
-    """Return whether content resembles a credential without logging it."""
+    """判断正文是否疑似凭据，但不记录或回显敏感内容。"""
 
     return contains_sensitive_text(content)
 
 
 def extract_implicit_preference_signal(text: str) -> tuple[str, str] | None:
-    """Extract one conservative, normalized preference signal from a Turn.
+    """从一个 Turn 中提取保守且规范化的隐式偏好信号。
 
     This is intentionally an allow-list for communication preferences only.
     It does not infer project facts, tool choices, or lessons from arbitrary
     prose.  Explicit "remember/save" language is left to the explicit memory
     command path and therefore cannot create a second implicit signal.
+
+    只允许通信语言和简洁程度这类白名单偏好，不从任意 prose 推断项目事实、
+    工具选择或经验；明确的 remember/save 仍走显式命令路径。
     """
 
     normalized = " ".join(str(text or "").split())
@@ -153,7 +160,7 @@ def extract_implicit_preference_signal(text: str) -> tuple[str, str] | None:
 
 
 def _is_reusable_experience(content: str) -> bool:
-    """Reject generic reflections that cannot guide a future turn."""
+    """拒绝不能指导未来 Turn 的泛化反思，要求条件/动作/结果模板。"""
 
     normalized = " ".join(str(content or "").split())
     lowered = normalized.lower()
@@ -212,8 +219,9 @@ def _scope_priority(scope: Scope) -> int:
 
 
 class MemoryService:
-    """The only business-facing entry point for persistent memory."""
+    """持久化记忆面向业务的唯一入口。"""
 
+    # 这里绑定唯一 Store、workspace 作用域和注入预算；生产运行时不创建备用数据库。
     def __init__(
         self,
         *,
@@ -274,6 +282,7 @@ class MemoryService:
     # Explicit and candidate write paths
     # ------------------------------------------------------------------
 
+    # 明确用户授权的记忆可直接进入 active，但仍必须经过敏感信息和 scope 校验。
     def remember_explicit(
         self,
         content: str,
@@ -305,6 +314,7 @@ class MemoryService:
             expires_at=expires_at,
         )
 
+    # 兼容旧的 propose 名称；真实写入仍必须经过经验证据门禁。
     def propose(
         self,
         content: str,
@@ -344,6 +354,7 @@ class MemoryService:
             evidence=evidence,
         )
 
+    # 系统/模型生成的经验只能先进入 pending，且证据必须来自同一 Turn。
     def propose_experience(
         self,
         content: str,
@@ -405,6 +416,7 @@ class MemoryService:
             evidence=normalized_evidence,
         )
 
+    # 隐式偏好先累计独立信号，达到阈值后创建 pending，不静默激活。
     def observe_implicit_preference(
         self,
         content: str,
@@ -485,6 +497,7 @@ class MemoryService:
             signal_count=signal_count,
         )
 
+    # 所有主要写入路径在这里收口：去重、同 key 冲突和事务内插入都在此完成。
     def _create(
         self,
         content: str,
@@ -599,8 +612,9 @@ class MemoryService:
         self._last_write_decision = decision
         return self._legacy_fields(result)
 
+    # 批准是唯一把候选提升为 active 的用户审核入口，并在事务内处理旧 active。
     def approve(self, entry_id: str) -> MemoryEntry:
-        """Activate a pending record and resolve an explicitly approved key."""
+        """把 pending 候选提升为 active，并在同一事务中解决已批准的 key 冲突。"""
 
         now = self._clock()
 
@@ -638,11 +652,13 @@ class MemoryService:
         self._last_write_decision = WriteDecision.UPDATE
         return result
 
+    # 拒绝只允许作用于 pending，保留审计记录而不产生可检索记忆。
     def reject(self, entry_id: str) -> MemoryEntry:
         return self._transition(entry_id, expected=Status.PENDING, target=Status.REJECTED)
 
+    # 用户修改会创建新版本并清空旧证据，避免旧验证证明新正文。
     def update(self, entry_id: str, content: str) -> MemoryEntry:
-        """Create a new version and supersede the previous record atomically."""
+        """原子创建新版本并将旧记录标记为 superseded。"""
 
         if looks_like_sensitive_content(content):
             raise SensitiveMemoryError("memory content resembles a credential and was not stored")
@@ -709,9 +725,11 @@ class MemoryService:
         self._last_write_decision = decision
         return self._legacy_fields(result)
 
+    # 归档保留记录但移出 active 检索，可由 restore 恢复。
     def archive(self, entry_id: str) -> MemoryEntry:
         return self._transition(entry_id, expected=None, target=Status.ARCHIVED)
 
+    # 恢复前重新检查过期和同 key active 冲突，防止恢复覆盖现有真值。
     def restore(self, entry_id: str) -> MemoryEntry:
         now = self._clock()
 
@@ -742,6 +760,7 @@ class MemoryService:
         self._last_write_decision = WriteDecision.UPDATE
         return result
 
+    # 物理删除是不可逆操作，必须由调用方明确传入 confirmed=True。
     def purge(self, entry_id: str, *, confirmed: bool = False) -> None:
         if not confirmed:
             raise MemoryConfirmationRequired("purge requires confirmed=True")
@@ -753,6 +772,7 @@ class MemoryService:
         self.store.run_in_transaction(delete)
         self._last_write_decision = WriteDecision.DELETE
 
+    # 统一处理 reject/archive 等简单状态转换，所有状态写入都在一个事务中完成。
     def _transition(
         self,
         entry_id: str,
@@ -785,6 +805,7 @@ class MemoryService:
     # Deterministic search and injection
     # ------------------------------------------------------------------
 
+    # 搜索只看 active、未过期且当前 scope 可见的记录，并使用稳定排序。
     def search(
         self,
         query: str = "",
@@ -854,6 +875,7 @@ class MemoryService:
             and entry.branch_name == context.branch_name
         )
 
+    # Service 只负责把检索结果交给 Injector，预算和 Prompt 格式由 Injector 负责。
     def build_prompt_context(
         self,
         task: str,
@@ -869,6 +891,7 @@ class MemoryService:
             limit=self.max_entries if limit is None else limit,
         )
 
+    # 兼容层冲突检查只读，不会自动合并或绕过 pending/approve 流程。
     def detect_conflicts(
         self,
         content: str,
@@ -905,6 +928,7 @@ class MemoryService:
     # Queries, migration, and safe compatibility surface
     # ------------------------------------------------------------------
 
+    # 返回当前上下文可见的 pending 候选，供 /memory pending 和人工审核使用。
     def list_pending(
         self,
         *,
@@ -919,9 +943,11 @@ class MemoryService:
         ]
         return [self._legacy_fields(entry) for entry in entries[:limit] if limit is not None] if limit is not None else [self._legacy_fields(entry) for entry in entries]
 
+    # 统计各 scope/status 数量，供状态命令和验收使用。
     def stats(self) -> dict[str, dict[str, int]]:
         return self.store.count_by_scope_and_status()
 
+    # 委托 legacy 读取器执行非破坏迁移，Service 仍是唯一写入入口。
     def migrate_legacy(
         self,
         *,
@@ -943,6 +969,7 @@ class MemoryService:
 
         return self._import_migrated_batch((entry,))[0]
 
+    # 迁移批次和 marker 必须共用一个事务，失败时整体回滚以便重试。
     def _import_migrated_batch(
         self,
         entries: Iterable[MemoryEntry],
@@ -987,6 +1014,7 @@ class MemoryService:
 
         return self.store.run_in_transaction(write)
 
+    # 合并显式上下文、workspace 默认上下文和 branch，并执行 scope 必需字段校验。
     def _resolve_context(
         self,
         scope: Scope,
@@ -1030,6 +1058,7 @@ class MemoryService:
     # -- Explicit command compatibility.  These methods delegate to the new
     # service and do not maintain a JSON/Markdown second truth source. -------
 
+    # 解析旧的 #/memory add 输入，但最终仍调用 remember_explicit 写入 SQLite。
     def handle_user_memory_input(self, user_input: str) -> str | None:
         raw = str(user_input or "").strip()
         if not raw:
@@ -1067,9 +1096,11 @@ class MemoryService:
         suffix = " (local: alias for project; deprecated)" if local_alias else ""
         return f"Saved memory ({entry.scope.value}, {entry.status.value}){suffix}: {entry.content}"
 
+    # 兼容旧调用名，直接复用确定性 Prompt 注入，不另建检索路径。
     def get_relevant_context(self, query: str = "", *, max_entries: int = 5, max_tokens: int = 800) -> str:
         return self.build_prompt_context(query, budget=max_tokens, limit=max_entries)
 
+    # 兼容旧 add_entry；category/tags 等旧字段不能恢复第二套存储。
     def add_entry(
         self,
         scope: Scope | str,
@@ -1090,11 +1121,13 @@ class MemoryService:
         entry.category = category
         return entry
 
+    # 兼容旧更新入口，实际生命周期由 Service.update 统一执行。
     def update_entry(self, scope: Scope | str, entry_id: str, content: str) -> bool:
         del scope
         self.update(entry_id, content)
         return True
 
+    # 兼容旧删除入口，使用归档保留审计历史，而不是悄悄清空数据库。
     def delete_entry(self, scope: Scope | str, entry_id: str) -> bool:
         del scope
         entry = self.store.get(entry_id)
@@ -1111,12 +1144,14 @@ class MemoryService:
                 self.archive(successor.id)
         return True
 
+    # 兼容旧清空入口：逐条归档指定 scope，保持生命周期可审计。
     def clear_scope(self, scope: Scope | str) -> None:
         normalized = coerce_scope(scope)
         for entry in self.store.list_entries(scopes=(normalized,)):
             if entry.status not in {Status.ARCHIVED, Status.SUPERSEDED, Status.REJECTED}:
                 self.archive(entry.id)
 
+    # 生成不含完整正文的状态摘要，供 CLI 展示数据库和各 scope 计数。
     def format_stats(self) -> str:
         stats = self.stats()
         lines = ["Memory System Status", "=" * 40]

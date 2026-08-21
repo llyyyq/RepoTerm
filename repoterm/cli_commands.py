@@ -144,6 +144,7 @@ def complete_slash_command(line: str) -> tuple[list[str], str]:
 
 
 def _format_memory_entries(entries) -> str:
+    # CLI 只展示有界正文预览和生命周期字段，不在这里执行检索或写入。
     if not entries:
         return "No memories found."
     lines = []
@@ -164,6 +165,7 @@ def _handle_user_memory_command(
     cwd: str | None = None,
     memory_service=None,
 ) -> str:
+    # /user 的唯一真值源是 global + preference 的 SQLite 记录；USER.md 仅只读迁移。
     """Expose global preferences through the SQLite memory service.
 
     ``USER.md`` is intentionally not used for writes here.  It remains a
@@ -264,6 +266,7 @@ def _handle_memory_command(
     cwd: str | None = None,
     memory_service=None,
 ) -> str:
+    # /memory 只做 Service 生命周期适配；删除必须显式 --confirm。
     """Handle the user-facing SQLite memory lifecycle commands.
 
     ``/memory`` remains the status command.  Destructive deletion is routed

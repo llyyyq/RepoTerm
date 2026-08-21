@@ -1,4 +1,8 @@
-"""Deterministic retrieval and prompt formatting for persistent memory."""
+"""持久化记忆的确定性检索和 Prompt 格式化层。
+
+Injector 只读取 MemoryService 返回的 active 记录，不负责写入、审批或
+判断证据；它是运行时唯一的记忆块组装器。
+"""
 
 from __future__ import annotations
 
@@ -19,7 +23,7 @@ _TOKEN_RE = re.compile(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]")
 
 
 def default_token_estimator(text: str) -> int:
-    """Conservative standard-library fallback.
+    """使用无第三方依赖的粗略字符估算 Token，保证预算逻辑可重复。
 
     Runtime composition roots pass RepoTerm's existing estimator.  The
     fallback keeps the standalone service usable without importing the context
@@ -31,14 +35,14 @@ def default_token_estimator(text: str) -> int:
 
 @dataclass(frozen=True)
 class PromptMemory:
-    """A selected memory with its deterministic relevance score."""
+    """一条被选中的记忆及其确定性词法相关性分数。"""
 
     entry: MemoryEntry
     score: float
 
 
 class MemoryInjector:
-    """Select at most five active memories under a token budget."""
+    """在 Token 预算内选择并格式化最多五条 active 记忆。"""
 
     HEADER = "## Persistent Memory (advisory)"
     SAFETY_LINE = (
@@ -54,6 +58,7 @@ class MemoryInjector:
         token_budget: int = 800,
         token_estimator: TokenEstimator | None = None,
     ) -> None:
+        """绑定 Service 和注入上限；不创建第二个数据库或检索器。"""
         self.service = service
         self.max_entries = max(0, int(max_entries))
         self.token_budget = max(0, int(token_budget))
@@ -67,7 +72,11 @@ class MemoryInjector:
         budget: int | None = None,
         limit: int | None = None,
     ) -> list[PromptMemory]:
-        """Return deterministic selected records from the service."""
+        """按相关性、作用域、更新时间和 ID 稳定选择记录。
+
+        这里只接收 Service 的 active 搜索结果，再做最多五条、正文哈希去重
+        和 Token 预算裁剪；pending、archived 等状态不会进入 Prompt。
+        """
 
         effective_budget = self.token_budget if budget is None else max(0, int(budget))
         effective_limit = self.max_entries if limit is None else max(0, int(limit))
@@ -104,7 +113,7 @@ class MemoryInjector:
         budget: int | None = None,
         limit: int | None = None,
     ) -> str:
-        """Build one clearly delimited, safety-scoped injection block."""
+        """生成一个带安全边界说明的记忆区块；没有候选时返回空字符串。"""
 
         selected = self.select(task, context=context, budget=budget, limit=limit)
         if not selected:
@@ -115,7 +124,7 @@ class MemoryInjector:
         return "\n".join(lines)
 
     def format_for_prompt(self, memories: list[PromptMemory | MemoryEntry]) -> str:
-        """Format an already selected list without performing another search."""
+        """只格式化已经选好的记录，不触发第二次检索。"""
 
         entries = [item.entry if isinstance(item, PromptMemory) else item for item in memories]
         if not entries:
@@ -138,7 +147,7 @@ class MemoryInjector:
         budget: int | None = None,
         limit: int | None = None,
     ) -> list[dict[str, Any]]:
-        """Return messages with a single memory block appended to the system message."""
+        """幂等地把一个记忆块追加到 system message，保证每 Turn 最多一次注入。"""
 
         if any(self.HEADER in str(message.get("content", "")) for message in messages):
             return messages

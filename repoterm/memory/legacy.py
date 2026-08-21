@@ -1,4 +1,8 @@
-"""Non-destructive, idempotent migration from RepoTerm's old files."""
+"""RepoTerm 旧文件的非破坏、可重试、幂等迁移。
+
+旧 JSON 和 USER.md 只作为输入读取；新 SQLite 才是迁移后的唯一真值源。
+每个来源的记录和 migration marker 必须在同一个事务中提交。
+"""
 
 from __future__ import annotations
 
@@ -25,7 +29,7 @@ from .service import looks_like_sensitive_content
 
 @dataclass
 class MigrationReport:
-    """Counts and safe diagnostics for one migration run."""
+    """一次迁移运行的计数和不泄露正文的安全诊断。"""
 
     imported: int = 0
     deduplicated: int = 0
@@ -36,6 +40,7 @@ class MigrationReport:
     sources: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
+        """转换为 CLI/测试可展示的报告字典，不包含敏感正文。"""
         return {
             "imported": self.imported,
             "deduplicated": self.deduplicated,
@@ -47,6 +52,7 @@ class MigrationReport:
         }
 
     def __str__(self) -> str:
+        """生成只包含计数的简短报告，不回显迁移内容。"""
         return (
             "MigrationReport("
             f"imported={self.imported}, deduplicated={self.deduplicated}, "
@@ -60,7 +66,12 @@ def migrate_legacy(
     workspace: str | Path | None = None,
     home: str | Path | None = None,
 ) -> MigrationReport:
-    """Import listed legacy sources without changing any source file."""
+    """读取旧来源并原子导入，不修改任何旧文件。
+
+    一个 source 是不可分割的迁移单元：敏感源整体跳过，正常源的所有
+    记录插入和 marker 一起提交。数据库异常会回滚插入且不写 marker，
+    这样修复来源后仍可再次重试。
+    """
 
     workspace_path = Path(workspace).expanduser().resolve(strict=False) if workspace else None
     home_path = Path(home).expanduser().resolve(strict=False) if home else Path.home()
@@ -139,6 +150,7 @@ def migrate_legacy(
 
 
 def _read_bytes(path: Path, report: MigrationReport) -> bytes | None:
+    """读取旧文件字节；失败只写安全错误到报告。"""
     try:
         return path.read_bytes()
     except OSError:
@@ -147,6 +159,7 @@ def _read_bytes(path: Path, report: MigrationReport) -> bytes | None:
 
 
 def _marker_key(path: Path, source_hash: str) -> str:
+    """按绝对路径和 source hash 生成幂等迁移 marker 键。"""
     return f"migration:{path.resolve(strict=False)}:{source_hash}"
 
 
@@ -157,6 +170,7 @@ def _parse_json(
     source_workspace: Path | None,
     report: MigrationReport,
 ) -> list[tuple[MemoryEntry, bool]]:
+    """解析旧 JSON，并将可校验记录转换为新 MemoryEntry。"""
     try:
         parsed = json.loads(raw.decode("utf-8-sig"))
     except (UnicodeDecodeError, json.JSONDecodeError):
@@ -191,6 +205,7 @@ def _convert_legacy_entry(
     source_kind: str,
     source_workspace: Path | None,
 ) -> tuple[MemoryEntry | None, bool, str | None]:
+    """转换一条旧记录，同时验证 scope、正文和旧状态是否合法。"""
     if not isinstance(raw_entry, dict):
         return None, False, "record is not an object"
     content = raw_entry.get("content")
@@ -254,7 +269,11 @@ def _parse_user_md(
     path: Path,
     report: MigrationReport,
 ) -> list[tuple[MemoryEntry, bool]]:
-    """Import only explicit key/value preference bullets from USER.md."""
+    """只从 USER.md 读取明确的 key/value 偏好条目。
+
+    USER.md 不再是可写真值源；该函数只为一次性迁移服务，并将结果标记
+    为 migration 来源。
+    """
 
     result: list[tuple[MemoryEntry, bool]] = []
     heading = ""

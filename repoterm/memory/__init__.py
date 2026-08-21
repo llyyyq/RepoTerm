@@ -1,4 +1,7 @@
-"""Public memory API.
+"""RepoTerm 记忆系统的公共导出和迁移期兼容门面。
+
+新代码应依赖 MemoryService、MemoryStore 和这里导出的模型；MemoryManager、
+MemoryScope、_tokenize 等符号只为旧调用方过渡，不能重新引入第二套真值源。
 
 New code should depend on :class:`MemoryService`, :class:`MemoryStore`, and
 the model enums exported here.  ``MemoryManager`` and ``MemoryScope`` remain
@@ -76,7 +79,7 @@ _CODE_TERM_EXPANSIONS: dict[str, list[str]] = {
 
 
 def _auto_classify_content(content: str) -> tuple[str, list[str]]:
-    """Compatibility classifier for callers of the retired JSON subsystem."""
+    """为已删除 JSON 系统的旧调用者提供不持久化的兼容分类。"""
 
     text = str(content or "").lower()
     rules = (
@@ -98,7 +101,7 @@ def _auto_classify_content(content: str) -> tuple[str, list[str]]:
 
 @lru_cache(maxsize=1024)
 def _tokenize(text: str) -> list[str]:
-    """Return the legacy-compatible, dependency-free query tokenization."""
+    """提供旧评测依赖的无依赖分词；新检索由 Service 使用确定性规则完成。"""
 
     value = str(text or "")
     tokens = [part.lower() for part in _WORD_RE.findall(value)]
@@ -115,7 +118,7 @@ def create_memory_service(
     token_budget: int | None = None,
     token_estimator=None,
 ) -> MemoryService:
-    """Compose the runtime service from an explicit path and configuration."""
+    """根据显式数据库路径和运行时配置创建唯一 MemoryService 组合根。"""
 
     runtime = runtime or {}
     if db_path is None:
@@ -153,6 +156,7 @@ class MemoryManager(MemoryService):
         db_path: str | Path | None = None,
         **kwargs: Any,
     ) -> None:
+        # 兼容旧 project_root 参数，但仍使用同一个生产 SQLite 数据库。
         target_workspace = workspace or project_root
         if db_path is None:
             db_path = REPOTERM_DIR / "memory.sqlite3"
@@ -164,7 +168,7 @@ def inject_memory_into_prompt(
     memory_manager: MemoryService,
     max_tokens: int = 800,
 ) -> str:
-    """Compatibility helper backed by the single deterministic injector."""
+    """兼容旧调用，委托唯一确定性 Injector 追加一个 advisory 记忆块。"""
 
     block = memory_manager.build_prompt_context("", budget=max_tokens)
     return f"{system_prompt}\n\n{block}" if block else system_prompt
@@ -175,7 +179,7 @@ def format_memory_list(
     scope: Scope | None = None,
     category: str | None = None,
 ) -> str:
-    """Format a bounded, content-preview list for old CLI callers."""
+    """为旧 CLI 输出有界正文预览；不创建新的存储或检索实现。"""
 
     if memory_manager is None:
         return "No MemoryService available."

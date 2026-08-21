@@ -304,6 +304,7 @@ def _handle_input(
     if input_text == "/exit":
         return True
 
+    # TUI 只转发 Main/Headless 已创建的同一个 MemoryService，不自行建库。
     memory_mgr = getattr(args, "memory_manager", None)
     if memory_mgr is not None:
         memory_result = memory_mgr.handle_user_memory_input(input_text)

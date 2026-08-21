@@ -495,6 +495,7 @@ def main() -> None:
     # single per-turn prompt injection; the composition root only passes the
     # service through and does not pre-render a memory block.
     from repoterm.memory import create_memory_service
+    # Main 是交互式组合根：创建的这一实例同时交给 CLI、Agent Loop 和 Reflection。
     memory_service = create_memory_service(cwd, runtime=runtime or {})
     logger.info("Memory service initialized")
     

@@ -202,6 +202,7 @@ def run_headless(prompt: str | None = None, allow_edits: bool = False) -> str:
             "(non-interactive CI mode; approvals are session-scoped)."
         )
     permissions = PermissionManager(cwd, prompt=_make_auto_approve_prompt() if auto_approve else None)
+    # 组合根只创建一个 MemoryService；Agent Loop 是唯一 Prompt 注入点。
     # Agent Loop is the sole prompt-injection point.  The composition root
     # creates one service and passes it through without adding memory_context
     # to the startup prompt.

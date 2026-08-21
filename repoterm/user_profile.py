@@ -90,7 +90,7 @@ def _parse_list_items(body: str) -> list[str]:
 
 
 def parse_user_md(content: str) -> UserProfile:
-    """Parse USER.md Markdown content into a UserProfile."""
+    """只读解析 USER.md；解析结果用于迁移或兼容展示，不写回文件。"""
     profile = UserProfile(raw_content=content)
 
     # Split into sections by ## headings
@@ -152,7 +152,7 @@ def parse_user_md(content: str) -> UserProfile:
 # ---------------------------------------------------------------------------
 
 def serialize_user_md(profile: UserProfile) -> str:
-    """Serialize a UserProfile back into USER.md Markdown format."""
+    """把内存对象序列化成 Markdown 文本，仅供旧兼容调用，不代表允许写文件。"""
     lines: list[str] = ["# User Profile", ""]
 
     # Preferences
@@ -222,7 +222,7 @@ def serialize_user_md(profile: UserProfile) -> str:
 # ---------------------------------------------------------------------------
 
 class UserProfileManager:
-    """Read USER.md profiles without maintaining a second write path."""
+    """只读加载 USER.md，不维护第二套可写的用户偏好真值源。"""
 
     def __init__(self, cwd: str | Path | None = None):
         from repoterm.config import REPOTERM_DIR
@@ -238,15 +238,15 @@ class UserProfileManager:
         return self._project_path
 
     def load_global(self) -> Optional[UserProfile]:
-        """Load global profile from ~/.repoterm/USER.md."""
+        """只读加载全局 USER.md；新的 /user 写入改走 SQLite。"""
         return self._load_from(self._global_path)
 
     def load_project(self) -> Optional[UserProfile]:
-        """Load project profile from .repoterm/USER.md."""
+        """只读加载项目 USER.md；它不是新的项目记忆数据库。"""
         return self._load_from(self._project_path)
 
     def load_merged(self) -> UserProfile:
-        """Load and merge global + project profiles. Project overrides global."""
+        """合并只读全局/项目旧档案，项目字段覆盖全局字段。"""
         global_profile = self.load_global()
         project_profile = self.load_project()
 

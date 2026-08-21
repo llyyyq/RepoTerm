@@ -93,7 +93,7 @@ logger = get_logger("agent_loop")
 
 
 def _bounded_runtime_tool_summary(tool_name: str, output: object) -> str:
-    """Keep a short runtime digest separate from persistent evidence."""
+    """生成仅供本回合状态使用的短摘要，与持久化证据严格分离。"""
 
     normalized = " ".join(str(output or "").split())
     if not normalized:
@@ -110,7 +110,7 @@ def _record_implicit_preference_signal(
     source_session_id: str | None,
     source_turn_id: str | None,
 ):
-    """Record one conservative user-preference signal for the current Turn."""
+    """把当前 Turn 的白名单偏好交给 Service 累计，不直接创建 active 记忆。"""
 
     signal = extract_implicit_preference_signal(task_text)
     if signal is None or not (source_session_id or source_turn_id):
@@ -805,6 +805,8 @@ def run_agent_turn(
     project_context: str = "",
     enable_work_chain: bool = True,
 ) -> list[ChatMessage]:
+    # 运行时记忆约定：组合根传入唯一 MemoryService，本函数只创建一个 Injector，
+    # 在 Turn 开始时注入一次，并把共享 TurnVerificationState 交给 Reflection。
     # Prelude: prepare per-turn state before we enter the recurrent think/act loop.
     current_messages = list(messages)
     runtime = runtime or {}
