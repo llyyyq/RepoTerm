@@ -598,6 +598,67 @@ def test_memory_command_uses_current_workspace(tmp_path) -> None:
     assert "Memory System Status" in result
 
 
+def test_user_command_writes_global_preference_to_sqlite_only(tmp_path, monkeypatch) -> None:
+    import repoterm.config as config
+    from repoterm.memory import Kind, Scope, Status, create_memory_service
+
+    profile_dir = tmp_path / "profile"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.setattr(config, "REPOTERM_DIR", profile_dir)
+    service = create_memory_service(
+        workspace=workspace,
+        db_path=profile_dir / "memory.sqlite3",
+    )
+
+    result = try_handle_local_command(
+        "/user set preferences.language Chinese",
+        cwd=str(workspace),
+        memory_service=service,
+    )
+
+    assert "SQLite" in result
+    entries = service.store.list_entries(
+        statuses=(Status.ACTIVE,), scopes=(Scope.GLOBAL,)
+    )
+    assert len(entries) == 1
+    assert entries[0].kind is Kind.PREFERENCE
+    assert entries[0].key == "preferences.language"
+    assert entries[0].content == "preferences.language = Chinese"
+    assert not (profile_dir / "USER.md").exists()
+    assert not (workspace / ".repoterm" / "USER.md").exists()
+
+    try_handle_local_command(
+        "/user set preferences.language English",
+        cwd=str(workspace),
+        memory_service=service,
+    )
+    active = service.store.list_entries(
+        statuses=(Status.ACTIVE,), scopes=(Scope.GLOBAL,)
+    )
+    assert len(active) == 1
+    assert active[0].content == "preferences.language = English"
+
+
+def test_legacy_user_profile_set_is_read_only(tmp_path, monkeypatch) -> None:
+    import repoterm.config as config
+    from repoterm.user_profile import handle_user_command
+
+    profile_dir = tmp_path / "profile"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.setattr(config, "REPOTERM_DIR", profile_dir)
+
+    result = handle_user_command(
+        "set preferences.language Chinese",
+        cwd=str(workspace),
+    )
+
+    assert "read-only" in result
+    assert not (profile_dir / "USER.md").exists()
+    assert not (workspace / ".repoterm" / "USER.md").exists()
+
+
 def test_memory_lifecycle_commands_use_new_service(tmp_path, monkeypatch) -> None:
     import repoterm.config as config
     from repoterm.memory import (

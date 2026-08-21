@@ -138,10 +138,18 @@ def classify_tool_result(
     result_output: str,
     source_session_id: str | None,
     source_turn_id: str | None,
-) -> VerificationEvidence:
-    """Build the single structured record shared by guard, trace and reflection."""
+) -> VerificationEvidence | None:
+    """Build validation/change evidence; ordinary observations stay in Trace.
+
+    ``read_file``, search and listing results are useful runtime observations,
+    but they are not evidence objects.  The caller records their bounded
+    summary separately, so an observation cannot accidentally participate in
+    the verification gate or an experience candidate.
+    """
 
     level, kind = _validation_category(tool_name, tool_input)
+    if level == EvidenceLevel.OBSERVATION:
+        return None
     return VerificationEvidence.create(
         level=level,
         kind=kind,

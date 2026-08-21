@@ -471,6 +471,36 @@ def test_implicit_preference_requires_two_distinct_signals_and_stays_pending(tmp
     assert len(service.list_pending()) == 1
 
 
+def test_memory_manager_with_workspace_uses_production_database(monkeypatch, tmp_path: Path) -> None:
+    import repoterm.memory as memory_module
+    from repoterm.memory import MemoryManager
+
+    production_dir = tmp_path / "profile"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.setattr(memory_module, "REPOTERM_DIR", production_dir)
+
+    manager = MemoryManager(project_root=workspace)
+
+    assert manager.db_path == production_dir / "memory.sqlite3"
+    assert not (workspace / ".repoterm-memory" / "memory.sqlite3").exists()
+
+
+def test_implicit_preference_signal_parser_is_conservative() -> None:
+    from repoterm.memory import extract_implicit_preference_signal
+
+    assert extract_implicit_preference_signal("I prefer concise responses") == (
+        "preferences.verbosity",
+        "preferences.verbosity = concise",
+    )
+    assert extract_implicit_preference_signal("以后请使用中文回答") == (
+        "preferences.language",
+        "preferences.language = Chinese",
+    )
+    assert extract_implicit_preference_signal("Please remember to use Chinese") is None
+    assert extract_implicit_preference_signal("Please fix the failing test") is None
+
+
 def test_v1_database_is_upgraded_to_v2_atomically(tmp_path: Path) -> None:
     db_path = tmp_path / "memory.sqlite3"
     with sqlite3.connect(db_path) as connection:

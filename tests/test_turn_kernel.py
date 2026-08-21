@@ -272,13 +272,10 @@ def test_only_semantic_validation_commands_open_the_evidence_gate() -> None:
     )
 
     turn_state.record_tool_result(True, summary="read_file: observed")
-    turn_state.record_verification_evidence(read)
+    assert read is None
     turn_state.record_tool_result(True, summary="run_command: observed")
-    turn_state.record_verification_evidence(shell)
+    assert shell is None
     assert turn_state.has_verification_evidence() is False
-    assert read.level is EvidenceLevel.OBSERVATION
-    assert shell.level is EvidenceLevel.OBSERVATION
-    assert shell.kind is EvidenceKind.SHELL
 
     turn_state.record_tool_result(True, summary="pytest: 2 passed")
     turn_state.record_verification_evidence(pytest_result)
@@ -303,8 +300,7 @@ def test_observation_text_does_not_open_the_evidence_gate() -> None:
             source_session_id="session-1",
             source_turn_id="turn-1",
         )
-        assert evidence.level is EvidenceLevel.OBSERVATION
-        assert evidence.supports_experience is False
+        assert evidence is None
 
 
 def test_decide_tool_turn_keeps_await_user_typed() -> None:

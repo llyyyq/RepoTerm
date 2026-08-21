@@ -158,6 +158,106 @@ def _format_memory_entries(entries) -> str:
     return "\n".join(lines)
 
 
+def _handle_user_memory_command(
+    user_input: str,
+    *,
+    cwd: str | None = None,
+    memory_service=None,
+) -> str:
+    """Expose global preferences through the SQLite memory service.
+
+    ``USER.md`` is intentionally not used for writes here.  It remains a
+    read-only migration/display input, while this adapter makes the global
+    ``Kind.PREFERENCE`` records the sole source of truth for ``/user``.
+    """
+
+    try:
+        from repoterm.memory import (
+            Kind,
+            MemoryServiceError,
+            Scope,
+            Status,
+            create_memory_service,
+        )
+
+        workspace = Path(cwd) if cwd else Path.cwd()
+        if memory_service is None:
+            from repoterm import config as config_module
+
+            db_path = Path(config_module.REPOTERM_DIR).expanduser() / "memory.sqlite3"
+            service = create_memory_service(workspace=workspace, db_path=db_path)
+        else:
+            service = memory_service
+
+        raw = user_input.strip()
+        args = raw[len("/user") :].strip() if raw.startswith("/user") else ""
+        action, _, rest = args.partition(" ")
+        action = action.lower() or "show"
+        rest = rest.strip()
+
+        active_preferences = [
+            entry
+            for entry in service.store.list_entries(
+                statuses=(Status.ACTIVE,), scopes=(Scope.GLOBAL,)
+            )
+            if entry.kind is Kind.PREFERENCE
+        ]
+
+        if action in {"show", "", "global", "list"}:
+            return _format_memory_entries(
+                sorted(active_preferences, key=lambda entry: (entry.key or "", entry.id))
+            )
+
+        if action == "search":
+            matches = [
+                entry
+                for entry in service.search(rest, scope=Scope.GLOBAL)
+                if entry.kind is Kind.PREFERENCE
+            ]
+            return _format_memory_entries(matches)
+
+        if action == "pending":
+            pending = [
+                entry
+                for entry in service.list_pending()
+                if entry.scope is Scope.GLOBAL and entry.kind is Kind.PREFERENCE
+            ]
+            return _format_memory_entries(pending)
+
+        if action == "set":
+            key, separator, value = rest.partition(" ")
+            key, value = key.strip(), value.strip()
+            if not separator or not key or not value:
+                return "Usage: /user set <preferences.key> <value>"
+            if not (key.startswith("preferences.") or key.startswith("coding_style.")):
+                return "Only preferences.* and coding_style.* can be managed by /user."
+
+            content = f"{key} = {value}"
+            existing = next((entry for entry in active_preferences if entry.key == key), None)
+            if existing is None:
+                entry = service.remember_explicit(
+                    content,
+                    scope=Scope.GLOBAL,
+                    kind=Kind.PREFERENCE,
+                    key=key,
+                )
+            else:
+                entry = service.update(existing.id, content)
+            return f"Set {key} = {value} in global preference (SQLite)."
+
+        if action in {"reset", "reset-global", "project", "paths"}:
+            return (
+                "USER.md is read-only migration input; use /memory archive/delete "
+                "for SQLite lifecycle operations."
+            )
+
+        return "Usage: /user [show|list|search <query>|pending|set <preferences.key> <value>]"
+    except MemoryServiceError as error:
+        return f"User preference command failed: {error}"
+    except Exception as error:  # noqa: BLE001 - local command boundary
+        return f"User preference command failed: {error}"
+
+
 def _handle_memory_command(
     user_input: str,
     *,
@@ -910,9 +1010,11 @@ def try_handle_local_command(
         return f"saved model={arg} to {REPOTERM_SETTINGS_PATH}\nRestart RepoTerm for the change to take effect."
 
     if user_input == "/user" or user_input.startswith("/user "):
-        from repoterm.user_profile import handle_user_command
-        args = user_input[len("/user"):].strip()
-        return handle_user_command(args)
+        return _handle_user_memory_command(
+            user_input,
+            cwd=cwd,
+            memory_service=memory_service,
+        )
 
     return None
 

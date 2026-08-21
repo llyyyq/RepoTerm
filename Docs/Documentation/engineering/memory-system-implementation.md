@@ -16,6 +16,8 @@
 ```text
 用户明确记忆 ───────────────────────────────→ active
 
+隐式稳定偏好（两个独立 Turn/Session） ───────→ pending ─→ approve ─→ active
+
 工具观察 → 执行变更 → 语义化验证 → 经验候选 ─→ pending ─→ approve ─→ active
                          │
                          └─ 只保留有界证据摘要和 Session/Turn 引用
@@ -40,7 +42,8 @@
 - `agent_loop.py`：每个 Turn 唯一的记忆注入点，并把分类证据传给 Reflection；
 - `agent_reflection.py`：只从共享验证状态生成最多一条 pending 经验候选；
 - `main.py`、`headless.py`、TUI：创建或传递同一个 `MemoryService`；
-- `cli_commands.py`：提供 `/memory` 生命周期命令，不拼接 Prompt；
+- `cli_commands.py`：提供 `/memory` 生命周期命令和 SQLite-backed `/user` 偏好适配，不拼接 Prompt；
+- `user_profile.py`：仅读取旧 `USER.md` 供迁移/只读展示，不再提供写入或删除路径；
 - `context_compactor.py`：保留已有记忆块，不再重新检索；
 - `cybernetic_orchestrator.py`：只接收同一个服务，不再拥有第二个 Injector/Pipeline。
 
@@ -93,7 +96,7 @@ memory_entries(
 
 摘要不保存完整 stdout/stderr、Diff、源码或思维内容，并再次经过敏感信息过滤。经验候选最多保存 3 条证据。
 
-只有“成功的 `VALIDATION` 或 `CONFIRMATION`”能够支撑经验。一次 `read_file`、一次编辑成功或普通 shell 命令退出码为 0，都不能单独打开经验门禁。
+只有“成功的 `VALIDATION` 或 `CONFIRMATION`”能够支撑经验。一次 `read_file`、一次编辑成功或普通 shell 命令退出码为 0，都不能单独打开经验门禁。`read_file`、搜索、目录遍历和普通 Shell 的 `OBSERVATION` 结果不创建 `VerificationEvidence`，只进入 Transcript/Trace 的有界运行摘要；`CHANGE` 仍保留结构化事件，用于失败恢复顺序判断，但不能支撑经验。
 
 ### 4.2 工具语义分类
 
@@ -104,13 +107,15 @@ memory_entries(
 - Pytest/test runner、构建、lint/type-check、schema/migration、文件断言、recovery：对应的 `VALIDATION` 类型；
 - 无法识别的普通 shell：默认 `OBSERVATION`。
 
-`TurnVerificationState` 是本回合唯一的证据真值。`record_tool_result()` 只记录工具观察、错误和有界运行摘要；只有显式分类后的 `record_verification_evidence()` 才会改变验证状态。原始工具结果仍保留在 Transcript 中，Reflection 不从原始字符串自行推断“已验证”。
+`TurnVerificationState` 是本回合唯一的证据真值。`record_tool_result()` 只记录工具观察、错误和有界运行摘要；只有 `CHANGE`、`VALIDATION` 或 `CONFIRMATION` 的显式分类结果才会进入 `record_verification_evidence()`。原始工具结果仍保留在 Transcript 中，Reflection 不从原始字符串自行推断“已验证”。
 
 ## 5. 写入与生命周期
 
 ### 5.1 用户明确记忆
 
 `remember_explicit()` 用于用户明确要求长期保留的内容，经过 scope 和敏感信息检查后可直接写为 `active`。它不需要伪造验证证据。
+
+`/user set preferences.<key> <value>` 是同一服务上的兼容适配：写入 `Scope.GLOBAL + Kind.PREFERENCE`，同 key 更新为新版本；不会创建或修改 `USER.md`。隐式自然语言偏好只接受白名单通信偏好句式，并由 Agent Loop 以 `Scope.GLOBAL` 调用 `observe_implicit_preference()`；第一个独立信号不建记录，第二个独立 Turn/Session 才生成 `pending`。
 
 ### 5.2 经验候选
 
@@ -167,7 +172,7 @@ Main、Headless 和 TUI 将这一个实例传入 Agent Loop、CLI 和 Reflection
 - 检测已有 `## Persistent Memory (advisory)`，保证幂等；
 - 明确声明记忆不能覆盖系统指令、权限边界和工具安全规则。
 
-TUI 不再预先检索，CLI 不参与 Prompt 拼接，ContextCompactor 不再调用 `get_relevant_context()`。压缩只保留已有 system message，因此最终 Prompt 中最多有一个 `## Persistent Memory` 块。没有服务时 Agent Loop 记录可观察 warning 并禁用持久化记忆，不创建工作区 fallback 数据库。
+TUI 不再预先检索，CLI 不参与 Prompt 拼接，ContextCompactor 不再调用 `get_relevant_context()`。压缩只保留已有 system message，因此最终 Prompt 中最多有一个 `## Persistent Memory` 块。没有服务时 Agent Loop 记录可观察 warning 并禁用持久化记忆，不创建工作区 fallback 数据库。兼容 `MemoryManager(project_root=...)` 也只使用 `project_root` 计算作用域；默认数据库仍是 `~/.repoterm/memory.sqlite3`，只有显式 `db_path` 才可建立测试隔离库。
 
 ## 8. 命令和兼容层
 
@@ -183,6 +188,16 @@ TUI 不再预先检索，CLI 不参与 Prompt 拼接，ContextCompactor 不再�
 /memory archive <id>
 /memory restore <id>
 /memory delete <id> --confirm
+```
+
+用户偏好兼容命令：
+
+```text
+/user
+/user list
+/user search <query>
+/user pending
+/user set preferences.language Chinese
 ```
 
 兼容导出的 `MemoryManager`、`MemoryScope`、`_tokenize` 和 `REPOTERM_DIR` 只服务于迁移期调用者；运行时委托到 SQLite `MemoryService`，不恢复 JSON/Markdown 第二真值源。旧 Pipeline、LLM Reranker、Vector、Curator、Timeline 和旧 Injector 模块已删除。

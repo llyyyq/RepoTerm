@@ -1,4 +1,4 @@
-"""USER.md user profile system for persisting user preferences.
+"""Read-only USER.md compatibility reader for legacy migration/display.
 
 Supports two scopes:
 - Global: ~/.repoterm/USER.md  (applies across all projects)
@@ -222,7 +222,7 @@ def serialize_user_md(profile: UserProfile) -> str:
 # ---------------------------------------------------------------------------
 
 class UserProfileManager:
-    """Manage USER.md profiles with global + project scope merging."""
+    """Read USER.md profiles without maintaining a second write path."""
 
     def __init__(self, cwd: str | Path | None = None):
         from repoterm.config import REPOTERM_DIR
@@ -258,14 +258,6 @@ class UserProfileManager:
             return global_profile
 
         return self._merge_profiles(global_profile, project_profile)
-
-    def save_global(self, profile: UserProfile) -> None:
-        """Save profile to global path."""
-        self._save_to(self._global_path, profile)
-
-    def save_project(self, profile: UserProfile) -> None:
-        """Save profile to project path."""
-        self._save_to(self._project_path, profile)
 
     def to_prompt_section(self, profile: UserProfile) -> str:
         """Convert profile to a system prompt section for LLM injection."""
@@ -360,13 +352,6 @@ class UserProfileManager:
             return None
 
     @staticmethod
-    def _save_to(path: Path, profile: UserProfile) -> None:
-        """Save a profile to a specific path."""
-        path.parent.mkdir(parents=True, exist_ok=True)
-        content = serialize_user_md(profile)
-        path.write_text(content, encoding="utf-8")
-
-    @staticmethod
     def _merge_profiles(global_p: UserProfile, project_p: UserProfile) -> UserProfile:
         """Merge global and project profiles. Project values override global."""
         merged = UserProfile()
@@ -454,16 +439,10 @@ def handle_user_command(args: str, cwd: str | Path | None = None) -> str:
         ])
 
     if subcmd == "reset":
-        if not manager.project_path.exists():
-            return f"No project profile to reset at {manager.project_path}"
-        manager.project_path.unlink()
-        return f"Deleted project profile: {manager.project_path}"
+        return "USER.md is read-only; manage SQLite memories with /memory archive/delete."
 
     if subcmd == "reset-global":
-        if not manager.global_path.exists():
-            return f"No global profile to reset at {manager.global_path}"
-        manager.global_path.unlink()
-        return f"Deleted global profile: {manager.global_path}"
+        return "USER.md is read-only; manage SQLite memories with /memory archive/delete."
 
     if subcmd == "set":
         return _handle_user_set(subcmd_args, manager)
@@ -482,36 +461,10 @@ def handle_user_command(args: str, cwd: str | Path | None = None) -> str:
 
 
 def _handle_user_set(args: str, manager: UserProfileManager) -> str:
-    """Handle /user set <key> <value>."""
-    parts = args.strip().split(maxsplit=1)
-    if len(parts) < 2:
-        return "Usage: /user set <key> <value>\nKeys: preferences.language, preferences.verbosity, etc."
-    key, value = parts[0].strip(), parts[1].strip()
+    """Reject legacy writes; the CLI adapter owns the SQLite write path."""
 
-    # Determine scope: if key starts with "project.", save to project; else global
-    scope = "global"
-    if key.startswith("project."):
-        key = key[len("project."):]
-        scope = "project"
-
-    # Load existing profile
-    if scope == "project":
-        profile = manager.load_project() or UserProfile()
-    else:
-        profile = manager.load_global() or UserProfile()
-
-    # Apply the setting
-    changed = _apply_setting(profile, key, value)
-    if not changed:
-        return f"Unknown profile key: {key}\nValid keys: preferences.*, coding_style.*, project_context, custom_instructions"
-
-    # Save
-    if scope == "project":
-        manager.save_project(profile)
-        return f"Set {key} = {value} in project profile ({manager.project_path})"
-    else:
-        manager.save_global(profile)
-        return f"Set {key} = {value} in global profile ({manager.global_path})"
+    del args, manager
+    return "USER.md is read-only; use the SQLite-backed /user command."
 
 
 def _apply_setting(profile: UserProfile, key: str, value: str) -> bool:

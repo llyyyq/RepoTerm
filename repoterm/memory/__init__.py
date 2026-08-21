@@ -41,6 +41,7 @@ from .service import (
     MemoryService,
     MemoryServiceError,
     SensitiveMemoryError,
+    extract_implicit_preference_signal,
     looks_like_sensitive_content,
 )
 from .store import MemoryStore, SCHEMA_VERSION
@@ -139,10 +140,9 @@ def create_memory_service(
 class MemoryManager(MemoryService):
     """Thin compatibility facade over :class:`MemoryService`.
 
-    A legacy caller that supplies ``project_root`` receives an isolated
-    compatibility database.  Runtime composition roots use
-    :func:`create_memory_service`, whose default is the single user database
-    ``~/.repoterm/memory.sqlite3``.
+    ``project_root``/``workspace`` supplies scope context only.  Unless a
+    caller explicitly passes ``db_path`` (as isolated tests may), this facade
+    uses the same single production database as the runtime composition root.
     """
 
     def __init__(
@@ -155,12 +155,7 @@ class MemoryManager(MemoryService):
     ) -> None:
         target_workspace = workspace or project_root
         if db_path is None:
-            if target_workspace is not None:
-                db_path = Path(target_workspace) / ".repoterm-memory" / "memory.sqlite3"
-            else:
-                from repoterm.config import REPOTERM_DIR
-
-                db_path = REPOTERM_DIR / "memory.sqlite3"
+            db_path = REPOTERM_DIR / "memory.sqlite3"
         super().__init__(db_path=db_path, workspace=target_workspace, **kwargs)
 
 
@@ -224,6 +219,7 @@ __all__ = [
     "content_hash",
     "create_memory_service",
     "default_token_estimator",
+    "extract_implicit_preference_signal",
     "format_memory_list",
     "inject_memory_into_prompt",
     "looks_like_sensitive_content",

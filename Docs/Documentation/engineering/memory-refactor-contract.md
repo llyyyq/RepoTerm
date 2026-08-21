@@ -1,6 +1,6 @@
 # RepoTerm 持久化记忆轻量化重构合同
 
-> 状态：待实现  
+> 状态：已完成（2026-08-21）
 > 基线分支：`refactor/v2`  
 > 重构前标签：`v0.1-before-refactor`  
 > 保护线说明：`tests/contracts/README.md`  

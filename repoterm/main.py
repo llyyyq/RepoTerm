@@ -498,14 +498,6 @@ def main() -> None:
     memory_service = create_memory_service(cwd, runtime=runtime or {})
     logger.info("Memory service initialized")
     
-    # Initialize UserProfileManager for user preferences
-    from repoterm.user_profile import UserProfileManager
-    profile_manager = UserProfileManager(cwd=cwd)
-    profile_manager.load_merged()
-    logger.info("User profile manager initialized (global=%s, project=%s)",
-                profile_manager.global_path.exists(),
-                profile_manager.project_path.exists())
-    
     # Initialize Store for global state management (inspired by Claude Code's Zustand store)
     from repoterm.state import create_app_store
     app_store = create_app_store(

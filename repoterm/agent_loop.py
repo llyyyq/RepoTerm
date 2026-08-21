@@ -67,7 +67,12 @@ from repoterm.context_cybernetics import ContextCyberneticsOrchestrator
 from repoterm.cost_control import CostControlLoop
 from repoterm.micro_compact import MicroCompactor
 from repoterm.circuit_breaker import CompactionCircuitBreaker
-from repoterm.memory import MemoryInjector, MemoryService
+from repoterm.memory import (
+    MemoryInjector,
+    MemoryService,
+    Scope,
+    extract_implicit_preference_signal,
+)
 from repoterm.memory.models import sanitize_evidence_summary
 from repoterm.turn_kernel import (
     TurnPreludeState,
@@ -96,6 +101,32 @@ def _bounded_runtime_tool_summary(tool_name: str, output: object) -> str:
     return sanitize_evidence_summary(
         f"{str(tool_name or 'tool').strip()}: {normalized[:240]}"
     )[:280]
+
+
+def _record_implicit_preference_signal(
+    memory_service: MemoryService,
+    task_text: str,
+    *,
+    source_session_id: str | None,
+    source_turn_id: str | None,
+):
+    """Record one conservative user-preference signal for the current Turn."""
+
+    signal = extract_implicit_preference_signal(task_text)
+    if signal is None or not (source_session_id or source_turn_id):
+        return None
+    key, content = signal
+    try:
+        return memory_service.observe_implicit_preference(
+            content,
+            scope=Scope.GLOBAL,
+            key=key,
+            source_session_id=source_session_id,
+            source_turn_id=source_turn_id,
+        )
+    except Exception as exc:  # noqa: BLE001 - memory must not break a Turn
+        logger.warning("Implicit preference signal skipped: %s", exc)
+        return None
 
 # Compatibility name for callers/tests that still inspect the old seam.
 # Runtime code uses MemoryService and its single deterministic injector.
@@ -897,6 +928,21 @@ def run_agent_turn(
     memory_source_turn_id = (
         str(getattr(prelude.task, "id", "") or "").strip() or None
     )
+
+    if task_desc and memory_mgr is not None:
+        # Headless/Main do not always carry a Session object.  A per-call
+        # runtime turn id still gives implicit preference signals a distinct
+        # source without inventing a session id or changing verification
+        # evidence semantics for the rest of the turn.
+        implicit_source_turn_id = memory_source_turn_id or f"runtime-{time.time_ns()}"
+        candidate = _record_implicit_preference_signal(
+            memory_mgr,
+            task_desc,
+            source_session_id=memory_source_session_id,
+            source_turn_id=implicit_source_turn_id,
+        )
+        if candidate is not None:
+            logger.info("Implicit preference candidate entered pending review")
 
     # This is the only prompt-memory injection in the turn.  It deliberately
     # runs outside the optional work-chain so headless/test callers cannot
@@ -1824,7 +1870,8 @@ def run_agent_turn(
                         call["toolName"], result.output
                     ),
                 )
-                turn_state.record_verification_evidence(evidence)
+                if evidence is not None:
+                    turn_state.record_verification_evidence(evidence)
                 tool_decision = decide_tool_turn(
                     tool_name=call["toolName"],
                     result_output=result.output,

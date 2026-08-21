@@ -76,11 +76,80 @@ _GENERIC_EXPERIENCE_PATTERNS = (
     "本次任务已完成",
 )
 
+_IMPLICIT_PREFERENCE_LANGUAGE_PATTERN = re.compile(
+    r"(?:"
+    r"\b(?:i\s+)?(?:prefer|like)\s+(?:to\s+)?(?:respond|reply|answer|write)\s+(?:in\s+)?"
+    r"|\b(?:please\s+)?(?:always\s+)?(?:use|respond|reply|answer|write)\s+(?:in\s+)?"
+    r"|(?:从现在开始|以后|请始终|请一直)\s*(?:请\s*)?(?:使用|用)?\s*"
+    r"|(?:回答请(?:使用|用)?|我(?:更)?偏好|我喜欢)\s*(?:使用|用)?\s*"
+    r")(?:\b(?P<value>chinese|english)\b|(?P<cjk_value>中文|英文))"
+    r"(?:\s+(?:responses?|answers?|replies?)|回答|回复|响应)?(?=$|[.!?。！？])",
+    re.IGNORECASE,
+)
+_IMPLICIT_PREFERENCE_STYLE_PATTERN = re.compile(
+    r"(?:"
+    r"\b(?:i\s+)?(?:prefer|like)\s+"
+    r"|\b(?:please\s+)?(?:be|keep\s+(?:responses?|answers?|replies?)\s+)\s*"
+    r"|(?:我(?:更)?偏好|我喜欢|请保持|回答请)\s*"
+    r")(?:\b(?P<value>concise|brief|short|detailed|verbose)\b|"
+    r"(?P<cjk_value>简洁|简短|详细|精炼))"
+    r"(?:\s+(?:responses?|answers?|replies?)|回答|回复|响应)?(?=$|[.!?。！？])",
+    re.IGNORECASE,
+)
+_IMPLICIT_PREFERENCE_EXPLICIT_MARKER = re.compile(
+    r"(?i)\b(?:remember|save|store|persist|memorize)\b|记住|记忆|保存|存储"
+)
+
 
 def looks_like_sensitive_content(content: str) -> bool:
     """Return whether content resembles a credential without logging it."""
 
     return contains_sensitive_text(content)
+
+
+def extract_implicit_preference_signal(text: str) -> tuple[str, str] | None:
+    """Extract one conservative, normalized preference signal from a Turn.
+
+    This is intentionally an allow-list for communication preferences only.
+    It does not infer project facts, tool choices, or lessons from arbitrary
+    prose.  Explicit "remember/save" language is left to the explicit memory
+    command path and therefore cannot create a second implicit signal.
+    """
+
+    normalized = " ".join(str(text or "").split())
+    if not normalized or len(normalized) > 240:
+        return None
+    if _IMPLICIT_PREFERENCE_EXPLICIT_MARKER.search(normalized):
+        return None
+
+    language_match = _IMPLICIT_PREFERENCE_LANGUAGE_PATTERN.search(normalized)
+    if language_match:
+        raw_value = language_match.group("value") or language_match.group("cjk_value")
+        canonical = {
+            "chinese": "Chinese",
+            "english": "English",
+            "中文": "Chinese",
+            "英文": "English",
+        }[raw_value.lower()]
+        return "preferences.language", f"preferences.language = {canonical}"
+
+    style_match = _IMPLICIT_PREFERENCE_STYLE_PATTERN.search(normalized)
+    if style_match:
+        raw_value = style_match.group("value") or style_match.group("cjk_value")
+        canonical = {
+            "concise": "concise",
+            "brief": "concise",
+            "short": "concise",
+            "detailed": "detailed",
+            "verbose": "detailed",
+            "简洁": "concise",
+            "简短": "concise",
+            "详细": "detailed",
+            "精炼": "concise",
+        }[raw_value.lower()]
+        return "preferences.verbosity", f"preferences.verbosity = {canonical}"
+
+    return None
 
 
 def _is_reusable_experience(content: str) -> bool:
@@ -1084,9 +1153,11 @@ class _MemoryScopeView:
 
     @property
     def entries(self) -> list[MemoryEntry]:
+        context = self.service.context()
         return [
             service_entry
             for service_entry in self.service.store.list_entries(scopes=(self.scope,))
+            if self.service._visible(service_entry, context)
         ]
 
     @property
