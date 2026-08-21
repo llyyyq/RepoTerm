@@ -471,6 +471,76 @@ def test_implicit_preference_requires_two_distinct_signals_and_stays_pending(tmp
     assert len(service.list_pending()) == 1
 
 
+def test_implicit_preference_conflict_keeps_one_latest_pending_candidate(tmp_path: Path) -> None:
+    service = make_service(tmp_path)
+    common = {
+        "scope": Scope.GLOBAL,
+        "key": "preferences.verbosity",
+    }
+
+    assert service.observe_implicit_preference(
+        "preferences.verbosity = concise",
+        source_session_id="session-concise-a",
+        source_turn_id="turn-concise-a",
+        **common,
+    ) is None
+    concise = service.observe_implicit_preference(
+        "preferences.verbosity = concise",
+        source_session_id="session-concise-b",
+        source_turn_id="turn-concise-b",
+        **common,
+    )
+    assert concise is not None and concise.status is Status.PENDING
+
+    assert service.observe_implicit_preference(
+        "preferences.verbosity = detailed",
+        source_session_id="session-detailed-a",
+        source_turn_id="turn-detailed-a",
+        **common,
+    ) is None
+    detailed = service.observe_implicit_preference(
+        "preferences.verbosity = detailed",
+        source_session_id="session-detailed-b",
+        source_turn_id="turn-detailed-b",
+        **common,
+    )
+
+    assert detailed is not None and detailed.status is Status.PENDING
+    assert detailed.content.endswith("detailed")
+    assert detailed.signal_count == 2
+    assert service.store.get(concise.id).status is Status.SUPERSEDED
+    pending = service.list_pending()
+    assert len(pending) == 1
+    assert pending[0].id == detailed.id
+
+
+def test_implicit_preference_pending_does_not_replace_active_value(tmp_path: Path) -> None:
+    service = make_service(tmp_path)
+    active = service.remember_explicit(
+        "preferences.verbosity = normal",
+        scope=Scope.GLOBAL,
+        kind=Kind.PREFERENCE,
+        key="preferences.verbosity",
+    )
+
+    for session_id, turn_id in (
+        ("session-a", "turn-a"),
+        ("session-b", "turn-b"),
+    ):
+        service.observe_implicit_preference(
+            "preferences.verbosity = concise",
+            scope=Scope.GLOBAL,
+            key="preferences.verbosity",
+            source_session_id=session_id,
+            source_turn_id=turn_id,
+        )
+
+    assert service.store.get(active.id).status is Status.ACTIVE
+    pending = service.list_pending()
+    assert len(pending) == 1
+    assert pending[0].content.endswith("concise")
+
+
 def test_memory_manager_with_workspace_uses_production_database(monkeypatch, tmp_path: Path) -> None:
     import repoterm.memory as memory_module
     from repoterm.memory import MemoryManager

@@ -314,6 +314,30 @@ class MemoryStore:
         with self._connection() as conn:
             return self._entry_from_row(conn.execute(query, params).fetchone())
 
+    def find_pending_by_key(
+        self,
+        *,
+        scope: Scope,
+        key: str,
+        project_key: str | None,
+        branch_name: str | None,
+        connection: sqlite3.Connection | None = None,
+    ) -> MemoryEntry | None:
+        """Find the current review candidate for one scoped business key."""
+
+        query = """
+            SELECT * FROM memory_entries
+            WHERE scope = ? AND key = ? AND status = 'pending'
+              AND project_key IS ? AND branch_name IS ?
+            ORDER BY version DESC, updated_at DESC, id ASC
+            LIMIT 1
+        """
+        params = (scope.value, key, project_key, branch_name)
+        if connection is not None:
+            return self._entry_from_row(connection.execute(query, params).fetchone())
+        with self._connection() as conn:
+            return self._entry_from_row(conn.execute(query, params).fetchone())
+
     def find_by_source(
         self,
         *,

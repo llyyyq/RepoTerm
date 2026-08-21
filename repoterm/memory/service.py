@@ -560,6 +560,26 @@ class MemoryService:
                 ), WriteDecision.NOOP
             decision = WriteDecision.CREATE
             if candidate.key:
+                pending_conflict = self.store.find_pending_by_key(
+                    scope=candidate.scope,
+                    key=candidate.key,
+                    project_key=candidate.project_key,
+                    branch_name=candidate.branch_name,
+                    connection=connection,
+                )
+                if pending_conflict is not None:
+                    # Keep exactly one pending value for a business key.  A
+                    # newer conflicting candidate supersedes the older review
+                    # item, while its signal/evidence history remains auditable.
+                    self.store.update_version_link(
+                        pending_conflict.id,
+                        status=Status.SUPERSEDED,
+                        updated_at=now,
+                        connection=connection,
+                    )
+                    candidate.supersedes_id = pending_conflict.id
+                    candidate.version = pending_conflict.version + 1
+                    decision = WriteDecision.UPDATE
                 conflict = self.store.find_active_by_key(
                     scope=candidate.scope,
                     key=candidate.key,

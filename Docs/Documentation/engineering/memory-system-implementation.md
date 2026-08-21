@@ -136,6 +136,7 @@ Reflection 只在明确任务正常结束、有验证证据且没有 blocked、m
 
 - 同 scope、同 content hash：`NOOP`，累计信号，不追加重复行；
 - 同 scope、同 key、内容不同：旧 active 不被静默覆盖，新值保留为 pending 冲突候选；
+- 同 scope、同 key 的 pending 冲突候选只保留最新一条，旧候选变为 `superseded`；已有 active 在新候选获批前保持不变；
 - 用户确认更新：建立新版本，旧版本为 `superseded`；
 - 用户修改经验正文：新版本清空旧证据，不能错误继承原验证；
 - `archive` 可恢复，`purge` 仅在明确确认后彻底删除。
