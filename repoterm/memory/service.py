@@ -32,7 +32,6 @@ from .models import (
     context_for_workspace,
     kind_from_legacy_category,
     new_memory_id,
-    project_key_for,
 )
 from .store import MemoryStore
 

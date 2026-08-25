@@ -11,7 +11,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from .models import (
     Kind,
@@ -276,11 +276,9 @@ def _parse_user_md(
     """
 
     result: list[tuple[MemoryEntry, bool]] = []
-    heading = ""
     for index, line in enumerate(content.splitlines()):
         heading_match = re.match(r"^##\s+(.+?)\s*$", line)
         if heading_match:
-            heading = heading_match.group(1).strip().lower()
             continue
         match = re.match(r"^\s*-\s+\*\*(.+?)\*\*\s*:\s*(.+?)\s*$", line)
         if not match or not match.group(2).strip():

@@ -1,5 +1,9 @@
 from dataclasses import asdict
 import os
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from repoterm.tools.registry import ToolRegistry
 
 
 def _load_core_tools():

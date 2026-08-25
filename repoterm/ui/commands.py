@@ -184,14 +184,14 @@ def _handle_user_memory_command(
             content = f"{key} = {value}"
             existing = next((entry for entry in active_preferences if entry.key == key), None)
             if existing is None:
-                entry = service.remember_explicit(
+                service.remember_explicit(
                     content,
                     scope=Scope.GLOBAL,
                     kind=Kind.PREFERENCE,
                     key=key,
                 )
             else:
-                entry = service.update(existing.id, content)
+                service.update(existing.id, content)
             return f"Set {key} = {value} in global preference (SQLite)."
 
         if action in {"reset", "reset-global", "project", "paths"}:

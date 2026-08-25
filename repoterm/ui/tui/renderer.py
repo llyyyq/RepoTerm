@@ -11,7 +11,6 @@ from repoterm.ui.tui.chrome import (
     render_slash_menu,
     render_session_feed,
     render_status_line,
-    render_tool_panel,
     safe_terminal_width,
     string_display_width,
     SUBTLE,

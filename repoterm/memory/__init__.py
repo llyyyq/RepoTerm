@@ -201,6 +201,7 @@ __all__ = [
     "MemoryConfirmationRequired",
     "MemoryConflictError",
     "MemoryEvidenceRequired",
+    "MemoryNotFoundError",
     "MemoryContext",
     "MemoryEntry",
     "MemoryInjector",
