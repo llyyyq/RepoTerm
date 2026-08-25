@@ -16,7 +16,7 @@ import logging
 
 import pytest
 
-from repoterm.logging_config import (
+from repoterm.observability.logging import (
     StructuredFormatter,
     log_permission_check,
     log_session_event,
@@ -24,7 +24,7 @@ from repoterm.logging_config import (
     setup_logging,
     structured_logging_requested,
 )
-from repoterm.tooling import ToolDefinition, ToolRegistry, ToolResult
+from repoterm.tools.registry import ToolDefinition, ToolRegistry, ToolResult
 
 
 # ---------------------------------------------------------------------------
@@ -33,7 +33,7 @@ from repoterm.tooling import ToolDefinition, ToolRegistry, ToolResult
 
 
 def test_rotation_is_size_only_no_dead_timed_constants() -> None:
-    import repoterm.logging_config as lc
+    import repoterm.observability.logging as lc
 
     # The dead "also rotate at midnight" constants must be gone.
     assert not hasattr(lc, "LOG_ROTATION_WHEN")
@@ -45,7 +45,7 @@ def test_rotation_is_size_only_no_dead_timed_constants() -> None:
 def test_setup_logging_uses_rotating_file_handler(tmp_path, monkeypatch) -> None:
     import logging.handlers as handlers
 
-    monkeypatch.setattr(lc := __import__("repoterm.logging_config", fromlist=["LOG_FILE"]), "LOG_FILE", tmp_path / "t.log")
+    monkeypatch.setattr(lc := __import__("repoterm.observability.logging", fromlist=["LOG_FILE"]), "LOG_FILE", tmp_path / "t.log")
     setup_logging(level="DEBUG", log_to_console=False, structured=False)
     root = logging.getLogger("repoterm")
     file_handlers = [h for h in root.handlers if isinstance(h, handlers.RotatingFileHandler)]
@@ -157,11 +157,11 @@ def test_log_session_event_emits(caplog) -> None:
 def test_main_argparse_has_structured_logs_flag() -> None:
     import importlib
 
-    import repoterm.main as main_module
+    import repoterm.app.interactive as main_module
 
     # The flag name is registered in build_arg_parser / main's argparse; verify
     # by inspecting the parser construction via the module source (stable contract).
-    src = importlib.util.find_spec("repoterm.main").origin
+    src = importlib.util.find_spec("repoterm.app.interactive").origin
     text = open(src, encoding="utf-8").read() if src else ""
     assert "--structured-logs" in text
     assert "REPOTERM_LOG_STRUCTURED" in text

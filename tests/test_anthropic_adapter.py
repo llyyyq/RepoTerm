@@ -2,10 +2,10 @@ import json
 import urllib.error
 
 import pytest
-from repoterm.anthropic_adapter import AnthropicModelAdapter, _messages_endpoint
-from repoterm.openai_adapter import OpenAIModelAdapter
-from repoterm.model_registry import create_model_adapter
-from repoterm.tooling import ToolDefinition, ToolRegistry
+from repoterm.providers.anthropic import AnthropicModelAdapter, _messages_endpoint
+from repoterm.providers.openai import OpenAIModelAdapter
+from repoterm.providers.registry import create_model_adapter
+from repoterm.tools.registry import ToolDefinition, ToolRegistry
 
 
 class DummyResponse:
@@ -137,4 +137,3 @@ def test_create_model_adapter_overrides_stale_anthropic_runtime_model() -> None:
     # suggests an OpenAI-compatible endpoint, even for anthropic model names.
     assert isinstance(adapter, (AnthropicModelAdapter, OpenAIModelAdapter))
     assert adapter.runtime.get("model") == "claude-haiku-3-20240307"
-

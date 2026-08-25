@@ -1,14 +1,14 @@
-from repoterm.tui.state import ScreenState
-from repoterm.tui.tool_lifecycle import (
+from repoterm.ui.tui.state import ScreenState
+from repoterm.ui.tui.tool_lifecycle import (
     _append_to_transcript_entry,
     _finalize_dangling_running_tools,
     _push_transcript_entry,
     _update_tool_entry,
     _update_transcript_entry,
 )
-from repoterm.tui.transcript import render_transcript
-import repoterm.tui.transcript as transcript_module
-from repoterm.tui.types import TranscriptEntry
+from repoterm.ui.tui.transcript import render_transcript
+import repoterm.ui.tui.transcript as transcript_module
+from repoterm.ui.tui.types import TranscriptEntry
 
 
 def test_transcript_revision_bumps_on_entry_changes() -> None:

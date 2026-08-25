@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from repoterm.tooling import ToolRegistry
-from repoterm.types import AgentStep, ChatMessage, ModelAdapter
+from repoterm.tools.registry import ToolRegistry
+from repoterm.contracts.types import AgentStep, ChatMessage, ModelAdapter
 
 
 class _DummyPermissions:
@@ -38,7 +38,7 @@ class _ProviderUnavailableModel(ModelAdapter):
 
 
 def test_run_headless_forwards_runtime_to_agent_turn(monkeypatch, tmp_path: Path) -> None:
-    import repoterm.headless
+    import repoterm.app.headless
 
     runtime = {
         "model": "deepseek-v4-pro[1m]",
@@ -56,17 +56,17 @@ def test_run_headless_forwards_runtime_to_agent_turn(monkeypatch, tmp_path: Path
         "repoterm.tools.create_default_tool_registry",
         lambda cwd, runtime=None: ToolRegistry([]),
     )
-    monkeypatch.setattr("repoterm.permissions.PermissionManager", _DummyPermissions)
+    monkeypatch.setattr("repoterm.safety.permissions.PermissionManager", _DummyPermissions)
     monkeypatch.setattr(
         "repoterm.memory.create_memory_service",
         lambda workspace, runtime=None: _DummyMemoryService(workspace),
     )
     monkeypatch.setattr(
-        "repoterm.prompt.build_system_prompt",
+        "repoterm.runtime.planning.prompt.build_system_prompt",
         lambda cwd, permissions, context: "sys",
     )
     monkeypatch.setattr(
-        "repoterm.model_registry.create_model_adapter",
+        "repoterm.providers.registry.create_model_adapter",
         lambda model, tools, runtime=None: object(),
     )
 
@@ -75,9 +75,9 @@ def test_run_headless_forwards_runtime_to_agent_turn(monkeypatch, tmp_path: Path
         captured["memory_manager"] = kwargs["memory_manager"]
         return [{"role": "assistant", "content": "ok"}]
 
-    monkeypatch.setattr("repoterm.agent_loop.run_agent_turn", _fake_run_agent_turn)
+    monkeypatch.setattr("repoterm.runtime.loop.run_agent_turn", _fake_run_agent_turn)
 
-    response = repoterm.headless.run_headless("Reply with exactly OK.")
+    response = repoterm.app.headless.run_headless("Reply with exactly OK.")
 
     assert response == "ok"
     assert captured["runtime"] is runtime
@@ -89,7 +89,7 @@ def test_run_headless_provider_failure_uses_runtime_channel_details(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    import repoterm.headless
+    import repoterm.app.headless
 
     runtime = {
         "model": "deepseek-v4-pro[1m]",
@@ -110,21 +110,21 @@ def test_run_headless_provider_failure_uses_runtime_channel_details(
         "repoterm.tools.create_default_tool_registry",
         lambda cwd, runtime=None: ToolRegistry([]),
     )
-    monkeypatch.setattr("repoterm.permissions.PermissionManager", _DummyPermissions)
+    monkeypatch.setattr("repoterm.safety.permissions.PermissionManager", _DummyPermissions)
     monkeypatch.setattr(
         "repoterm.memory.create_memory_service",
         lambda workspace, runtime=None: _DummyMemoryService(workspace),
     )
     monkeypatch.setattr(
-        "repoterm.prompt.build_system_prompt",
+        "repoterm.runtime.planning.prompt.build_system_prompt",
         lambda cwd, permissions, context: "sys",
     )
     monkeypatch.setattr(
-        "repoterm.model_registry.create_model_adapter",
+        "repoterm.providers.registry.create_model_adapter",
         lambda model, tools, runtime=None: _ProviderUnavailableModel(),
     )
 
-    response = repoterm.headless.run_headless("Reply with exactly OK.")
+    response = repoterm.app.headless.run_headless("Reply with exactly OK.")
 
     assert "Provider availability failure:" in response
     # Channel and fallback details vary by runtime env; verify the response
@@ -134,7 +134,7 @@ def test_run_headless_provider_failure_uses_runtime_channel_details(
 
 
 def test_headless_response_exit_code_marks_terminal_failures() -> None:
-    from repoterm.headless import _headless_response_exit_code
+    from repoterm.app.headless import _headless_response_exit_code
 
     assert _headless_response_exit_code("OK") == 0
     assert _headless_response_exit_code("Model API error (RuntimeError): error code: 1010") == 1
@@ -143,53 +143,53 @@ def test_headless_response_exit_code_marks_terminal_failures() -> None:
 
 
 def test_headless_main_returns_nonzero_for_provider_failure(monkeypatch, capsys) -> None:
-    import repoterm.headless
+    import repoterm.app.headless
 
     monkeypatch.setattr(
-        repoterm.headless,
+        repoterm.app.headless,
         "run_headless",
         lambda prompt, allow_edits=False: "Model API error (RuntimeError): error code: 1010",
     )
 
-    exit_code = repoterm.headless.main(["Reply with exactly OK."])
+    exit_code = repoterm.app.headless.main(["Reply with exactly OK."])
 
     assert exit_code == 1
     assert "error code: 1010" in capsys.readouterr().out
 
 
 def test_headless_main_returns_zero_for_success(monkeypatch, capsys) -> None:
-    import repoterm.headless
+    import repoterm.app.headless
 
     monkeypatch.setattr(
-        repoterm.headless,
+        repoterm.app.headless,
         "run_headless",
         lambda prompt, allow_edits=False: "OK",
     )
 
-    exit_code = repoterm.headless.main(["Reply with exactly OK."])
+    exit_code = repoterm.app.headless.main(["Reply with exactly OK."])
 
     assert exit_code == 0
     assert capsys.readouterr().out.strip() == "OK"
 
 
 def test_headless_main_help_does_not_load_config(monkeypatch, capsys) -> None:
-    import repoterm.headless
+    import repoterm.app.headless
 
     monkeypatch.setattr(
-        repoterm.headless,
+        repoterm.app.headless,
         "run_headless",
         lambda *args, **kwargs: pytest.fail("--help must not run headless"),
     )
 
     with pytest.raises(SystemExit) as raised:
-        repoterm.headless.main(["--help"])
+        repoterm.app.headless.main(["--help"])
 
     assert raised.value.code == 0
     assert "usage: repoterm-headless" in capsys.readouterr().out
 
 
 def test_run_headless_writes_messages_trace_when_requested(monkeypatch, tmp_path: Path) -> None:
-    import repoterm.headless
+    import repoterm.app.headless
 
     runtime = {
         "model": "deepseek-v4-pro[1m]",
@@ -208,28 +208,28 @@ def test_run_headless_writes_messages_trace_when_requested(monkeypatch, tmp_path
         "repoterm.tools.create_default_tool_registry",
         lambda cwd, runtime=None: ToolRegistry([]),
     )
-    monkeypatch.setattr("repoterm.permissions.PermissionManager", _DummyPermissions)
+    monkeypatch.setattr("repoterm.safety.permissions.PermissionManager", _DummyPermissions)
     monkeypatch.setattr(
         "repoterm.memory.create_memory_service",
         lambda workspace, runtime=None: _DummyMemoryService(workspace),
     )
     monkeypatch.setattr(
-        "repoterm.prompt.build_system_prompt",
+        "repoterm.runtime.planning.prompt.build_system_prompt",
         lambda cwd, permissions, context: "sys",
     )
     monkeypatch.setattr(
-        "repoterm.model_registry.create_model_adapter",
+        "repoterm.providers.registry.create_model_adapter",
         lambda model, tools, runtime=None: object(),
     )
     monkeypatch.setattr(
-        "repoterm.agent_loop.run_agent_turn",
+        "repoterm.runtime.loop.run_agent_turn",
         lambda **kwargs: [
             {"role": "assistant", "content": "traceable"},
             {"role": "tool", "content": "python -m unittest"},
         ],
     )
 
-    response = repoterm.headless.run_headless("Run the visible tests.")
+    response = repoterm.app.headless.run_headless("Run the visible tests.")
 
     assert response == "traceable"
     payload = json.loads(trace_path.read_text(encoding="utf-8"))
@@ -247,7 +247,7 @@ def test_run_headless_writes_messages_trace_when_requested(monkeypatch, tmp_path
 def test_run_headless_writes_trace_when_runtime_config_is_invalid(
     monkeypatch, tmp_path: Path
 ) -> None:
-    import repoterm.headless
+    import repoterm.app.headless
 
     trace_path = tmp_path / "artifacts" / "config-failure.json"
     monkeypatch.chdir(tmp_path)
@@ -258,7 +258,7 @@ def test_run_headless_writes_trace_when_runtime_config_is_invalid(
     )
 
     with pytest.raises(SystemExit) as raised:
-        repoterm.headless.run_headless("Reply with exactly OK.")
+        repoterm.app.headless.run_headless("Reply with exactly OK.")
 
     assert raised.value.code == 1
     payload = json.loads(trace_path.read_text(encoding="utf-8"))
@@ -270,7 +270,7 @@ def test_run_headless_writes_trace_when_runtime_config_is_invalid(
 
 
 def test_run_headless_failure_trace_includes_redacted_repair_context(monkeypatch, tmp_path: Path) -> None:
-    import repoterm.headless
+    import repoterm.app.headless
 
     runtime = {
         "model": "gpt-4o",
@@ -290,17 +290,17 @@ def test_run_headless_failure_trace_includes_redacted_repair_context(monkeypatch
         "repoterm.tools.create_default_tool_registry",
         lambda cwd, runtime=None: ToolRegistry([]),
     )
-    monkeypatch.setattr("repoterm.permissions.PermissionManager", _DummyPermissions)
+    monkeypatch.setattr("repoterm.safety.permissions.PermissionManager", _DummyPermissions)
     monkeypatch.setattr(
         "repoterm.memory.create_memory_service",
         lambda workspace, runtime=None: _DummyMemoryService(workspace),
     )
     monkeypatch.setattr(
-        "repoterm.prompt.build_system_prompt",
+        "repoterm.runtime.planning.prompt.build_system_prompt",
         lambda cwd, permissions, context: "sys",
     )
     monkeypatch.setattr(
-        "repoterm.model_registry.create_model_adapter",
+        "repoterm.providers.registry.create_model_adapter",
         lambda model, tools, runtime=None: object(),
     )
 
@@ -308,11 +308,11 @@ def test_run_headless_failure_trace_includes_redacted_repair_context(monkeypatch
         raise RuntimeError("Model API error: OPENAI_API_KEY=sk-real-secret-1234567890")
 
     monkeypatch.setattr(
-        "repoterm.agent_loop.run_agent_turn",
+        "repoterm.runtime.loop.run_agent_turn",
         _raise_provider_error,
     )
 
-    response = repoterm.headless.run_headless(
+    response = repoterm.app.headless.run_headless(
         "Run with OPENAI_API_KEY=sk-real-secret-1234567890"
     )
 
@@ -333,7 +333,7 @@ def test_run_headless_failure_trace_includes_redacted_repair_context(monkeypatch
 
 
 def test_allow_edits_flag_and_env(monkeypatch) -> None:
-    from repoterm.headless import _allow_edits_requested
+    from repoterm.app.headless import _allow_edits_requested
 
     monkeypatch.delenv("REPOTERM_ALLOW_EDITS", raising=False)
     assert _allow_edits_requested(cli_flag=False) is False
@@ -348,8 +348,8 @@ def test_allow_edits_auto_approve_grants_edits_and_out_of_cwd(tmp_path: Path) ->
     """With the auto-approve prompt, headless can edit files and reach
     out-of-cwd paths — the wall that previously made headless unusable for
     edits."""
-    from repoterm.headless import _make_auto_approve_prompt
-    from repoterm.permissions import PermissionManager
+    from repoterm.app.headless import _make_auto_approve_prompt
+    from repoterm.safety.permissions import PermissionManager
 
     perm = PermissionManager(str(tmp_path), prompt=_make_auto_approve_prompt())
     # Previously raised: "Edit requires approval ... Start repoterm in TTY mode"
@@ -360,7 +360,7 @@ def test_allow_edits_auto_approve_grants_edits_and_out_of_cwd(tmp_path: Path) ->
 
 def test_allow_edits_off_still_blocks_edits(tmp_path: Path) -> None:
     """Without the flag/env, headless edits remain blocked (no prompt)."""
-    from repoterm.permissions import PermissionManager
+    from repoterm.safety.permissions import PermissionManager
 
     perm = PermissionManager(str(tmp_path), prompt=None)
     with pytest.raises(RuntimeError, match="approval"):

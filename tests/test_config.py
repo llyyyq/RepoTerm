@@ -9,7 +9,7 @@ from repoterm.config import (
     merge_settings,
     validate_provider_runtime,
 )
-from repoterm.model_registry import Provider, detect_provider
+from repoterm.providers.registry import Provider, detect_provider
 
 
 def test_merge_settings_merges_env_and_mcp_servers() -> None:
@@ -92,7 +92,7 @@ def test_detect_provider_can_classify_unknown_openai_model_without_probe(
     def fail_probe(*_args, **_kwargs):
         raise AssertionError("local provider detection must not probe the gateway")
 
-    monkeypatch.setattr("repoterm.model_registry.probe_openai_exposed_models", fail_probe)
+    monkeypatch.setattr("repoterm.providers.registry.probe_openai_exposed_models", fail_probe)
     provider = detect_provider(
         "qwen3.7-max",
         {
@@ -363,7 +363,7 @@ def test_format_config_diagnostic_does_not_probe_openai_gateway(monkeypatch) -> 
         raise AssertionError("configuration diagnostics must remain local-only")
 
     monkeypatch.setattr(config_module, "load_runtime_config", lambda cwd=None: runtime)
-    monkeypatch.setattr("repoterm.model_registry.probe_openai_exposed_models", fail_probe)
+    monkeypatch.setattr("repoterm.providers.registry.probe_openai_exposed_models", fail_probe)
 
     result = format_config_diagnostic()
 

@@ -1,11 +1,11 @@
-from repoterm.intent_parser import ActionType, IntentType, ParsedIntent
-from repoterm.pipeline_engine import get_pipeline_engine
-from repoterm.progress_controller import (
+from repoterm.runtime.planning.intent_parser import ActionType, IntentType, ParsedIntent
+from repoterm.runtime.control.pipeline_engine import get_pipeline_engine
+from repoterm.runtime.control.progress_controller import (
     ProgressAction,
     ProgressController,
     ProgressSignal,
 )
-from repoterm.task_object import TaskObject
+from repoterm.runtime.planning.task_object import TaskObject
 
 
 class TestProgressController:
@@ -66,4 +66,3 @@ class TestProgressPipelineIntegration:
         assert result.outputs["progress_control"]["action"] in {
             "continue", "verify", "stop", "narrow_scope", "switch_strategy", "request_confirmation",
         }
-

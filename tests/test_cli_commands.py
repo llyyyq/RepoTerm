@@ -1,9 +1,9 @@
-from repoterm.cli_commands import find_matching_slash_commands, format_slash_commands, try_handle_local_command
+from repoterm.ui.commands import find_matching_slash_commands, format_slash_commands, try_handle_local_command
 from Main.RepoTermFrontline.Src.Application.Entry.LocalCommandSurface import (
     SLASH_COMMANDS as MAIN_SLASH_COMMANDS,
 )
-from repoterm.cli_commands import SLASH_COMMANDS as COMPAT_SLASH_COMMANDS
-from repoterm.local_tool_shortcuts import parse_local_tool_shortcut
+from repoterm.ui.commands import SLASH_COMMANDS as COMPAT_SLASH_COMMANDS
+from repoterm.ui.shortcuts import parse_local_tool_shortcut
 from repoterm.session import FileCheckpoint, SessionData, SessionMetadata
 
 
@@ -269,7 +269,7 @@ def test_extension_inspect_command_reads_project_manifest(tmp_path, monkeypatch)
     _write_extension_manifest(project_extensions, name="git-helpers", enabled=True, version="1.2.3")
     global_extensions = tmp_path / "global-extensions"
     global_extensions.mkdir()
-    monkeypatch.setattr("repoterm.product_surfaces.REPOTERM_EXTENSIONS_DIR", global_extensions)
+    monkeypatch.setattr("repoterm.runtime.surfaces.REPOTERM_EXTENSIONS_DIR", global_extensions)
 
     result = try_handle_local_command("/extension-inspect git-helpers", cwd=str(workspace))
 
@@ -291,7 +291,7 @@ def test_extension_enable_and_disable_commands_update_manifest(tmp_path, monkeyp
     )
     global_extensions = tmp_path / "global-extensions"
     global_extensions.mkdir()
-    monkeypatch.setattr("repoterm.product_surfaces.REPOTERM_EXTENSIONS_DIR", global_extensions)
+    monkeypatch.setattr("repoterm.runtime.surfaces.REPOTERM_EXTENSIONS_DIR", global_extensions)
 
     enabled = try_handle_local_command("/extension-enable git-helpers", cwd=str(workspace))
     assert enabled is not None
@@ -312,7 +312,7 @@ def test_extension_inspect_requires_scope_when_names_are_ambiguous(tmp_path, mon
     global_extensions = tmp_path / "global-extensions"
     global_extensions.mkdir()
     _write_extension_manifest(global_extensions, name="git-helpers", enabled=False)
-    monkeypatch.setattr("repoterm.product_surfaces.REPOTERM_EXTENSIONS_DIR", global_extensions)
+    monkeypatch.setattr("repoterm.runtime.surfaces.REPOTERM_EXTENSIONS_DIR", global_extensions)
 
     result = try_handle_local_command("/extension-inspect git-helpers", cwd=str(workspace))
 
@@ -352,7 +352,7 @@ def test_sessions_command_lists_saved_workspace_sessions(tmp_path, monkeypatch) 
     workspace = str(tmp_path.resolve())
     other_workspace = str((tmp_path / "other").resolve())
     monkeypatch.setattr(
-        "repoterm.cli_commands.list_sessions",
+        "repoterm.ui.commands.list_sessions",
         lambda: [
             SessionMetadata(
                 session_id="aaa111111111",
@@ -392,7 +392,7 @@ def test_session_command_latest_uses_workspace_session(tmp_path, monkeypatch) ->
         transcript_entries=[{"kind": "assistant", "body": "restored"}],
     )
     monkeypatch.setattr(
-        "repoterm.cli_commands.get_latest_session",
+        "repoterm.ui.commands.get_latest_session",
         lambda workspace=None: session if workspace == str(tmp_path.resolve()) else None,
         raising=False,
     )
@@ -415,7 +415,7 @@ def test_session_replay_command_latest_uses_workspace_session(tmp_path, monkeypa
         transcript_entries=[{"kind": "assistant", "body": "restored"}],
     )
     monkeypatch.setattr(
-        "repoterm.cli_commands.get_latest_session",
+        "repoterm.ui.commands.get_latest_session",
         lambda workspace=None: session if workspace == str(tmp_path.resolve()) else None,
         raising=False,
     )
@@ -447,7 +447,7 @@ def test_checkpoints_command_latest_uses_workspace_session(tmp_path, monkeypatch
     )
     session.update_metadata()
     monkeypatch.setattr(
-        "repoterm.cli_commands.get_latest_session",
+        "repoterm.ui.commands.get_latest_session",
         lambda workspace=None: session if workspace == str(tmp_path.resolve()) else None,
         raising=False,
     )
@@ -484,7 +484,7 @@ def test_rewind_command_rewinds_active_session(monkeypatch) -> None:
         session_arg.update_metadata()
         return [checkpoint]
 
-    monkeypatch.setattr("repoterm.cli_commands.rewind_session_data", fake_rewind)
+    monkeypatch.setattr("repoterm.ui.commands.rewind_session_data", fake_rewind)
 
     result = try_handle_local_command("/rewind", session=session)
 
@@ -537,7 +537,7 @@ def test_session_rewind_command_rewinds_saved_workspace_session(tmp_path, monkey
     session.checkpoints = [checkpoint]
     session.update_metadata()
     monkeypatch.setattr(
-        "repoterm.cli_commands.get_latest_session",
+        "repoterm.ui.commands.get_latest_session",
         lambda workspace=None: session if workspace == str(tmp_path.resolve()) else None,
         raising=False,
     )
@@ -550,7 +550,7 @@ def test_session_rewind_command_rewinds_saved_workspace_session(tmp_path, monkey
         session.update_metadata()
         return session, [checkpoint]
 
-    monkeypatch.setattr("repoterm.cli_commands.rewind_session", fake_rewind)
+    monkeypatch.setattr("repoterm.ui.commands.rewind_session", fake_rewind)
 
     result = try_handle_local_command("/session-rewind latest", cwd=workspace)
 
@@ -578,7 +578,7 @@ def test_session_rewind_preview_command_uses_saved_workspace_session(tmp_path, m
     session.checkpoints = [checkpoint]
     session.update_metadata()
     monkeypatch.setattr(
-        "repoterm.cli_commands.get_latest_session",
+        "repoterm.ui.commands.get_latest_session",
         lambda workspace=None: session if workspace == str(tmp_path.resolve()) else None,
         raising=False,
     )
@@ -642,7 +642,7 @@ def test_user_command_writes_global_preference_to_sqlite_only(tmp_path, monkeypa
 
 def test_legacy_user_profile_set_is_read_only(tmp_path, monkeypatch) -> None:
     import repoterm.config as config
-    from repoterm.user_profile import handle_user_command
+    from repoterm.memory.legacy_user_profile import handle_user_command
 
     profile_dir = tmp_path / "profile"
     workspace = tmp_path / "workspace"
@@ -735,8 +735,8 @@ def test_cybernetics_command_shows_controller_inventory() -> None:
 
 
 def test_cybernetics_command_uses_persisted_report(tmp_path, monkeypatch) -> None:
-    import repoterm.cybernetic_supervisor as supervisor_module
-    from repoterm.cybernetic_supervisor import ControlSnapshot, CyberneticSupervisor, save_supervisor_report
+    import repoterm.runtime.control.cybernetic_supervisor as supervisor_module
+    from repoterm.runtime.control.cybernetic_supervisor import ControlSnapshot, CyberneticSupervisor, save_supervisor_report
 
     monkeypatch.setattr(
         supervisor_module,

@@ -1,6 +1,6 @@
-from repoterm.task_object import TaskState
+from repoterm.runtime.planning.task_object import TaskState
 from repoterm.memory import EvidenceKind, EvidenceLevel
-from repoterm.turn_kernel import (
+from repoterm.runtime.turn_kernel import (
     TurnBudgetSignals,
     TurnRecurrentState,
     TurnVerificationState,

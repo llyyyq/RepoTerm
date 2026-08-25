@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from repoterm.tooling import ToolDefinition, ToolContext, ToolResult
+from repoterm.tools.registry import ToolDefinition, ToolContext, ToolResult
 
 
 def _validate(input_data: dict) -> dict:

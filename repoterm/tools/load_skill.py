@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from repoterm.skills import load_skill
-from repoterm.tooling import ToolDefinition, ToolResult
+from repoterm.integrations.skills import load_skill
+from repoterm.tools.registry import ToolDefinition, ToolResult
 
 
 def _validate(input_data: dict) -> dict:

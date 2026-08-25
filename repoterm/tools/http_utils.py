@@ -4,7 +4,7 @@ import json
 import urllib.error
 import urllib.request
 
-from repoterm.tooling import ToolDefinition, ToolContext, ToolResult
+from repoterm.tools.registry import ToolDefinition, ToolContext, ToolResult
 
 
 def _validate_http_request(input_data: dict) -> dict:

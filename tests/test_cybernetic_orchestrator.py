@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from repoterm.cybernetic_orchestrator import CyberneticOrchestrator
+from repoterm.runtime.control.cybernetic_orchestrator import CyberneticOrchestrator
 
 
 class TestOrchestratorInit:

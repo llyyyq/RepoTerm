@@ -3,8 +3,8 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from repoterm.tooling import ToolDefinition, ToolResult
-from repoterm.workspace import resolve_tool_path
+from repoterm.tools.registry import ToolDefinition, ToolResult
+from repoterm.safety.workspace import resolve_tool_path
 
 DEFAULT_READ_LIMIT = 8000
 MAX_READ_LIMIT = 20000
@@ -93,4 +93,3 @@ read_file_tool = ToolDefinition(
     validator=_validate,
     run=_run,
 )
-

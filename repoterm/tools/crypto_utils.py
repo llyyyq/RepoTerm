@@ -4,7 +4,7 @@ import hashlib
 import hmac
 from datetime import datetime, timezone, timedelta
 
-from repoterm.tooling import ToolDefinition, ToolContext, ToolResult
+from repoterm.tools.registry import ToolDefinition, ToolContext, ToolResult
 
 
 # ---------------------------------------------------------------------------

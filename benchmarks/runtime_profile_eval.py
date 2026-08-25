@@ -10,7 +10,7 @@ import sys
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from repoterm.runtime_profile_eval import (
+from benchmarks.evaluation.runtime_profile import (
     ProviderDiagnostic,
     RuntimeEvalCondition,
     RuntimeEvalScenario,
@@ -20,13 +20,13 @@ from repoterm.runtime_profile_eval import (
     runtime_profile_eval_as_dict,
     runtime_profile_eval_as_markdown,
 )
-from repoterm.evidence_safety import (
+from repoterm.safety.evidence import (
     normalize_evidence_paths,
     redact_sensitive_payload,
     redact_sensitive_text,
 )
-from repoterm.tooling import ToolRegistry
-from repoterm.types import AgentStep, ChatMessage, ModelAdapter
+from repoterm.tools.registry import ToolRegistry
+from repoterm.contracts.types import AgentStep, ChatMessage, ModelAdapter
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -226,7 +226,7 @@ def _classify_provider_diagnostic(
 
 
 def collect_provider_diagnostics() -> list[ProviderDiagnostic]:
-    command = [sys.executable, "-m", "repoterm.headless", "Reply with exactly OK."]
+    command = [sys.executable, "-m", "repoterm.app.headless", "Reply with exactly OK."]
     trace_artifact = REPO_ROOT / ".temp" / "headless-provider-smoke-trace.json"
     trace_artifact.parent.mkdir(parents=True, exist_ok=True)
     try:

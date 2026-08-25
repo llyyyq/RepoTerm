@@ -14,19 +14,19 @@ from pathlib import Path
 
 import pytest
 
-from repoterm.agent_loop import run_agent_turn
-from repoterm.context_compactor import ToolResultBudgetManager
-from repoterm.context_manager import ContextManager, compute_context_stats
-from repoterm.headless import _make_auto_approve_prompt
+from repoterm.runtime.loop import run_agent_turn
+from repoterm.context.compactor import ToolResultBudgetManager
+from repoterm.context.manager import ContextManager, compute_context_stats
+from repoterm.app.headless import _make_auto_approve_prompt
 from repoterm.memory import MemoryEntry, MemoryManager, MemoryScope
-from repoterm.mcp import create_mcp_backed_tools
-from repoterm.micro_compact import MicroCompactor, MicroCompactorConfig
-from repoterm.permissions import PermissionManager
-from repoterm.prompt import build_system_prompt_bundle
+from repoterm.integrations.mcp import create_mcp_backed_tools
+from repoterm.context.micro_compact import MicroCompactor, MicroCompactorConfig
+from repoterm.safety.permissions import PermissionManager
+from repoterm.runtime.planning.prompt import build_system_prompt_bundle
 from repoterm.session import create_new_session, load_session, save_session
 from repoterm.tools import create_default_tool_registry
-from repoterm.tooling import ToolContext
-from repoterm.types import AgentStep, ModelAdapter, ChatMessage
+from repoterm.tools.registry import ToolContext
+from repoterm.contracts.types import AgentStep, ModelAdapter, ChatMessage
 
 
 # ---------------------------------------------------------------------------

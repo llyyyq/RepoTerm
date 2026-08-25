@@ -37,7 +37,7 @@
           "reason": "Current product package and console entry points are Python-owned."
         },
         {
-          "path": "repoterm/main.py",
+          "path": "repoterm/app/interactive.py",
           "reason": "Current interactive product lifecycle enters through the Python CLI."
         }
       ],
@@ -73,11 +73,11 @@
       ],
       "replacementEvidence": [
         {
-          "path": "repoterm/main.py",
+          "path": "repoterm/app/interactive.py",
           "reason": "Current interactive CLI lifecycle is owned by the Python app."
         },
         {
-          "path": "repoterm/headless.py",
+          "path": "repoterm/app/headless.py",
           "reason": "Current non-interactive automation lifecycle is owned by the Python app."
         }
       ],

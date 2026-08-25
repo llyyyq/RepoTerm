@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from repoterm.file_review import apply_reviewed_file_change
-from repoterm.tooling import ToolDefinition
-from repoterm.workspace import resolve_tool_path
+from repoterm.safety.file_review import apply_reviewed_file_change
+from repoterm.tools.registry import ToolDefinition
+from repoterm.safety.workspace import resolve_tool_path
 
 # 验证输入是否符合要求
 def _validate(input_data: dict) -> dict:
@@ -29,4 +29,3 @@ write_file_tool = ToolDefinition(
     validator=_validate,
     run=_run,
 )
-

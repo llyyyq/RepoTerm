@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from repoterm.context_compactor import ToolResultBudgetManager
-from repoterm.micro_compact import MicroCompactor, MicroCompactorConfig
+from repoterm.context.compactor import ToolResultBudgetManager
+from repoterm.context.micro_compact import MicroCompactor, MicroCompactorConfig
 
 
 # ---------------------------------------------------------------------------

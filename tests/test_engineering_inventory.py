@@ -49,11 +49,11 @@ def test_material_inventory_tracks_current_product_app_entries() -> None:
     assert app["status"] == "active"
 
     entries = {entry["name"]: entry for entry in app["entrySurfaces"]}
-    assert entries["interactive-cli"]["path"] == "repoterm/main.py"
-    assert entries["headless-runner"]["path"] == "repoterm/headless.py"
-    assert entries["local-command-surface"]["path"] == "repoterm/cli_commands.py"
-    assert entries["product-surfaces"]["path"] == "repoterm/product_surfaces.py"
-    assert entries["readiness-gate"]["path"] == "repoterm/readiness.py"
+    assert entries["interactive-cli"]["path"] == "repoterm/app/interactive.py"
+    assert entries["headless-runner"]["path"] == "repoterm/app/headless.py"
+    assert entries["local-command-surface"]["path"] == "repoterm/ui/commands.py"
+    assert entries["product-surfaces"]["path"] == "repoterm/runtime/surfaces.py"
+    assert entries["readiness-gate"]["path"] == "repoterm/app/readiness.py"
     assert entries["readiness-gate"]["script"] == "repoterm-readiness"
     assert "release-readiness" not in entries
 
@@ -173,11 +173,11 @@ def test_material_inventory_focused_gates_remain_portable() -> None:
     assert "tests/test_engineering_structure.py" in gates["product-entry-gates"]["command"]
     assert (
         gates["structure-compliance"]["command"]
-        == "python -m repoterm.structure_check --root . --hotspots 5 --max-dependency-upstream 4 --check-material-inventory --report .temp/structure-compliance.json"
+        == "python -m repoterm.app.structure_check --root . --hotspots 5 --max-dependency-upstream 4 --check-material-inventory --report .temp/structure-compliance.json"
     )
     assert (
         gates["readiness-gate"]["command"]
-        == "python -m repoterm.readiness --json --fail-on blocked"
+        == "python -m repoterm.app.readiness --json --fail-on blocked"
     )
     for gate in gates.values():
         assert gate["command"].startswith("python -m ")
@@ -238,8 +238,8 @@ def test_legacy_only_tool_names_are_not_live_current_code_heuristics() -> None:
         "run_with_debug",
     }
     current_sources = [
-        ROOT / "repoterm" / "tooling.py",
-        ROOT / "repoterm" / "context_manager.py",
+        ROOT / "repoterm" / "tools" / "registry.py",
+        ROOT / "repoterm" / "context" / "manager.py",
     ]
 
     for source_path in current_sources:
@@ -272,7 +272,7 @@ def test_ts_src_burndown_manifest_tracks_reference_boundary() -> None:
         "legacy-node-package-no-product-caller"
     )
     assert entries["ts-src/src/index.ts"]["replacementEvidence"][0]["path"] == (
-        "repoterm/main.py"
+        "repoterm/app/interactive.py"
     )
     assert entries["ts-src/py-src"]["disposition"] == "archived-deleted"
     assert entries["ts-src/py-src"]["currentReferences"][0]["path"] == (
@@ -316,7 +316,7 @@ def test_repoterm_fork_burndown_manifest_tracks_comparison_boundary() -> None:
         "comparison-node-package-no-product-caller"
     )
     assert entries["RepoTerm-fork/src/index.ts"]["replacementEvidence"][0]["path"] == (
-        "repoterm/main.py"
+        "repoterm/app/interactive.py"
     )
     assert entries["RepoTerm-fork/external/RepoTerm"]["status"] == (
         "nested-external-reference"

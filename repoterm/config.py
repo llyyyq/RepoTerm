@@ -193,7 +193,7 @@ def describe_provider_channel(
     runtime = runtime or {}
     provider_key = (provider_name or "").strip().lower()
     if not provider_key:
-        from repoterm.model_registry import detect_provider
+        from repoterm.providers.registry import detect_provider
 
         provider_key = detect_provider(
             str(runtime.get("model", "")).strip(),
@@ -257,13 +257,13 @@ def _uses_custom_openai_compatible_host(runtime: dict[str, Any] | None) -> bool:
 
 
 def _known_openai_exposed_models(runtime: dict[str, Any] | None) -> list[str]:
-    from repoterm.model_registry import list_openai_exposed_models
+    from repoterm.providers.registry import list_openai_exposed_models
 
     return list(list_openai_exposed_models(runtime))
 
 
 def _known_openai_agent_models(runtime: dict[str, Any] | None) -> list[str]:
-    from repoterm.model_registry import model_id_supports_agent_tools
+    from repoterm.providers.registry import model_id_supports_agent_tools
 
     return [
         model
@@ -289,7 +289,7 @@ def discovered_openai_fallbacks(
     if not _uses_custom_openai_compatible_host(runtime):
         return []
 
-    from repoterm.model_registry import (
+    from repoterm.providers.registry import (
         list_openai_exposed_models,
         model_id_supports_agent_tools,
         probe_openai_exposed_models,
@@ -320,7 +320,7 @@ def describe_fallback_guidance(
     runtime = runtime or {}
     provider_key = (provider_name or "").strip().lower()
     if not provider_key:
-        from repoterm.model_registry import detect_provider
+        from repoterm.providers.registry import detect_provider
 
         provider_key = detect_provider(
             str(current_model or runtime.get("model", "")).strip(),
@@ -761,7 +761,7 @@ def validate_provider_runtime(
     OpenAI-compatible credentials must be present; likewise for Anthropic,
     OpenRouter, and custom endpoints.
     """
-    from repoterm.model_registry import Provider, detect_provider
+    from repoterm.providers.registry import Provider, detect_provider
 
     model = str(runtime.get("model", "")).strip()
     provider = detect_provider(
@@ -940,7 +940,7 @@ def format_config_diagnostic(cwd: str | Path | None = None) -> str:
         lines.append(f"  Model: {model_name}")
 
         # Show provider info
-        from repoterm.model_registry import detect_provider, Provider
+        from repoterm.providers.registry import detect_provider, Provider
         provider = detect_provider(
             model_name,
             config,

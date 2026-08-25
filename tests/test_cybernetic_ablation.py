@@ -1,6 +1,6 @@
 import json
 
-from repoterm.cybernetic_ablation import (
+from repoterm.runtime.control.cybernetic_ablation import (
     CyberneticAblationRunner,
     format_ablation_report,
     load_harness_task_profiles,

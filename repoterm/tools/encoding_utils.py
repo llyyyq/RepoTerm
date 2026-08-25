@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import urllib.parse
 
-from repoterm.tooling import ToolDefinition, ToolContext, ToolResult
+from repoterm.tools.registry import ToolDefinition, ToolContext, ToolResult
 
 
 # ---------------------------------------------------------------------------

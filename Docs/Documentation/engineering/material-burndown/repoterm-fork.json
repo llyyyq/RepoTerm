@@ -69,11 +69,11 @@
       ],
       "replacementEvidence": [
         {
-          "path": "repoterm/main.py",
+          "path": "repoterm/app/interactive.py",
           "reason": "Current interactive CLI lifecycle is owned by the Python app."
         },
         {
-          "path": "repoterm/headless.py",
+          "path": "repoterm/app/headless.py",
           "reason": "Current automation lifecycle is owned by the Python app."
         }
       ],

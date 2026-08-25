@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import urllib.request
 import urllib.error
-from repoterm.tooling import ToolDefinition, ToolResult
+from repoterm.tools.registry import ToolDefinition, ToolResult
 
 MAX_CONTENT_LENGTH = 50000
 MAX_REDIRECTS = 5  # 限制重定向次数防止 SSRF

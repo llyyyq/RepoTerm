@@ -20,23 +20,23 @@ class _BlockCybernetic:
 
     CYBERNETIC_PREFIXES = (
         "repoterm.cybernetic_",
-        "repoterm.feedback_controller",
-        "repoterm.feedforward_controller",
-        "repoterm.predictive_controller",
-        "repoterm.decoupling_controller",
-        "repoterm.adaptive_pid_tuner",
-        "repoterm.state_observer",
-        "repoterm.progress_controller",
-        "repoterm.stability_monitor",
-        "repoterm.self_healing_engine",
-        "repoterm.verification_controller",
-        "repoterm.decision_audit",
+        "repoterm.runtime.control.feedback_controller",
+        "repoterm.runtime.control.feedforward_controller",
+        "repoterm.runtime.control.predictive_controller",
+        "repoterm.runtime.control.decoupling_controller",
+        "repoterm.runtime.control.adaptive_pid_tuner",
+        "repoterm.runtime.control.state_observer",
+        "repoterm.runtime.control.progress_controller",
+        "repoterm.runtime.control.stability_monitor",
+        "repoterm.runtime.control.self_healing_engine",
+        "repoterm.runtime.control.verification_controller",
+        "repoterm.observability.decision_audit",
     )
 
     # Non-cybernetic modules that lazy-import cybernetic — must be cleared too
     CASCADE_MODULES = (
-        "repoterm.agent_loop",
-        "repoterm.tty_app",
+        "repoterm.runtime.loop",
+        "repoterm.ui.tty",
     )
 
     def __init__(self):
@@ -57,11 +57,11 @@ class _BlockCybernetic:
     def __exit__(self, *args):
         # Restore cybernetic modules directly.
         #
-        # Cascade modules (agent_loop, tty_app) are deliberately NOT restored
+        # Cascade modules (runtime.loop, tty_app) are deliberately NOT restored
         # from the snapshot: tests in this context manager re-import them under
         # isolation, and writing the stale pre-isolation module object back into
         # sys.modules can split the module identity (sys.modules holds one
-        # object while later ``import repoterm.agent_loop`` resolves another),
+        # object while later ``import repoterm.runtime.loop`` resolves another),
         # which silently breaks subsequent monkeypatch.setattr() calls in other
         # test files. The robust fix is to drop every cached reference and let
         # the import machinery rebuild a single canonical module on next access.
@@ -84,16 +84,16 @@ def test_core_agent_loop_imports_without_cybernetic():
     """Agent loop must be importable even when cybernetic modules are absent."""
     with _BlockCybernetic():
         # Force re-import
-        if "repoterm.agent_loop" in sys.modules:
-            del sys.modules["repoterm.agent_loop"]
+        if "repoterm.runtime.loop" in sys.modules:
+            del sys.modules["repoterm.runtime.loop"]
         # Should not raise
-        from repoterm.agent_loop import run_agent_turn  # noqa: F401
+        from repoterm.runtime.loop import run_agent_turn  # noqa: F401
         assert True  # reached = success
 
 
 def test_core_tooling_works_without_cybernetic():
     """ToolResult must work without any cybernetic imports."""
-    from repoterm.tooling import ToolResult
+    from repoterm.tools.registry import ToolResult
     result = ToolResult(ok=True, output="test ok")
     assert result.ok is True
 
@@ -108,7 +108,7 @@ def test_core_session_works_without_cybernetic(tmp_path):
 
 def test_core_context_manager_without_cybernetic():
     """ContextManager + token estimation must work without cybernetic."""
-    from repoterm.context_manager import estimate_message_tokens
+    from repoterm.context.manager import estimate_message_tokens
     tokens = estimate_message_tokens({"role": "user", "content": "Hello world"})
     assert isinstance(tokens, int)
     assert tokens > 0

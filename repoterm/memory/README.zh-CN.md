@@ -51,25 +51,7 @@ flowchart TD
 
 ### 3.1 写入流
 
-```mermaid
-flowchart LR
-    A[明确用户记忆] -->|remember_explicit| ACTIVE[active]
-    B[隐式通信偏好信号] --> C{同一 key 是否有两个独立 Turn/Session?}
-    C -->|否| META[只累计 metadata signal]
-    C -->|是| PENDING[pending]
-    D[工具调用结果] --> E[classify_tool_result]
-    E -->|OBSERVATION| TRACE[仅 Trace/Transcript]
-    E -->|CHANGE| STATE[TurnVerificationState]
-    E -->|VALIDATION/CONFIRMATION| STATE
-    STATE --> F{任务正常结束且有成功验证?}
-    F -->|否| TRACE
-    F -->|是| PENDING
-    PENDING -->|/memory approve| ACTIVE
-    PENDING -->|/memory reject| REJECTED[rejected]
-    ACTIVE -->|update| SUPERSEDED[superseded 旧版本]
-    ACTIVE -->|archive| ARCHIVED[archived]
-    ARCHIVED -->|restore| ACTIVE
-```
+写入路径按来源分成三类：明确用户记忆由 `remember_explicit()` 进入 `active`；隐式偏好先累计独立信号，达到门槛后进入 `pending`；工具结果先由 `turn_kernel` 分类，只有成功验证且满足完成门禁时才由 Reflection 提出 `pending` 经验。用户通过 `/memory approve` 或 `/memory reject` 决定候选的后续状态；更新、归档和恢复由 Service 生命周期 API 执行。
 
 写入统一经过 `MemoryService._create()`。它按以下顺序执行：
 
@@ -88,23 +70,7 @@ flowchart LR
 
 ### 3.2 读取和注入流
 
-```mermaid
-sequenceDiagram
-    participant R as Agent Loop
-    participant I as MemoryInjector
-    participant S as MemoryService
-    participant DB as SQLite
-    participant L as Model
-
-    R->>I: inject_once(messages, task, context)
-    I->>S: search(task, active only)
-    S->>DB: list active records
-    DB-->>S: candidate rows
-    S-->>I: scope-filtered deterministic ranking
-    I->>I: dedupe hash, max 5, token budget
-    I-->>R: one advisory block or unchanged messages
-    R->>L: messages with at most one memory block
-```
+读取路径是 `Agent Loop → MemoryInjector.inject_once() → MemoryService.search(active only) → MemoryStore`，Service 返回按 scope 和规范化 key 过滤、确定性排序的记录；Injector 再按 hash、最大条数和 token 预算去重，并把至多一个 advisory block 返回给 Loop。已有标记时 `inject_once()` 不重复添加，Loop 最后把带块或未改变的消息交给模型。
 
 注入块明确标记为 advisory。它不能覆盖系统指令、权限边界、工具安全规则或当前用户的新指令。`inject_once()` 先检测块标记，已有块时直接返回，从而防止 Main、TUI、ContextCompactor 和 Agent Loop 重复注入。
 
@@ -250,7 +216,7 @@ marker 只表示“该 source hash 已完整迁移”，不是“曾经尝试过
 memory_service = create_memory_service(workspace=cwd, runtime=runtime)
 ```
 
-Agent Loop 负责唯一注入点；CLI 只调用 Service 生命周期 API，不自己拼 Prompt；Reflection 只通过 `propose_experience()` 写 pending；`user_profile.py` 只读旧 `USER.md`，`/user set` 写 `global + preference` 的 SQLite 记录。任何新调用方都应遵循：
+Agent Loop 负责唯一注入点；CLI 只调用 Service 生命周期 API，不自己拼 Prompt；Reflection 只通过 `propose_experience()` 写 pending；`legacy_user_profile.py` 只读旧 `USER.md`，`/user set` 写 `global + preference` 的 SQLite 记录。任何新调用方都应遵循：
 
 - 需要长期保存 → 调用 `remember_explicit()` 或 `propose_experience()`；
 - 需要显示候选 → 调用 `list_pending()`；

@@ -19,9 +19,9 @@
 
 | 文件 | 行数 | 功能 |
 |------|------|------|
-| `repoterm/state.py` | 280 | Store 状态管理 + AppState |
-| `repoterm/cost_tracker.py` | 280 | 费用追踪 + 使用统计 |
-| `repoterm/tooling.py` | 扩展 | Tool Protocol + Metadata |
+| `repoterm/contracts/state.py` | 280 | Store 状态管理 + AppState |
+| `repoterm/observability/cost.py` | 280 | 费用追踪 + 使用统计 |
+| `repoterm/tools/registry.py` | 扩展 | Tool Protocol + Metadata |
 
 ---
 
@@ -30,7 +30,7 @@
 ### 1. Store 状态管理
 
 ```python
-from repoterm.state import create_app_store, format_app_state_summary
+from repoterm.contracts.state import create_app_store, format_app_state_summary
 
 # 创建 Store
 app_state = create_app_store({
@@ -40,7 +40,7 @@ app_state = create_app_store({
 })
 
 # 更新状态
-from repoterm.state import set_busy, set_idle, update_context_usage
+from repoterm.contracts.state import set_busy, set_idle, update_context_usage
 
 app_state.set_state(set_busy("read_file"))
 app_state.set_state(update_context_usage(50000, 200000))
@@ -86,7 +86,7 @@ Status:
 ### 2. 费用追踪
 
 ```python
-from repoterm.cost_tracker import CostTracker
+from repoterm.observability.cost import CostTracker
 
 tracker = CostTracker()
 
@@ -149,7 +149,7 @@ Cost per minute: $0.0081
 ### 3. Tool Protocol
 
 ```python
-from repoterm.tooling import Tool, ToolMetadata, ToolCapability
+from repoterm.tools.registry import Tool, ToolMetadata, ToolCapability
 
 # 定义工具元数据
 metadata = ToolMetadata(
@@ -180,8 +180,8 @@ print(metadata.is_concurrency_safe)  # True
 
 ```python
 # tty_app.py 中已添加：
-from repoterm.state import AppState, Store, create_app_store
-from repoterm.cost_tracker import CostTracker
+from repoterm.contracts.state import AppState, Store, create_app_store
+from repoterm.observability.cost import CostTracker
 
 # 在 run_tty_app 中初始化：
 app_state_store = create_app_store({
@@ -204,7 +204,7 @@ state = ScreenState(
 
 ### 步骤 1: 添加 /cost 命令
 
-编辑 `repoterm/cli_commands.py`，添加：
+编辑 `repoterm/ui/commands.py`，添加：
 
 ```python
 @dataclass
@@ -236,7 +236,7 @@ class StatusCommand:
 
 ### 步骤 3: 在 agent loop 中记录费用
 
-编辑 `repoterm/agent_loop.py`，在 API 调用后添加：
+编辑 `repoterm/runtime/loop.py`，在 API 调用后添加：
 
 ```python
 # 在 run_agent_turn 中，收到 API 响应后：
@@ -253,7 +253,7 @@ if state.cost_tracker and api_response.usage:
 
 ### 步骤 4: 在工具执行时记录代码变更
 
-编辑 `repoterm/tty_app.py` 的 `on_tool_result` 回调：
+编辑 `repoterm/ui/tty.py` 的 `on_tool_result` 回调：
 
 ```python
 def on_tool_result(tool_name: str, output: str, is_error: bool) -> None:

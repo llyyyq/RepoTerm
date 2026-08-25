@@ -14,7 +14,7 @@ import pytest
 
 TEST_WORKSPACE = Path(__file__).resolve().parents[1] / ".temp" / "test-tool-results"
 
-from repoterm.cost_control import (
+from repoterm.runtime.control.cost_control import (
     BudgetActuator,
     BudgetAdjustment,
     BudgetPIDController,
@@ -23,7 +23,7 @@ from repoterm.cost_control import (
     CostRateSensor,
     SpendingTrend,
 )
-from repoterm.context_compactor import (
+from repoterm.context.compactor import (
     AutoCompactConfig,
     ContextCompactor,
 )

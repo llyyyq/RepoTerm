@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repoterm.evidence_safety import (
+from repoterm.safety.evidence import (
     find_sensitive_payload_leaks,
     find_sensitive_text_leaks,
     normalize_evidence_paths,

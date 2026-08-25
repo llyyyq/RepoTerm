@@ -1,4 +1,4 @@
-from repoterm.mock_model import MockModelAdapter
+from repoterm.providers.mock import MockModelAdapter
 
 
 def test_mock_model_turns_ls_into_tool_call() -> None:

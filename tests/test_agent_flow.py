@@ -12,11 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from repoterm.agent_loop import run_agent_turn
-from repoterm.context_manager import ContextManager
-from repoterm.mock_model import MockModelAdapter
-from repoterm.permissions import PermissionManager
-from repoterm.tooling import ToolRegistry
+from repoterm.runtime.loop import run_agent_turn
+from repoterm.context.manager import ContextManager
+from repoterm.providers.mock import MockModelAdapter
+from repoterm.safety.permissions import PermissionManager
+from repoterm.tools.registry import ToolRegistry
 from repoterm.tools import create_default_tool_registry
 
 
@@ -125,7 +125,7 @@ class TestAgentFlowCybernetics:
         self, monkeypatch, mock_model, tools, messages, workspace, permissions
     ):
         """The agent loop should drive the unified orchestrator lifecycle."""
-        from repoterm.cybernetic_orchestrator import CyberneticOrchestrator
+        from repoterm.runtime.control.cybernetic_orchestrator import CyberneticOrchestrator
 
         calls: list[str] = []
 

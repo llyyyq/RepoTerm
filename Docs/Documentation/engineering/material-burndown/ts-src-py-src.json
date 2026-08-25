@@ -24,11 +24,11 @@
       "disposition": "retired",
       "replacementEvidence": [
         {
-          "path": "repoterm/product_surfaces.py",
+          "path": "repoterm/runtime/surfaces.py",
           "reason": "Current instruction, extension, readiness, and prompt bundle surfaces replace the old ad hoc async context collector boundary."
         },
         {
-          "path": "repoterm/prompt_pipeline.py",
+          "path": "repoterm/runtime/planning/prompt_pipeline.py",
           "reason": "Current prompt assembly owns cached paragraph evaluation for dynamic context."
         }
       ],
@@ -42,7 +42,7 @@
       "disposition": "retired",
       "replacementEvidence": [
         {
-          "path": "repoterm/cli_commands.py",
+          "path": "repoterm/ui/commands.py",
           "reason": "Current slash-command surface owns local command parsing and dispatch without the old polymorphic registry."
         },
         {
@@ -161,7 +161,7 @@
           "reason": "Current command execution is centralized in run_command; debug parsing is not a supported separate tool surface."
         },
         {
-          "path": "repoterm/tooling.py",
+          "path": "repoterm/tools/registry.py",
           "reason": "ToolRegistry keeps generic command-output truncation for the supported run_command tool."
         }
       ],

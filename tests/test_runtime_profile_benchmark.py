@@ -9,7 +9,7 @@ from benchmarks.runtime_profile_eval import (
 def test_runtime_profile_provider_diagnostic_classifies_model_api_error() -> None:
     diagnostic = _classify_provider_diagnostic(
         label="headless-smoke",
-        command="python -m repoterm.headless Reply with exactly OK.",
+        command="python -m repoterm.app.headless Reply with exactly OK.",
         exit_code=0,
         stdout="Model API error (RuntimeError): error code: 1010\n",
         stderr="request id: abc123",
@@ -31,7 +31,7 @@ def test_runtime_profile_provider_diagnostic_includes_headless_trace_context(tmp
     trace_path = tmp_path / "headless-trace.json"
     diagnostic = _classify_provider_diagnostic(
         label="headless-smoke",
-        command="python -m repoterm.headless Reply with exactly OK.",
+        command="python -m repoterm.app.headless Reply with exactly OK.",
         exit_code=1,
         stdout="Provider availability failure: all viable fallback models were unavailable.\n",
         stderr="",
@@ -52,7 +52,7 @@ def test_runtime_profile_provider_diagnostic_includes_headless_trace_context(tmp
 def test_runtime_profile_provider_diagnostic_classifies_local_config_failure() -> None:
     diagnostic = _classify_provider_diagnostic(
         label="headless-smoke",
-        command="python -m repoterm.headless Reply with exactly OK.",
+        command="python -m repoterm.app.headless Reply with exactly OK.",
         exit_code=1,
         stdout="",
         stderr="Config error: No model configured.",

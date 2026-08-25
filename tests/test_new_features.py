@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from repoterm.api_retry import (
+from repoterm.providers.retry import (
     APIRetryExhaustedError,
     HTTPError,
     RetryState,
@@ -16,7 +16,7 @@ from repoterm.api_retry import (
     is_retryable_error,
     retry_with_backoff,
 )
-from repoterm.context_manager import (
+from repoterm.context.manager import (
     ContextManager,
     ContextStats,
     estimate_message_tokens,
@@ -25,7 +25,7 @@ from repoterm.context_manager import (
     load_context_state,
     save_context_state,
 )
-from repoterm.task_tracker import (
+from repoterm.runtime.planning.task_tracker import (
     Task,
     TaskList,
     TaskManager,
@@ -128,7 +128,7 @@ def test_context_manager_format_summary():
 
 def test_context_manager_persistence(tmp_path):
     """Test saving and loading context state."""
-    with patch("repoterm.context_manager.REPOTERM_DIR", tmp_path):
+    with patch("repoterm.context.manager.REPOTERM_DIR", tmp_path):
         manager = ContextManager(model="claude-sonnet-4-20250514")
         manager.add_message({"role": "user", "content": "Test"})
         

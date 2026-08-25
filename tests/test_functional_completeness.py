@@ -43,16 +43,16 @@ class TestStartupAndConfig:
 
     def test_logging_system_initialization(self):
         """Test logging system initializes correctly."""
-        from repoterm.logging_config import setup_logging, get_logger
+        from repoterm.observability.logging import setup_logging, get_logger
         logger = setup_logging(level="DEBUG", log_to_file=False, log_to_console=False)
         assert logger.name == "repoterm"
         assert logger.level == 10  # DEBUG level
 
     def test_core_module_imports(self):
         """Test all core modules import without errors."""
-        from repoterm.main import main
-        from repoterm.logging_config import setup_logging
-        from repoterm.context_manager import ContextManager
+        from repoterm.app.interactive import main
+        from repoterm.observability.logging import setup_logging
+        from repoterm.context.manager import ContextManager
         from repoterm.memory import MemoryManager
         from repoterm.config import validate_config
         # If we get here, all imports succeeded
@@ -140,21 +140,21 @@ class TestPermissionSystem:
 
     def test_path_access_within_cwd_allowed(self):
         """Test that path access within cwd is allowed."""
-        from repoterm.permissions import PermissionManager
+        from repoterm.safety.permissions import PermissionManager
         pm = PermissionManager(workspace_root="/test/cwd")
         # Should not raise
         pm.ensure_path_access("/test/cwd/file.txt", "read")
 
     def test_path_access_outside_cwd_denied_without_prompt(self):
         """Test that path access outside cwd is denied when no prompt."""
-        from repoterm.permissions import PermissionManager
+        from repoterm.safety.permissions import PermissionManager
         pm = PermissionManager(workspace_root="/test/cwd")
         with pytest.raises(RuntimeError, match="outside cwd"):
             pm.ensure_path_access("/etc/passwd", "read")
 
     def test_dangerous_command_detection(self):
         """Test that dangerous commands are detected."""
-        from repoterm.permissions import _classify_dangerous_command
+        from repoterm.safety.permissions import _classify_dangerous_command
         # Git dangerous commands
         result = _classify_dangerous_command("git", ["reset", "--hard"])
         assert result is not None
@@ -175,7 +175,7 @@ class TestContextManagement:
 
     def test_token_estimation_ascii(self):
         """Test token estimation for ASCII text."""
-        from repoterm.context_manager import estimate_tokens
+        from repoterm.context.manager import estimate_tokens
         text = "Hello World " * 100
         tokens = estimate_tokens(text)
         # ~4 chars/token for ASCII
@@ -184,7 +184,7 @@ class TestContextManagement:
 
     def test_token_estimation_chinese(self):
         """Test token estimation for Chinese text."""
-        from repoterm.context_manager import estimate_tokens
+        from repoterm.context.manager import estimate_tokens
         text = "你好世界" * 100
         tokens = estimate_tokens(text)
         # ~1.5 chars/token for CJK
@@ -193,7 +193,7 @@ class TestContextManagement:
 
     def test_context_manager_stats(self):
         """Test context manager statistics."""
-        from repoterm.context_manager import ContextManager
+        from repoterm.context.manager import ContextManager
         ctx = ContextManager(model="claude-sonnet-4-20250514")
         ctx.messages = [{"role": "user", "content": "Hello " * 100}]
         stats = ctx.get_stats()
@@ -202,7 +202,7 @@ class TestContextManagement:
 
     def test_context_compaction(self):
         """Test context compaction reduces message count."""
-        from repoterm.context_manager import ContextManager
+        from repoterm.context.manager import ContextManager
         ctx = ContextManager(model="claude-sonnet-4-20250514", context_window=1000)
         # Add many messages to trigger compaction
         ctx.messages = [{"role": "user", "content": "x" * 50} for _ in range(50)]
@@ -279,7 +279,7 @@ class TestHelpSystem:
 
     def test_context_details_format(self):
         """Test /context command output format."""
-        from repoterm.context_manager import ContextManager
+        from repoterm.context.manager import ContextManager
         ctx = ContextManager(model="claude-sonnet-4-20250514")
         result = ctx.format_context_details()
         assert "Context Window Usage" in result
@@ -298,7 +298,7 @@ class TestHelpSystem:
 
     def test_slash_commands_available(self):
         """Test that all slash commands are available."""
-        from repoterm.cli_commands import SLASH_COMMANDS
+        from repoterm.ui.commands import SLASH_COMMANDS
         command_names = {cmd.name for cmd in SLASH_COMMANDS}
         expected = {"/help", "/tools", "/status", "/config", "/context", "/memory", "/mcp", "/skills", "/exit"}
         assert expected.issubset(command_names)

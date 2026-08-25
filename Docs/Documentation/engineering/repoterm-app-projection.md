@@ -1,5 +1,7 @@
 # RepoTerm App Projection
 
+> 历史设计输入：本文记录重构前的应用投影。当前代码结构与有效路径以[最终包结构重构报告](package-structure-refactor-report.md)为准；下文历史路径保留用于审计，不代表当前实现位置。
+
 Status: active engineering inventory
 Audited at: 2026-06-29
 Repository baseline: current RepoTerm worktree after the product-name migration.

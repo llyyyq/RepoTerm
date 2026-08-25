@@ -23,17 +23,17 @@ import pytest
 # Ensure py-src is on path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from repoterm.agent_loop import run_agent_turn
-from repoterm.mock_model import MockModelAdapter
-from repoterm.permissions import PermissionManager
-from repoterm.tooling import ToolContext, ToolRegistry, ToolDefinition, ToolResult
+from repoterm.runtime.loop import run_agent_turn
+from repoterm.providers.mock import MockModelAdapter
+from repoterm.safety.permissions import PermissionManager
+from repoterm.tools.registry import ToolContext, ToolRegistry, ToolDefinition, ToolResult
 from repoterm.tools import create_default_tool_registry
-from repoterm.types import AgentStep, ChatMessage
-from repoterm.context_manager import ContextManager
+from repoterm.contracts.types import AgentStep, ChatMessage
+from repoterm.context.manager import ContextManager
 from repoterm.session import SessionData, save_session, load_session, list_sessions
 from repoterm.config import load_effective_settings, REPOTERM_DIR
-from repoterm.prompt import build_system_prompt
-from repoterm.tui.types import TranscriptEntry, _create_transcript_entry, _recycle_transcript_entry
+from repoterm.runtime.planning.prompt import build_system_prompt
+from repoterm.ui.tui.types import TranscriptEntry, _create_transcript_entry, _recycle_transcript_entry
 
 
 # ---------------------------------------------------------------------------
@@ -719,7 +719,7 @@ class TestLiveAPI:
 
     def test_simple_question(self, tools, tmp_workspace, auto_allow_permissions):
         """Send a simple question to the real API and verify response."""
-        from repoterm.anthropic_adapter import AnthropicModelAdapter
+        from repoterm.providers.anthropic import AnthropicModelAdapter
 
         runtime = {
             "model": os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
@@ -750,7 +750,7 @@ class TestLiveAPI:
 
     def test_tool_use_via_api(self, tools, tmp_workspace, auto_allow_permissions):
         """Real API triggers tool use (list_files) and processes result."""
-        from repoterm.anthropic_adapter import AnthropicModelAdapter
+        from repoterm.providers.anthropic import AnthropicModelAdapter
 
         runtime = {
             "model": os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
@@ -801,7 +801,7 @@ class TestMCPIntegration:
 
     def test_mcp_import_and_create(self):
         """MCP module imports and creates empty tool set."""
-        from repoterm.mcp import create_mcp_backed_tools
+        from repoterm.integrations.mcp import create_mcp_backed_tools
 
         result = create_mcp_backed_tools(cwd=".", mcp_servers={})
         assert isinstance(result, dict)

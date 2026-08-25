@@ -83,7 +83,7 @@ def _select_run(report: dict[str, Any], task_id: str) -> tuple[dict, dict]:
 
 
 def _public_payload(trace: dict[str, Any], title_zh: str) -> dict[str, Any]:
-    from repoterm.evidence_safety import redact_sensitive_payload
+    from repoterm.safety.evidence import redact_sensitive_payload
 
     payload = {
         "schema_version": 1,

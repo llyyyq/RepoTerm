@@ -18,7 +18,7 @@ import tempfile
 
 import pytest
 
-from repoterm.context_compactor import (
+from repoterm.context.compactor import (
     AutoCompactConfig,
     AutoCompactDispatcher,
     CompactBoundary,

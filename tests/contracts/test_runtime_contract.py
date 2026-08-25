@@ -15,20 +15,20 @@ from pathlib import Path
 
 import pytest
 
-import repoterm.permissions as permissions_module
-import repoterm.session as session_module
-from repoterm.agent_loop import run_agent_turn
-from repoterm.context_manager import ContextManager
-from repoterm.permissions import PermissionManager
+import repoterm.safety.permissions as permissions_module
+import repoterm.session.service as session_module
+from repoterm.runtime.loop import run_agent_turn
+from repoterm.context.manager import ContextManager
+from repoterm.safety.permissions import PermissionManager
 from repoterm.session import (
     create_file_checkpoint,
     create_new_session,
     load_session,
     save_session,
 )
-from repoterm.tooling import ToolContext, ToolDefinition, ToolRegistry, ToolResult
+from repoterm.tools.registry import ToolContext, ToolDefinition, ToolRegistry, ToolResult
 from repoterm.tools.write_file import write_file_tool
-from repoterm.types import AgentStep, ChatMessage, RuntimeEvent
+from repoterm.contracts.types import AgentStep, ChatMessage, RuntimeEvent
 
 
 class DeterministicModel:

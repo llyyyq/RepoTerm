@@ -1,5 +1,5 @@
 from repoterm.tools.write_file import _run, _validate
-from repoterm.tooling import ToolDefinition
+from repoterm.tools.registry import ToolDefinition
 
 
 modify_file_tool = ToolDefinition(
@@ -9,4 +9,3 @@ modify_file_tool = ToolDefinition(
     validator=_validate,
     run=_run,
 )
-

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import shutil
 
-from repoterm.tooling import ToolDefinition, ToolContext, ToolResult
-from repoterm.workspace import resolve_tool_path
+from repoterm.tools.registry import ToolDefinition, ToolContext, ToolResult
+from repoterm.safety.workspace import resolve_tool_path
 
 
 def _validate_batch_copy(input_data: dict) -> dict:

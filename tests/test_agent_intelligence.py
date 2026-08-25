@@ -9,14 +9,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from repoterm.agent_metrics import (
+from repoterm.observability.metrics import (
     AgentMetricsCollector,
     AgentTurnMetrics,
     ErrorCategory,
     ToolExecutionRecord,
     ToolHistoricalStats,
 )
-from repoterm.agent_intelligence import (
+from repoterm.runtime.planning.intelligence import (
     ClassifiedError,
     ErrorCategory as AIErrorCategory,
     ErrorClassifier,
@@ -26,7 +26,7 @@ from repoterm.agent_intelligence import (
     ToolSchedulerController,
     ToolSchedulingSignal,
 )
-from repoterm.tooling import ToolCapability, ToolDefinition, ToolMetadata, ToolRegistry
+from repoterm.tools.registry import ToolCapability, ToolDefinition, ToolMetadata, ToolRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -406,8 +406,8 @@ class TestAgentLoopIntegration:
 
     def test_metrics_collector_integration(self):
         """Metrics flow through agent loop."""
-        from repoterm.agent_loop import run_agent_turn
-        from repoterm.types import AgentStep
+        from repoterm.runtime.loop import run_agent_turn
+        from repoterm.contracts.types import AgentStep
 
         metrics = AgentMetricsCollector()
 
@@ -437,9 +437,9 @@ class TestAgentLoopIntegration:
 
     def test_error_recovery_integration(self):
         """Error classification in loop."""
-        from repoterm.agent_loop import run_agent_turn
-        from repoterm.types import AgentStep, ToolCall
-        from repoterm.tooling import ToolResult
+        from repoterm.runtime.loop import run_agent_turn
+        from repoterm.contracts.types import AgentStep, ToolCall
+        from repoterm.tools.registry import ToolResult
 
         # Tool that always fails with a network error
         def failing_runner(args, ctx):
@@ -486,9 +486,9 @@ class TestAgentLoopIntegration:
 
     def test_scheduler_integration(self):
         """Tool scheduling in loop."""
-        from repoterm.agent_loop import run_agent_turn
-        from repoterm.types import AgentStep, ToolCall
-        from repoterm.tooling import ToolResult
+        from repoterm.runtime.loop import run_agent_turn
+        from repoterm.contracts.types import AgentStep, ToolCall
+        from repoterm.tools.registry import ToolResult
 
         results_log: list[str] = []
 

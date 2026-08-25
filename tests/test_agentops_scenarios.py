@@ -5,23 +5,23 @@ from pathlib import Path
 
 import pytest
 
-import repoterm.permissions as permissions_module
-import repoterm.session as session_module
-from repoterm.agent_loop import STABLE_TASK_STATE_MARKER, run_agent_turn
-from repoterm.permissions import PermissionManager
+import repoterm.safety.permissions as permissions_module
+import repoterm.session.service as session_module
+from repoterm.runtime.loop import STABLE_TASK_STATE_MARKER, run_agent_turn
+from repoterm.safety.permissions import PermissionManager
 from repoterm.session import (
     create_new_session,
     load_session,
     rewind_session,
     save_session,
 )
-from repoterm.tooling import ToolDefinition, ToolRegistry, ToolResult
+from repoterm.tools.registry import ToolDefinition, ToolRegistry, ToolResult
 from repoterm.tools.grep_files import grep_files_tool
 from repoterm.tools.read_file import read_file_tool
 from repoterm.tools.run_command import run_command_tool
 from repoterm.tools.test_runner import test_runner_tool
 from repoterm.tools.write_file import write_file_tool
-from repoterm.types import (
+from repoterm.contracts.types import (
     AgentStep,
     ChatMessage,
     ModelAdapter,

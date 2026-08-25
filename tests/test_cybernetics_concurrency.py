@@ -11,9 +11,9 @@ import time
 
 import pytest
 
-from repoterm.feedback_controller import FeedbackController, PIDController, SystemState
-from repoterm.state_observer import KalmanFilter, MeasurementVector, StateObserver
-from repoterm.context_cybernetics import ContextPIDController
+from repoterm.runtime.control.feedback_controller import FeedbackController, PIDController, SystemState
+from repoterm.runtime.control.state_observer import KalmanFilter, MeasurementVector, StateObserver
+from repoterm.runtime.control.context_cybernetics import ContextPIDController
 
 
 # ── CONCURRENT STRESS ────────────────────────────────────────────────

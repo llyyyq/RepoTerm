@@ -1,9 +1,9 @@
 from copy import deepcopy
-from repoterm.agent_loop import STABLE_TASK_STATE_MARKER, run_agent_turn
-from repoterm.model_switcher import ModelSwitcher
-from repoterm.state import create_app_store
-from repoterm.tooling import ToolDefinition, ToolRegistry, ToolResult
-from repoterm.types import (
+from repoterm.runtime.loop import STABLE_TASK_STATE_MARKER, run_agent_turn
+from repoterm.providers.switching import ModelSwitcher
+from repoterm.contracts.state import create_app_store
+from repoterm.tools.registry import ToolDefinition, ToolRegistry, ToolResult
+from repoterm.contracts.types import (
     AgentStep,
     ChatMessage,
     ModelAdapter,
@@ -532,10 +532,10 @@ def test_agent_turn_switches_to_fallback_model_on_provider_channel_error(monkeyp
 
     monkeypatch.setenv("ANTHROPIC_MODEL_FALLBACKS", "qwen3.6-plus")
     monkeypatch.setattr(
-        "repoterm.model_switcher.build_provider_config",
+        "repoterm.providers.switching.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(api_key="test-key"),
     )
-    monkeypatch.setattr("repoterm.model_switcher.create_model_adapter", _fake_create_model_adapter)
+    monkeypatch.setattr("repoterm.providers.switching.create_model_adapter", _fake_create_model_adapter)
 
     messages = run_agent_turn(
         model=ProviderUnavailableModel(),
@@ -562,10 +562,10 @@ def test_agent_turn_does_not_bounce_between_failed_provider_fallback_models(monk
 
     monkeypatch.setenv("ANTHROPIC_MODEL_FALLBACKS", "claude-haiku-3-20240307")
     monkeypatch.setattr(
-        "repoterm.model_switcher.build_provider_config",
+        "repoterm.providers.switching.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(api_key="test-key"),
     )
-    monkeypatch.setattr("repoterm.model_switcher.create_model_adapter", _failing_create_model_adapter)
+    monkeypatch.setattr("repoterm.providers.switching.create_model_adapter", _failing_create_model_adapter)
 
     messages = run_agent_turn(
         model=NamedProviderUnavailableModel("deepseek-v4-pro[1m]"),
@@ -600,14 +600,14 @@ def test_agent_turn_respects_runtime_anthropic_family_model_overrides(monkeypatc
 
     monkeypatch.delenv("ANTHROPIC_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "repoterm.model_switcher.build_provider_config",
+        "repoterm.providers.switching.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="test-key"
             if model.startswith("claude") or model == "deepseek-v4-pro[1m]"
             else ""
         ),
     )
-    monkeypatch.setattr("repoterm.model_switcher.create_model_adapter", _failing_create_model_adapter)
+    monkeypatch.setattr("repoterm.providers.switching.create_model_adapter", _failing_create_model_adapter)
 
     messages = run_agent_turn(
         model=NamedProviderUnavailableModel("deepseek-v4-pro[1m]"),
@@ -636,7 +636,7 @@ def test_model_switcher_uses_snapshotted_anthropic_family_overrides_when_runtime
 
     monkeypatch.delenv("ANTHROPIC_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "repoterm.model_switcher.build_provider_config",
+        "repoterm.providers.switching.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="test-key"
             if model.startswith("claude") or model == "deepseek-v4-pro[1m]"
@@ -664,7 +664,7 @@ def test_model_switcher_defaults_blank_anthropic_family_overrides_to_current_non
 
     monkeypatch.delenv("ANTHROPIC_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "repoterm.model_switcher.build_provider_config",
+        "repoterm.providers.switching.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="test-key"
             if model.startswith("claude") or model == "deepseek-v4-pro[1m]"
@@ -692,14 +692,14 @@ def test_agent_turn_infers_active_runtime_model_when_adapter_has_no_model_id(mon
 
     monkeypatch.delenv("ANTHROPIC_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "repoterm.model_switcher.build_provider_config",
+        "repoterm.providers.switching.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="test-key"
             if model.startswith("claude") or model == "deepseek-v4-pro[1m]"
             else ""
         ),
     )
-    monkeypatch.setattr("repoterm.model_switcher.create_model_adapter", _failing_create_model_adapter)
+    monkeypatch.setattr("repoterm.providers.switching.create_model_adapter", _failing_create_model_adapter)
 
     messages = run_agent_turn(
         model=UnnamedProviderUnavailableModel("deepseek-v4-pro[1m]"),
@@ -725,13 +725,13 @@ def test_model_switcher_prefers_runtime_configured_fallback_models(monkeypatch) 
     monkeypatch.delenv("REPOTERM_MODEL_FALLBACKS", raising=False)
     monkeypatch.delenv("OPENAI_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "repoterm.model_switcher.build_provider_config",
+        "repoterm.providers.switching.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="test-key" if model == "gpt-4o" else ""
         ),
     )
     monkeypatch.setattr(
-        "repoterm.model_switcher.create_model_adapter",
+        "repoterm.providers.switching.create_model_adapter",
         lambda model, tools, runtime=None, force_mock=False: created_models.append(model) or object(),
     )
 
@@ -762,12 +762,12 @@ def test_agent_turn_uses_default_runtime_fallback_chain_without_explicit_configu
     monkeypatch.delenv("REPOTERM_MODEL_FALLBACKS", raising=False)
     monkeypatch.delenv("ANTHROPIC_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "repoterm.model_switcher.build_provider_config",
+        "repoterm.providers.switching.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="test-key" if model in {"gpt-4o", "gpt-4o-mini", "deepseek-v4-pro[1m]"} else ""
         ),
     )
-    monkeypatch.setattr("repoterm.model_switcher.create_model_adapter", _fake_create_model_adapter)
+    monkeypatch.setattr("repoterm.providers.switching.create_model_adapter", _fake_create_model_adapter)
 
     messages = run_agent_turn(
         model=ProviderUnavailableModel(),
@@ -798,7 +798,7 @@ def test_model_switcher_bounds_custom_openai_host_fallbacks(monkeypatch) -> None
     monkeypatch.delenv("REPOTERM_MODEL_FALLBACKS", raising=False)
     monkeypatch.delenv("OPENAI_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "repoterm.model_switcher.build_provider_config",
+        "repoterm.providers.switching.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="openai-key",
             base_url="https://www.cctq.ai",
@@ -827,7 +827,7 @@ def test_model_switcher_probes_provider_exposed_models_on_custom_openai_host(mon
     monkeypatch.delenv("REPOTERM_MODEL_FALLBACKS", raising=False)
     monkeypatch.delenv("OPENAI_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "repoterm.model_switcher.build_provider_config",
+        "repoterm.providers.switching.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="openai-key",
             base_url="https://www.cctq.ai",
@@ -847,7 +847,7 @@ def test_model_switcher_probes_provider_exposed_models_on_custom_openai_host(mon
             "gpt-4o-audio-preview",
         )
 
-    monkeypatch.setattr("repoterm.model_switcher.probe_openai_exposed_models", _fake_probe)
+    monkeypatch.setattr("repoterm.providers.switching.probe_openai_exposed_models", _fake_probe)
 
     switcher = ModelSwitcher(
         current_model="gpt5.5",
@@ -866,14 +866,14 @@ def test_agent_turn_provider_outage_guidance_prefers_provider_exposed_models_whe
     monkeypatch.delenv("REPOTERM_MODEL_FALLBACKS", raising=False)
     monkeypatch.delenv("OPENAI_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "repoterm.model_switcher.build_provider_config",
+        "repoterm.providers.switching.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="openai-key",
             base_url="https://www.cctq.ai",
         ),
     )
     monkeypatch.setattr(
-        "repoterm.model_switcher.create_model_adapter",
+        "repoterm.providers.switching.create_model_adapter",
         lambda model, tools, runtime=None, force_mock=False: NamedProviderUnavailableModel(model),
     )
 
@@ -911,7 +911,7 @@ def test_model_switcher_bounds_custom_openai_host_fallbacks_with_legacy_api_base
     monkeypatch.delenv("REPOTERM_MODEL_FALLBACKS", raising=False)
     monkeypatch.delenv("OPENAI_MODEL_FALLBACKS", raising=False)
     monkeypatch.setattr(
-        "repoterm.model_switcher.build_provider_config",
+        "repoterm.providers.switching.build_provider_config",
         lambda model, runtime=None: SimpleNamespace(
             api_key="openai-key",
             api_base_url="https://www.cctq.ai",

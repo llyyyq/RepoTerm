@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repoterm.agent_loop import _record_implicit_preference_signal, run_agent_turn
-from repoterm.agent_reflection import ReflectionEngine
+from repoterm.runtime.loop import _record_implicit_preference_signal, run_agent_turn
+from repoterm.runtime.reflection import ReflectionEngine
 from repoterm.memory import MemoryService, Status
-from repoterm.tooling import ToolRegistry
-from repoterm.turn_kernel import TurnRecurrentState, classify_tool_result
-from repoterm.types import AgentStep, ModelAdapter
+from repoterm.tools.registry import ToolRegistry
+from repoterm.runtime.turn_kernel import TurnRecurrentState, classify_tool_result
+from repoterm.contracts.types import AgentStep, ModelAdapter
 
 
 def test_injector_is_idempotent_for_one_turn(tmp_path: Path) -> None:
