@@ -20,22 +20,22 @@ RUNTIME_LIFECYCLE_ENTRIES = (
     RuntimeLifecycleEntry(
         name="interactive-cli",
         scriptName="repoterm",
-        moduleTarget="repoterm.main:main",
-        commandSurface="python -m repoterm.main",
+        moduleTarget="repoterm.app.interactive:main",
+        commandSurface="python -m repoterm.app.interactive",
         lifecycleRole="interactive product app lifecycle",
     ),
     RuntimeLifecycleEntry(
         name="headless-runner",
         scriptName="repoterm-headless",
-        moduleTarget="repoterm.headless:main",
-        commandSurface="python -m repoterm.headless",
+        moduleTarget="repoterm.app.headless:main",
+        commandSurface="python -m repoterm.app.headless",
         lifecycleRole="non-interactive automation lifecycle",
     ),
     RuntimeLifecycleEntry(
         name="readiness-checker",
         scriptName="repoterm-readiness",
-        moduleTarget="repoterm.readiness:main",
-        commandSurface="python -m repoterm.readiness",
+        moduleTarget="repoterm.app.readiness:main",
+        commandSurface="python -m repoterm.app.readiness",
         lifecycleRole="provider readiness diagnostic lifecycle",
     ),
 )
