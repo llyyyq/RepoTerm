@@ -6,8 +6,8 @@ import tarfile
 import zipfile
 from pathlib import Path
 
-from repoterm.tooling import ToolDefinition, ToolContext, ToolResult
-from repoterm.workspace import resolve_tool_path
+from repoterm.tools.registry import ToolDefinition, ToolContext, ToolResult
+from repoterm.safety.workspace import resolve_tool_path
 
 
 def _resolve_archive_member(destination: Path, member_name: str) -> Path:

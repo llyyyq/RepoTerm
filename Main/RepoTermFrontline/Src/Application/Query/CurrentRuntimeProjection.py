@@ -22,11 +22,11 @@ class RuntimeEntryProjection:
 
 
 _ENTRY_EVIDENCE_PATHS = {
-    "interactive-cli": "repoterm/main.py",
-    "headless-runner": "repoterm/headless.py",
-    "readiness-checker": "repoterm/readiness.py",
-    "local-command-surface": "repoterm/cli_commands.py",
-    "product-snapshot": "repoterm/product_surfaces.py",
+    "interactive-cli": "repoterm/app/interactive.py",
+    "headless-runner": "repoterm/app/headless.py",
+    "readiness-checker": "repoterm/app/readiness.py",
+    "local-command-surface": "repoterm/ui/commands.py",
+    "product-snapshot": "repoterm/runtime/surfaces.py",
 }
 
 

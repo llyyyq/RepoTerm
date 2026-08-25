@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from repoterm.tooling import ToolDefinition, ToolResult
+from repoterm.tools.registry import ToolDefinition, ToolResult
 
 # In-memory task storage (resets per session)
 _tasks = []

@@ -1,4 +1,4 @@
-from repoterm.model_registry import (
+from repoterm.providers.registry import (
     ModelSelectionController,
     ModelSelectionSignal,
     ReasoningEffort,

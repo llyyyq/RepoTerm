@@ -13,29 +13,29 @@
     "entrySurfaces": [
       {
         "name": "interactive-cli",
-        "path": "repoterm/main.py",
+        "path": "repoterm/app/interactive.py",
         "script": "repoterm",
         "result": "interactive terminal coding session"
       },
       {
         "name": "headless-runner",
-        "path": "repoterm/headless.py",
+        "path": "repoterm/app/headless.py",
         "script": "repoterm-headless",
         "result": "single prompt automation run"
       },
       {
         "name": "local-command-surface",
-        "path": "repoterm/cli_commands.py",
+        "path": "repoterm/ui/commands.py",
         "result": "slash-command entry surface for session, replay, rewind, readiness, and extensions"
       },
       {
         "name": "product-surfaces",
-        "path": "repoterm/product_surfaces.py",
+        "path": "repoterm/runtime/surfaces.py",
         "result": "instruction, hook, delegation, extension, and readiness snapshot"
       },
       {
         "name": "readiness-gate",
-        "path": "repoterm/readiness.py",
+        "path": "repoterm/app/readiness.py",
         "script": "repoterm-readiness",
         "result": "standalone provider/runtime readiness gate with warning and blocked thresholds"
       }
@@ -312,7 +312,7 @@
       "callerSummary": "Prompt surfaces still point users at superpowers-zh installation; docs also retain it as support material.",
       "currentCallers": [
         {
-          "path": "repoterm/prompt.py",
+          "path": "repoterm/runtime/planning/prompt.py",
           "reason": "product prompt suggests installing skills via npx superpowers-zh"
         },
         {
@@ -485,13 +485,13 @@
     },
     {
       "name": "structure-compliance",
-      "command": "python -m repoterm.structure_check --root . --hotspots 5 --max-dependency-upstream 4 --check-material-inventory --report .temp/structure-compliance.json",
-      "portableFallback": "python3 -m repoterm.structure_check --root . --hotspots 5 --max-dependency-upstream 4 --check-material-inventory --report .temp/structure-compliance.json"
+      "command": "python -m repoterm.app.structure_check --root . --hotspots 5 --max-dependency-upstream 4 --check-material-inventory --report .temp/structure-compliance.json",
+      "portableFallback": "python3 -m repoterm.app.structure_check --root . --hotspots 5 --max-dependency-upstream 4 --check-material-inventory --report .temp/structure-compliance.json"
     },
     {
       "name": "readiness-gate",
-      "command": "python -m repoterm.readiness --json --fail-on blocked",
-      "portableFallback": "python3 -m repoterm.readiness --json --fail-on blocked"
+      "command": "python -m repoterm.app.readiness --json --fail-on blocked",
+      "portableFallback": "python3 -m repoterm.app.readiness --json --fail-on blocked"
     }
   ]
 }

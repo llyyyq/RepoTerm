@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from repoterm.openai_adapter import (
+from repoterm.providers.openai import (
     DEFAULT_OPENAI_USER_AGENT,
     OpenAIModelAdapter,
 )

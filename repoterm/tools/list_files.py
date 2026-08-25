@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repoterm.tooling import ToolDefinition, ToolResult
-from repoterm.workspace import resolve_tool_path
+from repoterm.tools.registry import ToolDefinition, ToolResult
+from repoterm.safety.workspace import resolve_tool_path
 
 
 def _validate(input_data: dict) -> dict:

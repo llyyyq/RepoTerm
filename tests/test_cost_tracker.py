@@ -2,7 +2,7 @@
 
 import pytest
 
-from repoterm.cost_tracker import calculate_cost
+from repoterm.observability.cost import calculate_cost
 
 
 @pytest.mark.parametrize(

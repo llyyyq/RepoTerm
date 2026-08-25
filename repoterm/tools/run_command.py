@@ -8,9 +8,9 @@ import subprocess
 import sys
 from typing import Sequence
 
-from repoterm.background_tasks import register_background_shell_task
-from repoterm.tooling import ToolDefinition, ToolResult
-from repoterm.workspace import resolve_tool_path
+from repoterm.tools.background import register_background_shell_task
+from repoterm.tools.registry import ToolDefinition, ToolResult
+from repoterm.safety.workspace import resolve_tool_path
 
 # 命令执行超时（秒）- 5 分钟
 COMMAND_TIMEOUT = 300

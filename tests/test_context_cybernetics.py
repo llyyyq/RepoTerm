@@ -17,7 +17,7 @@ import pytest
 
 TEST_WORKSPACE = Path(__file__).resolve().parents[1] / ".temp" / "test-tool-results"
 
-from repoterm.context_cybernetics import (
+from repoterm.runtime.control.context_cybernetics import (
     AnomalyType,
     ContextCyberneticsOrchestrator,
     ContextPIDController,
@@ -30,7 +30,7 @@ from repoterm.context_cybernetics import (
     AdaptiveThresholdManager,
     CompactionStrategySelector,
 )
-from repoterm.context_compactor import (
+from repoterm.context.compactor import (
     AutoCompactConfig,
     CompactStrategy,
     CompactTrigger,

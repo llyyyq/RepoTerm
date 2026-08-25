@@ -14,10 +14,10 @@ dependencies = []
 dev = ["pytest>=8.0.0", "hypothesis>=6.0.0", "setuptools>=68"]
 
 [project.scripts]
-repoterm = "repoterm.main:main"
-repoterm-headless = "repoterm.headless:main"
-repoterm-readiness = "repoterm.readiness:main"
-repoterm-structure-check = "repoterm.structure_check:main"
+repoterm = "repoterm.app.interactive:main"
+repoterm-headless = "repoterm.app.headless:main"
+repoterm-readiness = "repoterm.app.readiness:main"
+repoterm-structure-check = "repoterm.app.structure_check:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

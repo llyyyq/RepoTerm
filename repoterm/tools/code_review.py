@@ -4,8 +4,8 @@ import ast
 import os
 from pathlib import Path
 from typing import Any
-from repoterm.tooling import ToolDefinition, ToolResult
-from repoterm.workspace import resolve_tool_path
+from repoterm.tools.registry import ToolDefinition, ToolResult
+from repoterm.safety.workspace import resolve_tool_path
 
 
 # ---------------------------------------------------------------------------

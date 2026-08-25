@@ -8,8 +8,8 @@ import pytest
 
 import repoterm.tools.test_runner as test_runner_module
 import repoterm.tools.run_command as run_command_module
-import repoterm.session as session_module
-from repoterm.permissions import PermissionManager
+import repoterm.session.service as session_module
+from repoterm.safety.permissions import PermissionManager
 from repoterm.session import create_new_session, load_session
 from repoterm.tools.batch_ops import batch_copy_tool, batch_move_tool
 from repoterm.tools.code_nav import find_references_tool, find_symbols_tool, get_ast_info_tool
@@ -21,7 +21,7 @@ from repoterm.tools.archive_utils import tar_extract_tool, zip_extract_tool
 from repoterm.tools.run_command import run_command_tool
 from repoterm.tools.test_runner import test_runner_tool
 from repoterm.tools.write_file import write_file_tool
-from repoterm.tooling import ToolContext
+from repoterm.tools.registry import ToolContext
 from repoterm.tools import create_default_tool_registry
 
 

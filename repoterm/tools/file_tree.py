@@ -3,8 +3,8 @@ from __future__ import annotations
 import time
 from datetime import datetime
 from pathlib import Path
-from repoterm.tooling import ToolDefinition, ToolResult
-from repoterm.workspace import resolve_tool_path
+from repoterm.tools.registry import ToolDefinition, ToolResult
+from repoterm.safety.workspace import resolve_tool_path
 
 
 # ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from repoterm.llm_e2e_eval import (
+from benchmarks.evaluation.llm_e2e import (
     EvaluationPermissionPolicy,
     SimulatedInterruption,
     TraceRecorder,
@@ -16,7 +16,7 @@ from repoterm.llm_e2e_eval import (
     run_fixture_preflight,
     run_single_live_task,
 )
-from repoterm.types import AgentStep
+from repoterm.contracts.types import AgentStep
 
 
 class _DummyModel:
@@ -225,7 +225,7 @@ def test_single_task_harness_crosses_real_agent_loop_tools_trace_and_graders(
 ):
     scripted_model = _ScriptedRepositoryModel()
     monkeypatch.setattr(
-        "repoterm.llm_e2e_eval._new_model",
+        "benchmarks.evaluation.llm_e2e._new_model",
         lambda runtime, tools: scripted_model,
     )
 

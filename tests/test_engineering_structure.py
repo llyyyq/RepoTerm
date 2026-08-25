@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from repoterm.engineering_structure import (
+from repoterm.app.engineering_structure import (
     ROOT_PROJECT_ID,
     check_product_project_compliance,
     scan_product_project_root,
     summarize_structure_projection,
 )
-from repoterm.structure_check import check_material_inventory
-from repoterm.structure_check import main as structure_check_main
+from repoterm.app.structure_check import check_material_inventory
+from repoterm.app.structure_check import main as structure_check_main
 from Package.EngineeringStructure.Src.Application.Query.ProductRootProjection import (
     scan_product_project_root as scan_product_project_root_from_package,
 )

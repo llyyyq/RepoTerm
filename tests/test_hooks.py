@@ -1,10 +1,10 @@
-"""Tests for repoterm.hooks — event-driven hook system."""
+"""Tests for repoterm.runtime.hooks — event-driven hook system."""
 
 from __future__ import annotations
 
 import pytest
 
-from repoterm.hooks import (
+from repoterm.runtime.hooks import (
     HookContext,
     HookEvent,
     HookManager,

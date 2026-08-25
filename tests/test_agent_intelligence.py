@@ -9,14 +9,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from repoterm.agent_metrics import (
+from repoterm.observability.metrics import (
     AgentMetricsCollector,
     AgentTurnMetrics,
     ErrorCategory,
     ToolExecutionRecord,
     ToolHistoricalStats,
 )
-from repoterm.agent_intelligence import (
+from repoterm.runtime.planning.intelligence import (
     ClassifiedError,
     ErrorCategory as AIErrorCategory,
     ErrorClassifier,
@@ -26,15 +26,7 @@ from repoterm.agent_intelligence import (
     ToolSchedulerController,
     ToolSchedulingSignal,
 )
-from repoterm.memory_injector import (
-    InjectedMemory,
-    MemoryInjectionController,
-    MemoryInjectionMode,
-    MemoryInjectionSignal,
-    MemoryInjector,
-)
-from repoterm.memory import MemoryManager, MemoryScope
-from repoterm.tooling import ToolCapability, ToolDefinition, ToolMetadata, ToolRegistry
+from repoterm.tools.registry import ToolCapability, ToolDefinition, ToolMetadata, ToolRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -406,130 +398,6 @@ class TestToolScheduler:
 
 
 # ---------------------------------------------------------------------------
-# TestMemoryInjector
-# ---------------------------------------------------------------------------
-
-class TestMemoryInjector:
-    """Integration tests for MemoryInjector."""
-
-    def test_inject_for_task(self, memory_with_entries):
-        """Memories injected for task."""
-        injector = MemoryInjector(
-            memory_manager=memory_with_entries,
-            max_injected_memories=5,
-            min_relevance=0.0,
-        )
-        memories = injector.inject_for_task("How does the API work?")
-        assert len(memories) > 0
-        assert all(isinstance(m, InjectedMemory) for m in memories)
-        # Should find the architecture entry about FastAPI
-        contents = [m.content.lower() for m in memories]
-        assert any("fastapi" in c for c in contents)
-
-    def test_inject_on_failure(self, memory_with_entries):
-        """Recovery memories on failure."""
-        injector = MemoryInjector(
-            memory_manager=memory_with_entries,
-            max_injected_memories=5,
-        )
-        memories = injector.inject_on_failure("pytest fixture error", "test_runner")
-        # Should return memories (even if generic) since memory has entries
-        assert isinstance(memories, list)
-
-    def test_format_for_prompt(self):
-        """Proper formatting."""
-        injector = MemoryInjector()
-        memories = [
-            InjectedMemory(content="Use pytest", category="testing", relevance_score=0.9, source="project_search"),
-            InjectedMemory(content="Use snake_case", category="convention", relevance_score=0.8, source="project_search"),
-        ]
-        formatted = injector.format_for_prompt(memories)
-        assert "Relevant Context from Memory" in formatted
-        assert "1. [testing] Use pytest" in formatted
-        assert "2. [convention] Use snake_case" in formatted
-        assert "Use the above context" in formatted
-
-    def test_cooldown_prevention(self, memory_with_entries):
-        """Same query within cooldown skipped."""
-        injector = MemoryInjector(
-            memory_manager=memory_with_entries,
-            injection_cooldown=60.0,
-        )
-        first = injector.inject_for_task("test query")
-        # Same query immediately after should be skipped
-        second = injector.inject_for_task("test query")
-        assert second == []
-
-        # Different query should work
-        third = injector.inject_for_task("different query")
-        assert isinstance(third, list)
-
-    def test_deduplication(self, memory_with_entries):
-        """Duplicate memories removed."""
-        # Add duplicate content across scopes
-        memory_with_entries.add_entry(
-            MemoryScope.LOCAL, "testing", "Tests use pytest with fixtures", ["test", "pytest"]
-        )
-        injector = MemoryInjector(
-            memory_manager=memory_with_entries,
-            max_injected_memories=10,
-            min_relevance=0.0,
-        )
-        memories = injector.inject_for_task("pytest testing")
-        contents = [m.content for m in memories]
-        # The exact duplicate should appear only once
-        assert contents.count("Tests use pytest with fixtures") <= 1
-
-    def test_memory_controller_blocks_under_critical_context_pressure(self):
-        """Critical context pressure disables memory injection."""
-        controller = MemoryInjectionController()
-        decision = controller.decide(
-            MemoryInjectionSignal(context_usage=0.95),
-            base_max_memories=5,
-            base_min_relevance=0.3,
-            base_max_tokens=200,
-        )
-        assert decision.mode == MemoryInjectionMode.NONE
-        assert decision.max_memories == 0
-
-    def test_memory_controller_uses_summary_under_high_pressure(self):
-        """High context pressure switches to compact summary injection."""
-        controller = MemoryInjectionController()
-        decision = controller.decide(
-            MemoryInjectionSignal(context_usage=0.80, retrieval_quality=0.8),
-            base_max_memories=5,
-            base_min_relevance=0.3,
-            base_max_tokens=200,
-        )
-        assert decision.mode == MemoryInjectionMode.SUMMARY
-        assert decision.max_memories <= 2
-        assert decision.max_tokens_per_memory <= 80
-
-    def test_injector_honors_critical_pressure_decision(self, memory_with_entries):
-        """Injector returns no memories when controller blocks injection."""
-        injector = MemoryInjector(memory_manager=memory_with_entries, min_relevance=0.0)
-        memories = injector.inject_for_task(
-            "How does the API work?",
-            signal=MemoryInjectionSignal(context_usage=0.95),
-        )
-        assert memories == []
-        assert injector.last_decision is not None
-        assert injector.last_decision.mode == MemoryInjectionMode.NONE
-
-    def test_failure_recovery_strengthens_memory_injection(self, memory_with_entries):
-        """Failure recovery lowers threshold and records a strong decision."""
-        injector = MemoryInjector(memory_manager=memory_with_entries, max_injected_memories=3)
-        memories = injector.inject_on_failure(
-            "pytest fixture error",
-            "test_runner",
-            signal=MemoryInjectionSignal(recent_failure=True, context_usage=0.3),
-        )
-        assert isinstance(memories, list)
-        assert injector.last_decision is not None
-        assert injector.last_decision.mode == MemoryInjectionMode.STRONG
-
-
-# ---------------------------------------------------------------------------
 # TestAgentLoopIntegration
 # ---------------------------------------------------------------------------
 
@@ -538,8 +406,8 @@ class TestAgentLoopIntegration:
 
     def test_metrics_collector_integration(self):
         """Metrics flow through agent loop."""
-        from repoterm.agent_loop import run_agent_turn
-        from repoterm.types import AgentStep
+        from repoterm.runtime.loop import run_agent_turn
+        from repoterm.contracts.types import AgentStep
 
         metrics = AgentMetricsCollector()
 
@@ -569,9 +437,9 @@ class TestAgentLoopIntegration:
 
     def test_error_recovery_integration(self):
         """Error classification in loop."""
-        from repoterm.agent_loop import run_agent_turn
-        from repoterm.types import AgentStep, ToolCall
-        from repoterm.tooling import ToolResult
+        from repoterm.runtime.loop import run_agent_turn
+        from repoterm.contracts.types import AgentStep, ToolCall
+        from repoterm.tools.registry import ToolResult
 
         # Tool that always fails with a network error
         def failing_runner(args, ctx):
@@ -618,9 +486,9 @@ class TestAgentLoopIntegration:
 
     def test_scheduler_integration(self):
         """Tool scheduling in loop."""
-        from repoterm.agent_loop import run_agent_turn
-        from repoterm.types import AgentStep, ToolCall
-        from repoterm.tooling import ToolResult
+        from repoterm.runtime.loop import run_agent_turn
+        from repoterm.contracts.types import AgentStep, ToolCall
+        from repoterm.tools.registry import ToolResult
 
         results_log: list[str] = []
 

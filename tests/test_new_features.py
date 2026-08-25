@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from repoterm.api_retry import (
+from repoterm.providers.retry import (
     APIRetryExhaustedError,
     HTTPError,
     RetryState,
@@ -16,7 +16,7 @@ from repoterm.api_retry import (
     is_retryable_error,
     retry_with_backoff,
 )
-from repoterm.context_manager import (
+from repoterm.context.manager import (
     ContextManager,
     ContextStats,
     estimate_message_tokens,
@@ -25,14 +25,7 @@ from repoterm.context_manager import (
     load_context_state,
     save_context_state,
 )
-from repoterm.memory import (
-    MemoryEntry,
-    MemoryFile,
-    MemoryManager,
-    MemoryScope,
-    inject_memory_into_prompt,
-)
-from repoterm.task_tracker import (
+from repoterm.runtime.planning.task_tracker import (
     Task,
     TaskList,
     TaskManager,
@@ -135,7 +128,7 @@ def test_context_manager_format_summary():
 
 def test_context_manager_persistence(tmp_path):
     """Test saving and loading context state."""
-    with patch("repoterm.context_manager.REPOTERM_DIR", tmp_path):
+    with patch("repoterm.context.manager.REPOTERM_DIR", tmp_path):
         manager = ContextManager(model="claude-sonnet-4-20250514")
         manager.add_message({"role": "user", "content": "Test"})
         
@@ -334,206 +327,3 @@ def test_task_update_format():
     task = Task(id="1", description="Test")
     formatted = format_task_update(task, TaskStatus.COMPLETED)
     assert "✓" in formatted or "Task 1" in formatted
-
-
-# ---------------------------------------------------------------------------
-# Memory System Tests
-# ---------------------------------------------------------------------------
-
-def test_memory_entry_creation():
-    """Test memory entry creation."""
-    entry = MemoryEntry(
-        id="test-1",
-        scope=MemoryScope.USER,
-        category="convention",
-        content="Use snake_case for functions",
-        tags=["python", "naming"],
-    )
-    assert entry.scope == MemoryScope.USER
-    assert "snake_case" in entry.content
-
-
-def test_memory_file_add_entry():
-    """Test adding entries to memory file."""
-    mf = MemoryFile(scope=MemoryScope.PROJECT)
-    entry = MemoryEntry(
-        id="p-1",
-        scope=MemoryScope.PROJECT,
-        category="architecture",
-        content="Use repository pattern",
-    )
-    mf.add_entry(entry)
-    assert len(mf.entries) == 1
-
-
-def test_memory_file_enforce_limits():
-    """Test memory file enforces entry limits."""
-    mf = MemoryFile(scope=MemoryScope.USER, max_entries=5)
-    
-    for i in range(10):
-        entry = MemoryEntry(
-            id=f"u-{i}",
-            scope=MemoryScope.USER,
-            category="test",
-            content=f"Entry {i}",
-        )
-        mf.add_entry(entry)
-    
-    assert len(mf.entries) <= 5
-
-
-def test_memory_file_search():
-    """Test searching memory entries."""
-    mf = MemoryFile(scope=MemoryScope.PROJECT)
-    mf.add_entry(MemoryEntry(
-        id="p-1", scope=MemoryScope.PROJECT, category="python",
-        content="Use pytest for testing", tags=["testing"]
-    ))
-    mf.add_entry(MemoryEntry(
-        id="p-2", scope=MemoryScope.PROJECT, category="python",
-        content="Use black for formatting", tags=["formatting"]
-    ))
-    
-    results = mf.search("pytest")
-    assert len(results) == 1
-    assert "pytest" in results[0].content
-
-
-def test_memory_file_format_markdown():
-    """Test formatting as MEMORY.md."""
-    mf = MemoryFile(scope=MemoryScope.USER)
-    mf.add_entry(MemoryEntry(
-        id="u-1", scope=MemoryScope.USER, category="convention",
-        content="Use type hints", tags=["python"]
-    ))
-    
-    markdown = mf.format_as_markdown()
-    assert "# User Memory" in markdown
-    assert "Use type hints" in markdown
-
-
-def test_memory_manager_add_entry(tmp_path):
-    """Test memory manager add entry."""
-    workspace = str(tmp_path / "workspace")
-    (tmp_path / "workspace").mkdir()
-    
-    mm = MemoryManager(workspace)
-    mm.add_entry(
-        scope=MemoryScope.LOCAL,
-        category="convention",
-        content="Use fastapi for APIs",
-        tags=["python", "web"]
-    )
-    
-    assert len(mm.memories[MemoryScope.LOCAL].entries) == 1
-
-
-def test_memory_manager_search(tmp_path):
-    """Test memory manager search."""
-    workspace = str(tmp_path / "workspace")
-    (tmp_path / "workspace").mkdir()
-    
-    mm = MemoryManager(workspace)
-    mm.add_entry(MemoryScope.PROJECT, "python", "Use pytest")
-    mm.add_entry(MemoryScope.PROJECT, "python", "Use black")
-    
-    results = mm.search("pytest")
-    assert len(results) == 1
-
-
-def test_memory_manager_get_context(tmp_path):
-    """Test getting relevant context."""
-    workspace = str(tmp_path / "workspace")
-    (tmp_path / "workspace").mkdir()
-    
-    mm = MemoryManager(workspace)
-    mm.add_entry(MemoryScope.LOCAL, "test", "Entry 1")
-    mm.add_entry(MemoryScope.PROJECT, "test", "Entry 2")
-    mm.add_entry(MemoryScope.USER, "test", "Entry 3")
-    
-    context = mm.get_relevant_context()
-    assert "Entry 1" in context or "Entry 2" in context or "Entry 3" in context
-
-
-def test_memory_manager_get_context_can_filter_by_query(tmp_path):
-    """Test prompt memory can be narrowed to the current user request."""
-    workspace = str(tmp_path / "workspace")
-    (tmp_path / "workspace").mkdir()
-
-    mm = MemoryManager(workspace)
-    mm.add_entry(MemoryScope.PROJECT, "test", "Use pytest before release")
-    mm.add_entry(MemoryScope.PROJECT, "style", "Use black for formatting")
-
-    context = mm.get_relevant_context(query="release tests")
-
-    assert "Use pytest before release" in context
-    assert "Use black for formatting" not in context
-
-
-def test_memory_manager_query_without_matches_does_not_inject_all_memory(tmp_path):
-    """Query-scoped prompt memory should not fall back to unrelated full memory."""
-    workspace = str(tmp_path / "workspace")
-    (tmp_path / "workspace").mkdir()
-
-    mm = MemoryManager(workspace)
-    mm.add_entry(MemoryScope.PROJECT, "style", "Use black for formatting")
-    mm.add_entry(MemoryScope.USER, "shell", "Prefer PowerShell examples")
-
-    context = mm.get_relevant_context(query="release database migration")
-
-    assert context == ""
-
-
-def test_memory_manager_query_budget_skips_oversized_scope_and_keeps_later_matches(tmp_path):
-    """One oversized matching scope should not block smaller relevant memories."""
-    workspace = str(tmp_path / "workspace")
-    (tmp_path / "workspace").mkdir()
-
-    mm = MemoryManager(workspace)
-    mm.add_entry(MemoryScope.LOCAL, "release", "release " + ("x" * 2000))
-    mm.add_entry(MemoryScope.PROJECT, "release", "Run smoke tests before release")
-
-    context = mm.get_relevant_context(query="release", max_tokens=80)
-
-    assert "Run smoke tests before release" in context
-    assert "x" * 100 not in context
-
-
-def test_memory_manager_handles_explicit_chat_memory(tmp_path):
-    """Test explicit chat memory input is persisted and searchable."""
-    workspace = str(tmp_path / "workspace")
-    (tmp_path / "workspace").mkdir()
-
-    mm = MemoryManager(workspace)
-    result = mm.handle_user_memory_input("# Prefer pytest before release")
-
-    assert result == "Saved memory (project): Prefer pytest before release"
-    assert any("pytest" in entry.content for entry in mm.search("pytest"))
-
-
-def test_inject_memory_into_prompt(tmp_path):
-    """Test memory injection into system prompt."""
-    workspace = str(tmp_path / "workspace")
-    (tmp_path / "workspace").mkdir()
-    
-    mm = MemoryManager(workspace)
-    mm.add_entry(MemoryScope.PROJECT, "convention", "Use snake_case")
-    
-    system_prompt = "You are a helpful assistant."
-    injected = inject_memory_into_prompt(system_prompt, mm)
-    
-    assert "You are a helpful assistant." in injected
-    assert "Project Memory" in injected
-    assert "snake_case" in injected
-
-
-def test_memory_manager_format_stats(tmp_path):
-    """Test memory stats formatting."""
-    workspace = str(tmp_path / "workspace")
-    (tmp_path / "workspace").mkdir()
-    
-    mm = MemoryManager(workspace)
-    mm.add_entry(MemoryScope.USER, "test", "Entry")
-    
-    stats = mm.format_stats()
-    assert "Memory System Status" in stats

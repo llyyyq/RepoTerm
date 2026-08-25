@@ -18,13 +18,13 @@ try:
 except ImportError:
     pytest = None
 
-from repoterm.agent_intelligence import ErrorClassifier
-from repoterm.agent_loop import run_agent_turn
-from repoterm.agent_metrics import AgentMetricsCollector
-from repoterm.context_manager import ContextManager
+from repoterm.runtime.planning.intelligence import ErrorClassifier
+from repoterm.runtime.loop import run_agent_turn
+from repoterm.observability.metrics import AgentMetricsCollector
+from repoterm.context.manager import ContextManager
 from repoterm.memory import MemoryManager, MemoryScope
-from repoterm.tooling import ToolContext, ToolDefinition, ToolRegistry, ToolResult
-from repoterm.types import AgentStep, ChatMessage, ModelAdapter
+from repoterm.tools.registry import ToolContext, ToolDefinition, ToolRegistry, ToolResult
+from repoterm.contracts.types import AgentStep, ChatMessage, ModelAdapter
 
 
 class DelayedModel(ModelAdapter):
@@ -56,7 +56,7 @@ class ConcurrentToolRegistry:
         self._concurrent_max = 0
         self._current_executions = 0
         
-        from repoterm.tooling import ToolMetadata, ToolCapability
+        from repoterm.tools.registry import ToolMetadata, ToolCapability
         
         tools = []
         for i in range(num_tools):

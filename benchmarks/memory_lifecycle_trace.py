@@ -300,7 +300,7 @@ def render_markdown(report: dict[str, Any]) -> str:
 
 
 def write_reports(report: dict[str, Any], json_path: Path, markdown_path: Path) -> None:
-    from repoterm.evidence_safety import redact_sensitive_payload
+    from repoterm.safety.evidence import redact_sensitive_payload
 
     safe_report = redact_sensitive_payload(report)
     json_path.parent.mkdir(parents=True, exist_ok=True)

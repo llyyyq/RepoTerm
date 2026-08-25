@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-import repoterm.permissions as permissions_module
-from repoterm.permissions import PermissionManager, _classify_dangerous_command, _is_within_directory
+import repoterm.safety.permissions as permissions_module
+from repoterm.safety.permissions import PermissionManager, _classify_dangerous_command, _is_within_directory
 
 
 @pytest.fixture(autouse=True)

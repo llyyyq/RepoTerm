@@ -1,285 +1,426 @@
 # RepoTerm
 
-<p align="center">
-  <strong>面向本地代码仓库的终端 AI Coding Agent：运行过程可追踪，任务中断可恢复，工程行为可评测。</strong>
-</p>
+RepoTerm 是一个面向本地代码仓库的终端 AI Coding Agent。它把模型推理、结构化工具、上下文治理、受控文件编辑、会话恢复和任务验证组合到一个有边界的 Agent Turn 中。
 
-<p align="center">
-  <a href="./README.md">English</a>
-  ·
-  <a href="#core-highlights">核心亮点</a>
-  ·
-  <a href="#quick-start">快速开始</a>
-  ·
-  <a href="#architecture">Architecture</a>
-  ·
-  <a href="#implementation-index">实现索引</a>
-  ·
-  <a href="#evaluation">Evaluation</a>
-  ·
-  <a href="#runtime-flow">运行链路</a>
-  ·
-  <a href="#trace">Trace</a>
-  ·
-  <a href="#failure-recovery">Failure Recovery</a>
-  ·
-  <a href="#reproduce">Reproduce</a>
-</p>
+它定位为本地开发工具以及工程/研究实践项目。当前 Runtime 借鉴了终端 Coding Agent 的交互方式，不宣称可以完整替代 Claude Code 或其他同类产品。
 
-<p align="center">
-  <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white">
-  <img alt="Runtime regression" src="https://img.shields.io/badge/runtime%20regression-60%2F60-brightgreen?style=flat-square">
-  <img alt="Live E2E" src="https://img.shields.io/badge/live%20E2E-15%2F15-brightgreen?style=flat-square">
-</p>
+[English README](./README.md)
 
-<p align="center">
-  <img alt="Demo" src="./Docs/demo.gif" width="720">
-</p>
+## 快速导航
 
-RepoTerm 是一个面向本地代码仓库的 Python 终端 Coding Agent。项目参考 Claude Code 的核心交互模式，重点解决五类工程问题：Agent Turn 控制、上下文治理、工具运行时、安全编辑与会话恢复，以及分层 AgentOps 评测。
+- [核心能力](#core-highlights)
+- [快速开始](#quick-start)
+- [运行流程](#runtime-flow)
+- [架构](#architecture)
+- [评测](#evaluation)
+- [Trace](#trace)
+- [故障恢复](#failure-recovery)
+- [复现与验证](#reproduce)
+- [文档索引](#documentation-index)
 
-> README 中的数字只描述仓库内固定的受控任务集。确定性回归与真实模型评测验证的是不同故障面，不代表开放世界代码仓库任务成功率。
+<a id="core-highlights"></a>
+## Core Highlights（核心能力）
 
-AgentOps 评测快照：[`agentops-2026-07-28`](https://github.com/llyyyq/RepoTerm/tree/agentops-2026-07-28)。
+- **有界 Agent Turn：** 按 `explore → execute → verify` 推进任务，对可恢复错误和空响应进行有限处理，在步数耗尽时给出明确停止原因。
+- **结构化工具运行时：** `ToolDefinition` 和 `ToolRegistry` 负责发现、校验、执行、观察和释放工具；JSON Schema 与 Python validator 约束参数，失败统一为结构化 `ToolResult`。
+- **受控编辑：** 文件变更遵循 `Diff → 权限决策 → Checkpoint → 写入`，被拒绝的编辑不会创建 Checkpoint 或修改目标文件。
+- **上下文治理：** 优先使用 Provider usage，并在缺失时使用本地估算；根据压力执行微压缩、历史摘要和 `StableTaskPack` 保留。
+- **可恢复会话：** 通过完整 Snapshot 和增量 Delta 支持会话列表、inspect/replay、resume 以及受管文件 rewind。
+- **持久化记忆：** SQLite Memory Service 区分 active 记录、pending 候选、证据门禁、确定性检索和生命周期操作。
+- **证据化评测：** 确定性 Runtime 回归与受控真实模型 E2E 分开报告，并提供脱敏 Trace 和明确的 Grader。
 
-## Core Highlights
+<a id="quick-start"></a>
+## Quick Start（快速开始）
 
-- **分阶段 Agent Turn：** 以 `explore → execute → verify` 路由任务；检索停滞时扩大范围，缺少证据时拒绝结束，达到步数上限后安全终止——20 场景确定性回归（60/60）验证状态路由与安全检查逻辑。
-- **分层上下文治理：** 结合 Provider usage 与本地 Token 估算，对旧工具结果微压缩、对历史消息摘要压缩，并通过 `StableTaskPack` 保护任务关键状态——回归断言验证压缩后关键证据仍被保留。
-- **结构化工具运行时：** 使用 JSON Schema 与 Python validator 校验参数，将失败统一为 `ToolResult`，并从超长输出中保留 head/error/tail 证据——全部 26 个工具共享同一套 validate→dispatch→normalize→truncate 管道。
-- **受控写入与持久化恢复：** Diff 审查 → 权限决策 → Checkpoint → 文件写入；以全量 Snapshot + 增量 Delta 持久化会话——重复 resume 无状态漂移，rewind 可恢复受管文件。
-- **分层 AgentOps 评测：** 确定性 Runtime 回归（20 场景 × 3 轮 = 60/60）与真实模型端到端评测（5 类任务 × 3 轮 = 15/15，含 9/9 异常恢复），报告与脱敏 Trace 随仓库检入。
+### 环境要求
 
-## Quick Start
+- Python 3.11 或更高版本
+- Git
+- Live 模式需要配置模型和对应 Provider 凭据
 
-运行环境：Python 3.11+、Git。
+### 使用 venv 安装
 
 ```bash
 git clone https://github.com/llyyyq/RepoTerm.git
 cd RepoTerm
+python -m venv .venv
+```
+
+激活环境：
+
+```powershell
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+
+# Windows CMD
+.venv\Scripts\activate.bat
+```
+
+```bash
+# macOS / Linux
+source .venv/bin/activate
+```
+
+安装项目和开发依赖：
+
+```bash
 python -m pip install -e ".[dev]"
 ```
 
-通过交互式安装向导配置真实模型，然后启动 RepoTerm：
+### 使用 Conda 安装
+
+```bash
+conda create -n repoterm python=3.11
+conda activate repoterm
+python -m pip install -e ".[dev]"
+```
+
+### 配置 Provider
+
+Anthropic-compatible 配置可以直接使用交互式安装向导：
 
 ```bash
 repoterm --install
+```
+
+向导会询问模型、`ANTHROPIC_BASE_URL` 和 `ANTHROPIC_AUTH_TOKEN`，并将选择写入 `~/.repoterm/settings.json`。Runtime 也支持从当前进程环境变量或该 settings 文件读取 Provider 配置。对于 Anthropic-compatible Provider，`ANTHROPIC_API_KEY` 和 `ANTHROPIC_AUTH_TOKEN` 是两种可选认证变量，请根据服务端要求配置其中一种。
+
+`.env.example` 是本地配置模板。可以先复制后编辑，但本仓库不会自动加载 `.env`；请将需要的值导出到当前 Shell，或写入 `~/.repoterm/settings.json`。
+
+```powershell
+# Windows PowerShell
+Copy-Item .env.example .env
+$env:ANTHROPIC_MODEL = "your-model"
+$env:ANTHROPIC_API_KEY = "your-local-key"
+```
+
+```cmd
+:: Windows CMD
+copy .env.example .env
+set ANTHROPIC_MODEL=your-model
+set ANTHROPIC_API_KEY=your-local-key
+```
+
+```bash
+# macOS / Linux
+cp .env.example .env
+export ANTHROPIC_MODEL="your-model"
+export ANTHROPIC_API_KEY="your-local-key"
+```
+
+常用配置变量：
+
+| Provider 或行为 | 变量 |
+| --- | --- |
+| Anthropic-compatible | `ANTHROPIC_MODEL`、`ANTHROPIC_BASE_URL`、`ANTHROPIC_API_KEY` 或 `ANTHROPIC_AUTH_TOKEN` |
+| OpenAI | `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`OPENAI_MODEL_FALLBACKS` |
+| OpenRouter | `OPENROUTER_API_KEY`、`OPENROUTER_BASE_URL`、`OPENROUTER_MODEL_FALLBACKS` |
+| 自定义 OpenAI-compatible | `CUSTOM_API_KEY`、`CUSTOM_API_BASE_URL`、`CUSTOM_MODEL_FALLBACKS` |
+| Runtime | `REPOTERM_MODEL`、`REPOTERM_RUNTIME_PROFILE`、`REPOTERM_TOOL_PROFILE`、`REPOTERM_LOG_LEVEL` |
+| 限制参数 | `REPOTERM_MODEL_TIMEOUT`、`REPOTERM_TOOL_TIMEOUT`、`REPOTERM_MAX_RETRIES`、`REPOTERM_MAX_OUTPUT_TOKENS` |
+
+不要提交 `.env`、API Key、Token 或包含凭据的 settings 文件。
+
+### 启动 RepoTerm
+
+交互式 TTY 模式：
+
+```bash
 repoterm
 ```
 
-安装向导会把模型、API 地址和密钥保存到 `~/.repoterm/settings.json`。如果暂时没有模型凭据，可以用 mock 模式检查产品界面：
+也可以直接从源码启动：
 
 ```bash
-# PowerShell
-$env:REPOTERM_MODEL_MODE="mock"
-repoterm
+python -m repoterm.app.interactive
+```
 
+单次无界面任务：
+
+```bash
+repoterm-headless "请解释这个仓库的结构"
+```
+
+`repoterm-headless --allow-edits "..."` 会在本次运行中自动批准编辑、命令和工作区外访问。只有明确需要这种非交互行为时才使用该参数。
+
+不配置真实 Provider 时，可以强制使用 Mock Adapter 做本地冒烟：
+
+```powershell
+# PowerShell
+$env:REPOTERM_MODEL_MODE = "mock"
+repoterm
+```
+
+```bash
 # macOS / Linux
 REPOTERM_MODEL_MODE=mock repoterm
 ```
 
-进入 TUI 后，可以使用 `/help` 查看命令，使用 `/readiness` 检查 Provider 配置。
+进入 TUI 后输入 `/help` 查看命令。输入 `/exit` 或按 `Ctrl+C` 退出；TTY 清理路径会在正常退出和异常退出时恢复终端模式。
 
-## Architecture
+常用入口命令：
+
+```bash
+repoterm --readiness
+repoterm --readiness-json
+repoterm --validate-config
+repoterm --list-sessions
+repoterm --resume latest
+```
+
+<a id="runtime-flow"></a>
+## Runtime Flow（基本使用流程）
+
+1. 用户在 TTY UI 输入任务，或将任务作为 Headless 参数/标准输入提供。
+2. App 层创建或恢复 Session，并组合 Runtime、Provider、Tool、Permission、Context 和 Memory 服务。
+3. Runtime 在剩余步数预算内选择当前 `explore`、`execute` 或 `verify` 阶段。
+4. Model Adapter 返回文本或结构化工具调用。
+5. `ToolRegistry` 校验参数、执行工具、归一化结果并返回 `ToolResult`。
+6. Runtime 记录工具证据，更新上下文和控制状态，决定继续、恢复、widen、验证或停止。
+7. 任务以最终回答、暂停/错误状态或明确的安全停止原因结束。
+
+<a id="architecture"></a>
+## Architecture（架构）
 
 ```mermaid
 flowchart LR
-    User["用户 / TUI / Headless"] --> Prompt["指令 + 记忆 + 任务状态"]
-    Prompt --> Loop["Agent Loop"]
-    Loop --> Turn["Turn Kernel<br/>explore → execute → verify"]
-    Turn --> Adapter["Model Adapter<br/>真实模型或脚本模型"]
-    Adapter --> Calls["模型回答 / 工具调用"]
-    Calls --> Registry["ToolRegistry<br/>校验 → 调度 → 归一化"]
-    Registry --> Tools["文件 / 检索 / Shell / 测试工具"]
-    Tools --> Result["ToolResult"]
-    Result --> Context["上下文治理<br/>微压缩 / 摘要 / StableTaskPack"]
-    Context --> Loop
-    Registry --> SafeWrite["Diff → 权限 → Checkpoint → 写入"]
-    SafeWrite --> Session["Snapshot + Delta 会话存储"]
-    Loop --> Events["Runtime events + Transcript"]
-    Events --> Evidence["Trace 导出 + Grader + 报告"]
+    User[用户输入] --> App[App / UI]
+    App --> Runtime[Agent Runtime]
+    Runtime --> Provider[Model Adapter]
+    Runtime --> Registry[ToolRegistry]
+    Registry --> Safety[Safety / Permission]
+    Registry --> Context[Context 治理]
+    Registry --> Session[Session Snapshot / Delta]
+    Runtime --> Memory[Memory Service]
+    Registry --> Result[ToolResult]
+    Result --> Runtime
+    Runtime --> Answer[验证后的回答或停止原因]
 ```
 
-### 1. Agent Turn 状态机
+## Implementation Index（实现索引）
 
-`agent_loop.py` 负责一轮任务中的模型—工具反馈循环，`turn_kernel.py` 负责可变状态和阶段路由。Runtime 会向 Prompt 注入 `explore`、`execute`、`verify` 的阶段提示，再结合剩余步数、工具异常、空响应、任务进展和验证证据决定下一步。
+| 模块 | 当前路径 | 核心责任 |
+| --- | --- | --- |
+| 应用入口 | `repoterm/app/` | CLI、交互式 TTY、Headless、readiness 和结构检查入口 |
+| Contracts | `repoterm/contracts/` | 公共类型以及 `AppState`/`Store` 状态契约 |
+| Runtime | `repoterm/runtime/` | Agent Turn 编排、阶段推进、证据和停止原因 |
+| Planning | `repoterm/runtime/planning/` | 意图解析、任务规划、Prompt 组合、路由和 worktree 隔离辅助 |
+| Control | `repoterm/runtime/control/` | 验证、进度、稳定性、上下文/成本控制及部分 Provider/Memory wiring |
+| Providers | `repoterm/providers/` | 模型目录、Adapter、重试分类和模型切换 |
+| Tools | `repoterm/tools/` | 工具定义、校验、执行、结果归一化、截断和释放 |
+| Context | `repoterm/context/` | Token 预算、分层上下文、压缩和工作记忆 |
+| Safety | `repoterm/safety/` | 工作区边界、权限、Diff 审查、Checkpoint 和证据脱敏 |
+| Session | `repoterm/session/` | Snapshot、Delta、resume、inspect/replay 和受管文件 rewind |
+| Memory | `repoterm/memory/` | SQLite 记忆、确定性检索、证据门禁和生命周期 |
+| Observability | `repoterm/observability/` | 日志、指标、成本统计和决策审计 |
+| UI | `repoterm/ui/` | Slash command、历史、TTY 生命周期和 TUI 交互 |
+| Integrations | `repoterm/integrations/` | 可选 Skills/MCP 发现与通信，并通过 Tools 暴露 |
+| Evaluation | `benchmarks/evaluation/` | 确定性 Runtime 回归和受控真实模型评测 |
 
-- 路径停滞时进入 widening，在受限范围内扩大检索路径和步数预算。
-- 模型没有工具证据就请求结束时，verification guard 会拒绝完成并回到执行或验证阶段。
-- 空响应和可恢复 thinking stop 使用独立计数器进行有限重试。
-- 达到最大步数后以明确 stop reason 终止，避免无效循环。
+详细的中文 Package 设计文档见[包结构重构报告](./Docs/Documentation/engineering/package-structure-refactor-report.md)以及各 Package 目录。
 
-每次阶段变化、停止原因、扩宽触发和恢复动作都会产生一条 `RuntimeEvent`，持久化在 Session Transcript 中并导出为精选 Trace 证据。详见 [Trace](#trace) 与 [Failure Recovery](#failure-recovery) 章节。
+## 关键执行机制
 
-### 2. 上下文治理
+### Agent Turn
 
-Token 统计优先使用 Provider usage，缺失时使用本地估算。系统根据上下文压力选择对旧工具结果做微压缩，或对更早历史做摘要压缩。`StableTaskPack` 不依赖普通摘要文本，单独保留任务目标、最新工具证据、验证状态、任务进展和剩余预算。
+`repoterm/runtime/loop.py` 负责有界反馈循环，`turn_kernel.py` 维护阶段和验证状态。
 
-回归场景会断言压缩后仍保留下一轮决策需要的错误信息和编辑证据。
+- `explore` 收集仓库和任务证据。
+- `execute` 执行选定的工具动作。
+- `verify` 检查请求变更是否有支持性证据。
+- 工具错误以及空响应/可恢复响应可以在有限步数内回到下一步决策。
+- 停滞路径可以使用 widening，获得有限的搜索扩展。
+- 只有自然语言“完成”而没有要求的验证证据，不足以打开完成门禁。
+- 达到配置的最大步数后，Runtime 发出明确停止原因，不会无限循环。
 
-### 3. 工具运行时
+Runtime Event 记录阶段变化、恢复动作、widening、compaction、验证守卫和停止原因；它与日志、Session 持久化和 TUI 渲染事件不同。
 
-`ToolDefinition` 定义工具契约，`ToolRegistry` 完成工具发现、参数校验、调度和观测。JSON Schema 约束模型侧的参数生成，Python validator 负责运行时校验。未知工具、参数错误、超时、非零退出码和普通异常都会归一化为 `ToolResult`，作为下一轮模型决策的观察结果。
+### Tool Runtime
 
-超长输出采用 head/error/tail 截断：同时保留开头、包含错误的关键行和末尾状态，而不是只保留固定前缀。
+`ToolDefinition` 描述工具名称、说明、schema、validator、runner 和 metadata。`ToolRegistry` 按 core 或可选 full profile 发现工具，校验模型调用，通过 `ToolContext` 分发并归一化结果。
 
-### 4. 安全编辑与持久化会话
+未知工具、参数错误、超时、命令非零退出和普通 runner 异常都会转为 `ToolResult` 中的结构化失败。过长输出采用 head/error/tail 策略，向下一步模型决策提供有界但仍可用的证据。
 
-受管文件写入严格遵循：
+JSON Schema 约束暴露给模型的参数形状；Python validator 和 Safety/Permission 规则负责运行时约束。`run_command` 受权限控制，但 RepoTerm 不将其描述为完整的操作系统或容器沙箱。
+
+### 受控编辑与恢复
+
+受管文件编辑遵循：
 
 ```text
-Diff 预览 → 权限决策 → 创建 Checkpoint → 文件写入
+Diff 审查 → 权限决策 → 文件 Checkpoint → 文件写入
 ```
 
-会话通过全量 Snapshot 与增量 Delta 保存消息、Transcript 事件、Runtime 状态、权限和 Checkpoint。`inspect`、`replay` 用于查看保存状态，`resume` 用于继续任务，`rewind-preview` 和 `rewind` 根据 Checkpoint 恢复受管文件。
+Session 使用完整 Snapshot 和增量 Delta 持久化。`inspect` 和 `replay` 展示保存状态；`resume` 加载同一会话；`rewind-preview` 和 `rewind` 根据 Checkpoint 恢复受管文件内容。
 
-### 5. AgentOps 证据闭环
+Rewind 不是通用撤销系统。它可以恢复受管文件和 Session 状态，但不能撤销任意网络请求、外部 Shell 副作用或其他进程的修改。
 
-同一个 Agent Loop 可以注入两类 Model Adapter：
+### Context 与 Memory
 
-- `ScenarioModel` 按预设顺序返回模型回答与工具调用，用于确定性 Runtime 回归。
-- 真实模型 Adapter 让模型自主选择工具，并根据实际工具结果继续决策。
+Context 治理模型窗口：优先使用 Provider usage，缺失时使用本地估算；压力升高时可以微压缩或摘要历史。`StableTaskPack` 与工作记忆保留任务目标、近期证据、验证状态、进度和剩余预算。
 
-Grader 根据测试结果、文件内容与 Hash、禁止路径、权限结果、停止原因、Checkpoint 和恢复后的会话状态判分。评测报告与精选 Trace 可以在不重跑全部任务的情况下直接检查运行证据。
+Memory 是独立的 SQLite 生命周期系统。Active 记忆可以被确定性检索和注入；模型生成的经验候选先进入 `pending`，经批准后才成为 active。普通对话、源码正文、原始工具输出和未经验证的模型判断不会自动成为永久记忆。
 
-## Implementation Index
+### UI 与终端生命周期
 
-| 能力 | 核心实现 | 回归测试 | 报告与 Trace |
-| --- | --- | --- | --- |
-| **Agent Turn 状态机** — `explore → execute → verify` 阶段路由，widening 扩宽，verification guard 证据守卫，stop reasons 停止原因，`RuntimeEvent` 追踪 | [`repoterm/agent_loop.py`](./repoterm/agent_loop.py)、[`repoterm/turn_kernel.py`](./repoterm/turn_kernel.py)、[`repoterm/runtime_profiles.py`](./repoterm/runtime_profiles.py) | [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [正常修改 Trace](./benchmarks/traces/normal-edit.md)、[Runtime 报告](./benchmarks/runtime_regression_results.md) |
-| **上下文治理** — provider usage + 本地 token 估算，微压缩，历史摘要压缩，`StableTaskPack` | [`repoterm/context_manager.py`](./repoterm/context_manager.py)、[`repoterm/micro_compact.py`](./repoterm/micro_compact.py)、[`repoterm/context_compactor.py`](./repoterm/context_compactor.py)、[`repoterm/turn_kernel.py`](./repoterm/turn_kernel.py) | [`tests/test_context_compactor.py`](./tests/test_context_compactor.py)、[`tests/test_micro_compact.py`](./tests/test_micro_compact.py)、[`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [评测方法中的上下文场景](./benchmarks/eval-methodology.md) |
-| **工具运行时** — `ToolDefinition` + `ToolRegistry`，JSON Schema 校验，`ToolResult` 归一化，head/error/tail 截断 | [`repoterm/tooling.py`](./repoterm/tooling.py)、[`repoterm/tools/`](./repoterm/tools/) | [`tests/test_tools.py`](./tests/test_tools.py)、[`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [工具失败恢复 Trace](./benchmarks/traces/tool-failure-recovery.md) |
-| **安全编辑与会话持久化** — Diff → 权限 → checkpoint → 写入管道，Snapshot + Delta 持久化，resume/replay/rewind | [`repoterm/file_review.py`](./repoterm/file_review.py)、[`repoterm/permissions.py`](./repoterm/permissions.py)、[`repoterm/session.py`](./repoterm/session.py)、[`repoterm/tui/session_flow.py`](./repoterm/tui/session_flow.py) | [`tests/test_permissions.py`](./tests/test_permissions.py)、[`tests/test_session.py`](./tests/test_session.py)、[`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py) | [权限拒绝 Trace](./benchmarks/traces/permission-denial.md)、[中断恢复 Trace](./benchmarks/traces/session-resume.md) |
-| **AgentOps 评测** — `ScenarioModel` adapter 注入，确定性回归（60/60）+ 真实模型 E2E（15/15，9/9 恢复），多维 Grader 判分 | [`benchmarks/runtime_regression_eval.py`](./benchmarks/runtime_regression_eval.py)、[`repoterm/llm_e2e_eval.py`](./repoterm/llm_e2e_eval.py)、[`benchmarks/llm_e2e_eval.py`](./benchmarks/llm_e2e_eval.py) | [`tests/test_agentops_scenarios.py`](./tests/test_agentops_scenarios.py)、[`tests/test_agentops_proof_artifacts.py`](./tests/test_agentops_proof_artifacts.py) | [评测方法](./benchmarks/eval-methodology.md)、[Runtime 报告](./benchmarks/runtime_regression_results.md)、[真实模型报告](./benchmarks/llm_e2e_results.md) |
+`repoterm/ui/` 负责 Slash command、历史、TTY 生命周期、审批和 TUI 渲染。TUI Parser 区分文本、按键和滚轮事件；主线程拥有可见状态，Worker 只发布事件。Bracketed paste 以原子文本处理且不会自动提交。终端清理覆盖 alternate screen、mouse、paste、focus 和 sync-output 模式。
 
+<a id="evaluation"></a>
 ## Evaluation
 
-评测分层的原因是：Runtime 控制逻辑是否正确，与真实模型在不确定输出下能否完成任务，是两个不同问题。
+RepoTerm 将确定性 Runtime 正确性与真实模型行为作为两层独立证据。
 
-| 层级 | 配置 | 结果 | 验证内容 |
-| --- | --- | ---: | --- |
-| 确定性 Runtime 回归 | 20 个场景 × 3 轮；`ScenarioModel` 输出预先设定 | **60/60 通过** | 状态路由、Schema/ToolResult、权限边界、压缩连续性、Checkpoint 与 Session 恢复 |
-| 真实模型端到端评测 | 5 类受控仓库任务 × 3 轮；使用已配置真实模型 | **15/15 通过** | 工具选择、失败纠正、文件修改、权限引导、恢复执行和最终测试证据 |
-| 异常恢复子集 | 3 类恢复任务 × 3 轮；包含在上述 15 次之中 | **9/9 通过** | 测试失败恢复、权限拒绝恢复和中断会话恢复 |
+### 确定性 Runtime 回归
 
-其中 **9/9 是 15 次真实模型运行的子集**，不是额外增加的 9 次。
+- 使用脚本化 `ScenarioModel`/Model Adapter，不调用真实 Provider。
+- 覆盖 20 个受控场景，重复 3 轮，共 60 次运行。
+- 覆盖工具校验与失败归一化、权限拒绝、上下文压力、验证证据、Checkpoint、Session 恢复和有界终止。
+- 当前仓库报告记录为 **60/60 passed**：[`benchmarks/runtime_regression_results.md`](./benchmarks/runtime_regression_results.md)。
 
-主要 Grader：
-
-- 测试命令退出码与预期输出；
-- 目标文件内容/Hash，以及受保护测试文件是否保持不变；
-- 禁止路径访问与权限拒绝结果；
-- 必需工具序列与最终 stop reason；
-- Checkpoint 数量、恢复后的 Session 状态和重复 resume 幂等性。
-
-证据入口：
-
-- [评测方法、场景与指标口径](./benchmarks/eval-methodology.md)
-- [确定性 Runtime 回归报告](./benchmarks/runtime_regression_results.md)
-- [真实模型端到端评测报告](./benchmarks/llm_e2e_results.md)
-
-## Runtime Flow
-
-一次正常的仓库任务会经过下面这条可观察链路：
-
-1. CLI/TUI 创建或加载 Session，并记录用户任务。
-2. 系统把指令、相关记忆、当前阶段、预算信号和 `StableTaskPack` 组装为模型输入。
-3. Model Adapter 返回文本回答或结构化工具调用。
-4. `ToolRegistry` 校验并执行工具；文件修改还要经过 Diff 审查、权限控制和 Checkpoint。
-5. `ToolResult` 写入 Transcript，并作为观察结果进入下一轮模型决策。
-6. Turn Kernel 更新任务进展、阶段、widening、verification 和 stop signals。
-7. 任务以明确 stop reason 结束，随后通过测试命令和 Grader 验证仓库与会话状态。
-
-[正常修改 Trace](./benchmarks/traces/normal-edit.md) 展示了从仓库检索到验证完成的完整顺序。
-
-## Trace
-
-RepoTerm 的可观测性由两个相关层次组成：
-
-- **Session Transcript** 是持久化的任务原始记录，包含用户/模型消息、工具调用与结果、权限、Checkpoint 和 Runtime events。
-- **精选 Trace** 是经过脱敏和裁剪的运行记录，组合时间线、模型与工具元数据、停止原因、恢复动作和 Grader 结果。
-
-Runtime event 回答“阶段为什么改变”，Transcript/tool event 回答“任务实际做了什么”，Grader 回答“最终仓库状态是否满足任务”。
-
-| 参考场景 | 可观察行为 | Markdown | 机器可读 |
-| --- | --- | --- | --- |
-| 成功修改 | read → edit → test → `done`，包含 Checkpoint 和通过的 Grader | [normal-edit.md](./benchmarks/traces/normal-edit.md) | [normal-edit.json](./benchmarks/traces/normal-edit.json) |
-| 工具失败后恢复 | 测试失败作为下一轮观察，修改后再次测试直至成功 | [tool-failure-recovery.md](./benchmarks/traces/tool-failure-recovery.md) | [tool-failure-recovery.json](./benchmarks/traces/tool-failure-recovery.json) |
-| 权限拒绝 | 受保护写入被拒绝，模型根据 guidance 改走允许路径 | [permission-denial.md](./benchmarks/traces/permission-denial.md) | [permission-denial.json](./benchmarks/traces/permission-denial.json) |
-| 中断恢复 | Checkpoint 跨中断保留，resume 后验证状态且重复恢复无漂移 | [session-resume.md](./benchmarks/traces/session-resume.md) | [session-resume.json](./benchmarks/traces/session-resume.json) |
-
-Trace 的生成规则和脱敏边界见[精选 Trace 索引](./benchmarks/traces/README.md)。
-
-## Failure Recovery
-
-| 失败信号 | Runtime 如何处理 | 安全边界 | 证据 |
-| --- | --- | --- | --- |
-| 模型空响应或可恢复 thinking stop | 使用独立计数器有限重试，并记录恢复动作 | 重试上限与剩余步数预算 | [确定性回归报告](./benchmarks/runtime_regression_results.md)中的 Runtime 场景 |
-| 测试/工具失败 | 归一化为失败 `ToolResult`，回传模型后允许纠正并重新验证 | 最大步数限制，错误结果不会被隐藏 | [工具失败恢复 Trace](./benchmarks/traces/tool-failure-recovery.md) |
-| 权限拒绝 | 返回拒绝结果和用户 guidance，由模型选择允许路径 | 被拒绝的写入不会落盘，也不会创建 Checkpoint | [权限拒绝 Trace](./benchmarks/traces/permission-denial.md) |
-| 上下文压力 | 先微压缩旧工具输出，再摘要历史，同时保留 `StableTaskPack` | 熔断保护和关键任务证据 | [评测方法](./benchmarks/eval-methodology.md)中的上下文场景 |
-| 进程中断 | 保存 Session/Checkpoint，重载并 resume，必要时 rewind | 只恢复受管文件与会话状态，无法撤销任意外部 Shell 副作用 | [中断恢复 Trace](./benchmarks/traces/session-resume.md) |
-| 缺少验证证据或步数耗尽 | 拒绝过早 `done`，回到 execute/verify；到上限后安全停止 | 显式 `verification_failed` 或 `max_steps` | [确定性回归报告](./benchmarks/runtime_regression_results.md) |
-
-## Reproduce
-
-### 安装并启动
-
-```bash
-git clone https://github.com/llyyyq/RepoTerm.git
-cd RepoTerm
-python -m pip install -e ".[dev]"
-repoterm
-```
-
-需要 Python 3.11+。
-
-### 复现确定性 Runtime 证据
-
-这一层不需要模型凭据：
+运行：
 
 ```bash
 python benchmarks/runtime_regression_eval.py --rounds 3
-python benchmarks/export_agentops_traces.py
-python -m pytest -q tests/test_agentops_scenarios.py tests/test_agentops_proof_artifacts.py
 ```
 
-输出：
+### 真实模型端到端评测
 
-- `benchmarks/runtime_regression_results.md`
-- `benchmarks/runtime_regression_results.json`
-- `benchmarks/traces/`
+- 采用 5 类受控仓库任务，每类重复 3 次，共 15 次任务运行。
+- 每次在隔离临时仓库执行，并检查独立 Pytest、文件 Hash、保护路径、权限结果、Checkpoint 和恢复状态。
+- 异常恢复子集包括测试失败恢复、权限拒绝恢复和中断 Session 恢复，共 9 次运行。
+- 当前仓库报告记录 **15/15 次任务运行**、**9/9 次恢复运行**：[`benchmarks/llm_e2e_results.md`](./benchmarks/llm_e2e_results.md)。
+- 结果受模型、Prompt、Provider endpoint、网络和本地配置影响，不能外推为开放仓库成功率。
 
-### 复现真实模型证据
+先运行不调用模型的夹具预检：
 
-复制 `.env.example`，在本地配置一种受支持的 Provider，不要提交真实密钥。下面的命令会真实调用模型 15 次，可能消耗额度：
+```bash
+python benchmarks/llm_e2e_eval.py --dry-run --all
+```
+
+真实运行需要显式确认，并可能消耗 Provider 配额：
 
 ```bash
 python benchmarks/llm_e2e_eval.py --all --runs 3 --confirm-live
 ```
 
-输出：
+报告默认写入 `benchmarks/llm_e2e_results.md` 和 `.json`，单次运行材料默认位于 `.temp/llm_e2e/`。
 
-- `benchmarks/llm_e2e_results.md`
-- `benchmarks/llm_e2e_results.json`
-- `.temp/llm_e2e/runs/` 下的原始运行材料
+解释指标前请先阅读[评测方法](./benchmarks/eval-methodology.md)。
 
-真实模型结果受 Provider 和模型版本影响。仓库内报告记录了当前 15/15 指标对应的模型与任务配置。
+<a id="trace"></a>
+## Trace（Trace 与失败恢复）
 
-## Repository Guide
+Session Transcript 和精选 Trace 相关但不同：
 
-| 路径 | 作用 |
+- **Session Transcript：** 持久化的任务记录，包含消息、工具事件、权限、Checkpoint 和 Runtime 事件。
+- **精选 Trace：** 脱敏的任务证据导出，包含时间线、工具/模型元数据、停止原因、恢复动作和 Grader 结果。
+- **Snapshot/Delta：** 用于加载和恢复的 Session 持久化记录，不是 Trace 或审计日志的替代品。
+
+| 场景 | 说明 | 证据 |
+| --- | --- | --- |
+| 正常修改 | 仓库检索、受控编辑、测试和验证停止 | [normal-edit.md](./benchmarks/traces/normal-edit.md) · [normal-edit.json](./benchmarks/traces/normal-edit.json) |
+| 工具失败恢复 | 工具/测试失败先回传下一步决策，再进行修复 | [tool-failure-recovery.md](./benchmarks/traces/tool-failure-recovery.md) · [tool-failure-recovery.json](./benchmarks/traces/tool-failure-recovery.json) |
+| 权限拒绝 | 受保护编辑被拒绝，运行获得替代路径 | [permission-denial.md](./benchmarks/traces/permission-denial.md) · [permission-denial.json](./benchmarks/traces/permission-denial.json) |
+| 中断恢复 | Checkpoint 跨中断保留，同一 Session 可以恢复 | [session-resume.md](./benchmarks/traces/session-resume.md) · [session-resume.json](./benchmarks/traces/session-resume.json) |
+
+[Trace 索引](./benchmarks/traces/README.md)说明现有材料和脱敏边界。
+
+<a id="failure-recovery"></a>
+## Failure Recovery（失败恢复）
+
+上面的场景展示了工具失败、权限拒绝和中断会话如何在继续运行或安全停止前被显式记录。
+
+| 故障 | Runtime 行为 | 可观察证据 |
+| --- | --- | --- |
+| 空响应/可恢复暂停 | 有界重试并继续下一轮 | Runtime Event |
+| 工具失败 | 转为 `ToolResult` 并回传模型 | `ToolResult`、Trace |
+| 权限拒绝 | 阻止写入，不创建 Checkpoint | 权限记录、文件 Hash |
+| 写入中断 | 重新加载同一 Session 并继续验证 | Snapshot、Delta、Resume Trace |
+
+<a id="reproduce"></a>
+## Reproduce（测试与验证）
+
+运行全量测试：
+
+```bash
+python -m pytest -q --tb=short
+```
+
+只运行 Package Contracts：
+
+```bash
+python -m pytest tests/contracts -q
+```
+
+编译产品和评测源码：
+
+```bash
+python -m compileall -q repoterm benchmarks Main Package
+```
+
+运行当前结构检查器：
+
+```bash
+python -m repoterm.app.structure_check \
+  --root . \
+  --hotspots 5 \
+  --max-dependency-upstream 4 \
+  --check-material-inventory \
+  --report .temp/structure-compliance.json
+```
+
+仓库还包含 [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)。它定义了 Python 3.11/3.12、Ubuntu/Windows/macOS 的 CI 矩阵；上面的命令是当前包结构下直接可调用的本地入口。
+
+## 配置与安全说明
+
+- `.env` 和 `~/.repoterm/settings.json` 只保存在本地，不要提交 Key 或 Token。
+- `.env.example` 是模板，不是自动加载的 dotenv 文件。
+- 项目级 `.mcp.json` 是可选配置，默认不启用；启用它需要明确的信任决定。只有明确信任项目配置时，才使用 `repoterm --trust-project-mcp`。
+- 文件编辑和命令执行经过工作区与权限检查，但这不等于完整的容器或操作系统沙箱。
+- 证据和日志设计为有界并进行脱敏；不要在 Prompt 或工具参数中粘贴秘密。
+- Rewind 只恢复受管文件和 Session 状态，外部 Shell 与网络副作用可能不可逆。
+
+## 项目结构
+
+```text
+repoterm/                 # 产品 Package 与稳定 config 入口
+benchmarks/               # 评测脚本、报告和 Trace 材料
+tests/                    # 单元、集成、契约、UI 和 AgentOps 测试
+Docs/                     # 使用、工程和设计文档
+Main/                     # 架构投影与镜像验证代码
+Package/                  # 工程结构与合规检查代码
+.github/                  # CI 工作流
+```
+
+`Main/` 和 `Package/` 是架构投影/验证代码，不是 Agent Runtime。`__pycache__/`、`.pytest_cache/`、`.temp/` 和 `*.egg-info/` 是本地生成物，不属于产品源码目录。
+
+<a id="documentation-index"></a>
+## 文档索引
+
+以下模块设计文档（module design documents）说明当前各 Package 的边界、依赖方向和维护约束：
+
+| 主题 | 文档 |
 | --- | --- |
-| `repoterm/` | Runtime、Adapter、上下文、工具、权限、记忆和会话实现 |
-| `tests/` | 单元测试、集成测试和确定性 AgentOps 场景 |
-| `benchmarks/` | 评测脚本、方法说明、报告和公开 Trace |
-| `Docs/Documentation/` | 使用说明与更深入的工程文档 |
-| `.env.example` | 不含真实凭据的 Provider 配置模板 |
+| Application | [Application Package 文档](./repoterm/app/README.zh-CN.md) |
+| Contracts | [Contracts Package 文档](./repoterm/contracts/README.zh-CN.md) |
+| 包结构总览 | [包结构重构报告](./Docs/Documentation/engineering/package-structure-refactor-report.md) |
+| Runtime 设计 | [Runtime Package 文档](./repoterm/runtime/README.zh-CN.md) |
+| Planning | [Planning Package 文档](./repoterm/runtime/planning/README.zh-CN.md) |
+| Control | [Control Package 文档](./repoterm/runtime/control/README.zh-CN.md) |
+| Providers | [Providers Package 文档](./repoterm/providers/README.zh-CN.md) |
+| Context | [Context Package 文档](./repoterm/context/README.zh-CN.md) |
+| Tool 设计 | [Tools Package 文档](./repoterm/tools/README.zh-CN.md) |
+| Safety 与权限 | [Safety Package 文档](./repoterm/safety/README.zh-CN.md) |
+| Session | [Session Package 文档](./repoterm/session/README.zh-CN.md) |
+| Memory | [Memory Package 文档](./repoterm/memory/README.zh-CN.md) |
+| Observability | [Observability Package 文档](./repoterm/observability/README.zh-CN.md) |
+| Integrations | [Integrations Package 文档](./repoterm/integrations/README.zh-CN.md) |
+| UI 与 TUI | [UI 文档](./repoterm/ui/README.zh-CN.md) · [TUI 文档](./repoterm/ui/tui/README.zh-CN.md) |
+| Evaluation | [Evaluation Package 文档](./benchmarks/evaluation/README.zh-CN.md) · [评测方法](./benchmarks/eval-methodology.md) · [真实模型评测指南](./benchmarks/llm_e2e_guide_zh.md) |
+| Trace 材料 | [Trace 索引](./benchmarks/traces/README.md) |
 
-## Source and Attribution
+## 许可证与来源说明
 
-RepoTerm 基于开源项目 [MiniCode-Python](https://github.com/QUSETIONS/MiniCode-Python) 进行二次开发，其上游主项目为 [MiniCode](https://github.com/LiuMengxuan04/MiniCode)。感谢原作者提供 Agent Loop、工具调用和终端交互等基础实现与学习参考。
+RepoTerm 使用 [MIT License](./LICENSE)。上游来源和归属说明见 [`NOTICE.md`](./NOTICE.md)。
 
-本仓库在此基础上重点补充和重构 Agent Runtime 状态控制、确定性与真实模型 AgentOps 评测、公开 Trace 证据、记忆生命周期、安全写入和失败恢复。上游代码与贡献的权利归原作者所有，本仓库的新增修改以实际 Git 历史和文件内容为准。
-
-许可证与详细来源说明见 [MIT License](./LICENSE) 和 [NOTICE.md](./NOTICE.md)。
+NOTICE 将 RepoTerm 说明为基于 [MiniCode](https://github.com/LiuMengxuan04/MiniCode) 和 [MiniCode-Python](https://github.com/QUSETIONS/MiniCode-Python) 的二次开发项目。原始通知和权利归各自作者所有；RepoTerm 的新增修改以仓库历史和当前文件为准。

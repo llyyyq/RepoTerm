@@ -18,7 +18,7 @@ CURRENT_IMPLEMENTATION_ROOT = "repoterm"
 ENTRY_SURFACES = (
     EntrySurface(
         name="interactive-cli",
-        currentPoint="repoterm | python -m repoterm.main",
+        currentPoint="repoterm | python -m repoterm.app.interactive",
         observableResult=(
             "terminal coding session with tools, permissions, model runtime, "
             "transcript, session commands, checkpoints, and rewind"
@@ -27,19 +27,19 @@ ENTRY_SURFACES = (
     ),
     EntrySurface(
         name="headless-runner",
-        currentPoint="repoterm-headless | python -m repoterm.headless",
+        currentPoint="repoterm-headless | python -m repoterm.app.headless",
         observableResult="single prompt execution with optional message trace",
         appRole="product app automation entry",
     ),
     EntrySurface(
         name="readiness-checker",
-        currentPoint="repoterm-readiness | python -m repoterm.readiness",
+        currentPoint="repoterm-readiness | python -m repoterm.app.readiness",
         observableResult="provider/runtime readiness report with risk scope and next actions",
         appRole="product app diagnostic entry",
     ),
     EntrySurface(
         name="local-command-surface",
-        currentPoint="repoterm/cli_commands.py",
+        currentPoint="repoterm/ui/commands.py",
         observableResult=(
             "/session, /session-replay, /sessions, /checkpoints, /rewind, "
             "/readiness, and /extensions"
@@ -48,7 +48,7 @@ ENTRY_SURFACES = (
     ),
     EntrySurface(
         name="product-snapshot",
-        currentPoint="repoterm/product_surfaces.py",
+        currentPoint="repoterm/runtime/surfaces.py",
         observableResult=(
             "instruction, hook, delegation, extension, readiness, and prompt "
             "bundle summaries"

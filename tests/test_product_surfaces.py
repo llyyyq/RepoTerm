@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from repoterm.product_surfaces import build_readiness_report
-from repoterm.product_surfaces import (
+from repoterm.runtime.surfaces import build_readiness_report
+from repoterm.runtime.surfaces import (
     DelegationStatus,
     HookStatus,
     InstructionLayer,
@@ -130,7 +130,7 @@ def test_build_readiness_report_does_not_probe_custom_gateway(monkeypatch) -> No
     def fail_probe(*_args, **_kwargs):
         raise AssertionError("readiness preflight must remain local-only")
 
-    monkeypatch.setattr("repoterm.model_registry.probe_openai_exposed_models", fail_probe)
+    monkeypatch.setattr("repoterm.providers.registry.probe_openai_exposed_models", fail_probe)
     report = build_readiness_report(
         ".",
         runtime={
@@ -232,8 +232,8 @@ class TestExtensionManifests:
         }))
 
         # Monkey-patch extension_search_roots to include tmp_path
-        from repoterm.product_surfaces import extension_search_roots as _original
-        import repoterm.product_surfaces as ps
+        from repoterm.runtime.surfaces import extension_search_roots as _original
+        import repoterm.runtime.surfaces as ps
 
         original = ps.extension_search_roots
         try:

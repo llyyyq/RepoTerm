@@ -4,7 +4,7 @@ import csv
 import io
 import json
 
-from repoterm.tooling import ToolDefinition, ToolContext, ToolResult
+from repoterm.tools.registry import ToolDefinition, ToolContext, ToolResult
 
 
 # ---------------------------------------------------------------------------

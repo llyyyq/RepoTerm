@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from repoterm.file_review import apply_reviewed_file_change, load_existing_file
-from repoterm.tooling import ToolDefinition, ToolResult
-from repoterm.workspace import resolve_tool_path
+from repoterm.safety.file_review import apply_reviewed_file_change, load_existing_file
+from repoterm.tools.registry import ToolDefinition, ToolResult
+from repoterm.safety.workspace import resolve_tool_path
 
 
 def _validate(input_data: dict) -> dict:

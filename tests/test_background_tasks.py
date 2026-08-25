@@ -1,4 +1,4 @@
-"""Tests for repoterm.background_tasks — task slot and lifecycle management."""
+"""Tests for repoterm.tools.background — task slot and lifecycle management."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
-import repoterm.background_tasks as _bt
-from repoterm.background_tasks import (
+import repoterm.tools.background as _bt
+from repoterm.tools.background import (
     _refresh_record,
     can_start_new_task,
     check_completed_tasks,

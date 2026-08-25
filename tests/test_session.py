@@ -12,7 +12,6 @@ from repoterm.session import (
     AutosaveManager,
     SessionData,
     SessionMetadata,
-    _runtime_summary_from_transcript_entries,
     cleanup_old_sessions,
     create_file_checkpoint,
     create_new_session,
@@ -30,6 +29,7 @@ from repoterm.session import (
     rewind_session,
     save_session,
 )
+from repoterm.session.service import _runtime_summary_from_transcript_entries
 
 
 @pytest.fixture
@@ -37,8 +37,8 @@ def temp_session_dir(tmp_path):
     """Create a temporary session directory."""
     sessions_dir = tmp_path / "sessions"
     sessions_dir.mkdir()
-    with patch("repoterm.session.SESSIONS_DIR", sessions_dir), \
-         patch("repoterm.session.REPOTERM_DIR", tmp_path):
+    with patch("repoterm.session.service.SESSIONS_DIR", sessions_dir), \
+         patch("repoterm.session.service.REPOTERM_DIR", tmp_path):
         yield sessions_dir
 
 

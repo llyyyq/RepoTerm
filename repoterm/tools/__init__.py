@@ -1,68 +1,69 @@
 from dataclasses import asdict
 import os
+from typing import TYPE_CHECKING
 
-from repoterm.mcp import create_mcp_backed_tools
-from repoterm.skills import discover_skills
-from repoterm.tooling import ToolRegistry
-from repoterm.tools.ask_user import ask_user_tool
-from repoterm.tools.batch_ops import batch_copy_tool, batch_move_tool, batch_delete_tool
-from repoterm.tools.code_nav import find_symbols_tool, find_references_tool, get_ast_info_tool
-from repoterm.tools.code_review import code_review_tool
-from repoterm.tools.diff_viewer import diff_viewer_tool
-from repoterm.tools.edit_file import edit_file_tool
-from repoterm.tools.file_tree import file_tree_tool
-from repoterm.tools.git import git_tool
-from repoterm.tools.grep_files import grep_files_tool
-from repoterm.tools.list_files import list_files_tool
-from repoterm.tools.load_skill import create_load_skill_tool
-from repoterm.tools.patch_file import patch_file_tool
-from repoterm.tools.read_file import read_file_tool
-from repoterm.tools.run_command import run_command_tool
-from repoterm.tools.test_runner import test_runner_tool
-from repoterm.tools.todo_write import todo_write_tool
-from repoterm.tools.web_fetch import web_fetch_tool
-from repoterm.tools.web_search import web_search_tool
-from repoterm.tools.write_file import write_file_tool
-from repoterm.tools.task import task_tool
+if TYPE_CHECKING:
+    from repoterm.tools.registry import ToolRegistry
 
 
-_CORE_TOOLS = [
-    # User interaction
-    ask_user_tool,
-    # File operations
-    list_files_tool,
-    grep_files_tool,
-    read_file_tool,
-    write_file_tool,
-    # modify_file_tool removed: identical to write_file (same _run/_validate)
-    edit_file_tool,
-    patch_file_tool,
-    # Batch operations
-    batch_copy_tool,
-    batch_move_tool,
-    batch_delete_tool,
-    # Command execution
-    run_command_tool,
-    # Web tools
-    web_fetch_tool,
-    web_search_tool,
-    # Task management
-    todo_write_tool,
-    # Sub-agent
-    task_tool,
-    # Git workflow
-    git_tool,
-    # Code intelligence
-    find_symbols_tool,
-    find_references_tool,
-    get_ast_info_tool,
-    code_review_tool,
-    # Visualization
-    file_tree_tool,
-    diff_viewer_tool,
-    # Testing
-    test_runner_tool,
-]
+def _load_core_tools():
+    from repoterm.tools.ask_user import ask_user_tool
+    from repoterm.tools.batch_ops import batch_copy_tool, batch_move_tool, batch_delete_tool
+    from repoterm.tools.code_nav import find_symbols_tool, find_references_tool, get_ast_info_tool
+    from repoterm.tools.code_review import code_review_tool
+    from repoterm.tools.diff_viewer import diff_viewer_tool
+    from repoterm.tools.edit_file import edit_file_tool
+    from repoterm.tools.file_tree import file_tree_tool
+    from repoterm.tools.git import git_tool
+    from repoterm.tools.grep_files import grep_files_tool
+    from repoterm.tools.list_files import list_files_tool
+    from repoterm.tools.patch_file import patch_file_tool
+    from repoterm.tools.read_file import read_file_tool
+    from repoterm.tools.run_command import run_command_tool
+    from repoterm.tools.task import task_tool
+    from repoterm.tools.test_runner import test_runner_tool
+    from repoterm.tools.todo_write import todo_write_tool
+    from repoterm.tools.web_fetch import web_fetch_tool
+    from repoterm.tools.web_search import web_search_tool
+    from repoterm.tools.write_file import write_file_tool
+
+    return [
+        # User interaction
+        ask_user_tool,
+        # File operations
+        list_files_tool,
+        grep_files_tool,
+        read_file_tool,
+        write_file_tool,
+        # modify_file_tool removed: identical to write_file (same _run/_validate)
+        edit_file_tool,
+        patch_file_tool,
+        # Batch operations
+        batch_copy_tool,
+        batch_move_tool,
+        batch_delete_tool,
+        # Command execution
+        run_command_tool,
+        # Web tools
+        web_fetch_tool,
+        web_search_tool,
+        # Task management
+        todo_write_tool,
+        # Sub-agent
+        task_tool,
+        # Git workflow
+        git_tool,
+        # Code intelligence
+        find_symbols_tool,
+        find_references_tool,
+        get_ast_info_tool,
+        code_review_tool,
+        # Visualization
+        file_tree_tool,
+        diff_viewer_tool,
+        # Testing
+        test_runner_tool,
+    ]
 
 def _resolve_tool_profile(runtime: dict | None) -> str:
     configured = (
@@ -126,11 +127,16 @@ def _load_utility_wrapper_tools():
     ]
 
 
-def create_default_tool_registry(cwd: str, runtime: dict | None = None) -> ToolRegistry:
+def create_default_tool_registry(cwd: str, runtime: dict | None = None) -> "ToolRegistry":
+    from repoterm.integrations.mcp import create_mcp_backed_tools
+    from repoterm.integrations.skills import discover_skills
+    from repoterm.tools.load_skill import create_load_skill_tool
+    from repoterm.tools.registry import ToolRegistry
+
     skills = [asdict(skill) for skill in discover_skills(cwd)]
     mcp = create_mcp_backed_tools(cwd=cwd, mcp_servers=dict(runtime.get("mcpServers", {})) if runtime else {})
     profile = _resolve_tool_profile(runtime)
-    tools = list(_CORE_TOOLS)
+    tools = _load_core_tools()
     if _is_full_tool_profile(profile):
         tools.extend(_load_utility_wrapper_tools())
     tools.extend(

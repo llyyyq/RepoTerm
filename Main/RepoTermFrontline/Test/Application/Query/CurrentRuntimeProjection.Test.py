@@ -17,9 +17,9 @@ def test_current_runtime_projection_reports_all_entry_evidence() -> None:
     assert {
         entry["evidencePath"] for entry in projection["entries"]
     } == {
-        "repoterm/main.py",
-        "repoterm/headless.py",
-        "repoterm/readiness.py",
-        "repoterm/cli_commands.py",
-        "repoterm/product_surfaces.py",
+        "repoterm/app/interactive.py",
+        "repoterm/app/headless.py",
+        "repoterm/app/readiness.py",
+        "repoterm/ui/commands.py",
+        "repoterm/runtime/surfaces.py",
     }

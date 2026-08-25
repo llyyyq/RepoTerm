@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import urllib.request
 import urllib.parse
-from repoterm.tooling import ToolDefinition, ToolResult
+from repoterm.tools.registry import ToolDefinition, ToolResult
 
 MAX_RESULTS = 10
 

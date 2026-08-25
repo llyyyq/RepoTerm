@@ -1,7 +1,9 @@
 from types import SimpleNamespace
 
-from repoterm.tty_app import (
+from repoterm.ui.tty import (
     _ThrottledRenderer,
+    _poll_windows_resize,
+    _present_ui_error,
     _apply_tool_result_visual_state,
     _format_history,
     _mark_unfinished_tools,
@@ -9,11 +11,13 @@ from repoterm.tty_app import (
     summarize_tool_input,
     summarize_tool_output,
 )
-import repoterm.tui.input_handler as input_handler_module
-from repoterm.context_manager import ContextManager
+import repoterm.ui.tui.input_handler as input_handler_module
+from repoterm.context.manager import ContextManager
 from repoterm.memory import MemoryManager, MemoryScope
-from repoterm.permissions import PermissionManager
-from repoterm.prompt import build_system_prompt_bundle
+from repoterm.safety.permissions import PermissionManager
+from repoterm.contracts.types import RuntimeEvent
+from repoterm.observability.cost import CostTracker
+from repoterm.runtime.planning.prompt import build_system_prompt_bundle
 from repoterm.session import (
     FileCheckpoint,
     SessionData,
@@ -22,19 +26,19 @@ from repoterm.session import (
     create_new_session,
     rewind_session,
 )
-from repoterm.tooling import ToolRegistry
-from repoterm.tui.runtime_control import _ThrottledRenderer as RuntimeThrottledRenderer
-from repoterm.tui.event_flow import _handle_event
-from repoterm.tui.input_parser import KeyEvent
-from repoterm.tui.renderer import _decorate_session_feed_body
-from repoterm.tui.session_flow import (
+from repoterm.tools.registry import ToolRegistry
+from repoterm.ui.tui.runtime_control import _ThrottledRenderer as RuntimeThrottledRenderer
+from repoterm.ui.tui.event_flow import _handle_event
+from repoterm.ui.tui.input_parser import KeyEvent
+from repoterm.ui.tui.renderer import _decorate_session_feed_body
+from repoterm.ui.tui.session_flow import (
     build_tty_runtime_state,
     finalize_tty_session,
     load_or_create_session,
 )
-from repoterm.tui.state import ScreenState, TtyAppArgs
-from repoterm.tui.transcript import format_runtime_summary_line, format_transcript_text
-from repoterm.tui.types import TranscriptEntry
+from repoterm.ui.tui.state import ScreenState, TtyAppArgs
+from repoterm.ui.tui.transcript import format_runtime_summary_line, format_transcript_text
+from repoterm.ui.tui.types import TranscriptEntry
 
 
 def test_tty_app_uses_runtime_control_throttled_renderer() -> None:
@@ -327,8 +331,8 @@ def test_finalize_tty_session_persists_runtime_metadata() -> None:
 def test_tty_resume_rehydrates_session_checkpoint_and_memory(tmp_path, monkeypatch) -> None:
     sessions_dir = tmp_path / "sessions"
     sessions_dir.mkdir()
-    monkeypatch.setattr("repoterm.session.SESSIONS_DIR", sessions_dir)
-    monkeypatch.setattr("repoterm.session.REPOTERM_DIR", tmp_path)
+    monkeypatch.setattr("repoterm.session.service.SESSIONS_DIR", sessions_dir)
+    monkeypatch.setattr("repoterm.session.service.REPOTERM_DIR", tmp_path)
     monkeypatch.setattr("repoterm.memory.REPOTERM_DIR", tmp_path)
 
     workspace = tmp_path / "workspace"
@@ -512,6 +516,7 @@ def test_tty_input_passes_and_persists_context_manager(tmp_path, monkeypatch) ->
 
     assert input_handler_module._handle_input(args, state, lambda: None) is False
     state.agent_thread.join(timeout=5)
+    input_handler_module.drain_ui_events(args, state, lambda: None)
 
     assert captured["context_manager"] is context_manager
     assert captured["memory_manager"] is memory_manager
@@ -543,11 +548,123 @@ def test_tty_tool_callbacks_record_start_and_result(tmp_path, monkeypatch) -> No
 
     assert input_handler_module._handle_input(args, state, lambda: None) is False
     state.agent_thread.join(timeout=5)
+    input_handler_module.drain_ui_events(args, state, lambda: None)
 
     assert state.agent_thread.is_alive() is False
     assert state.agent_result["messages"][-1] == {"role": "assistant", "content": "done"}
     assert state.tool_start_time is not None
     assert state.recent_tools[-1] == {"name": "write_file x1", "status": "success"}
+
+
+def test_stateful_ui_commands_have_live_handlers(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(input_handler_module, "save_history_entries", lambda _history: None)
+    args = TtyAppArgs(
+        runtime={"model": "default"},
+        tools=ToolRegistry([]),
+        model=object(),
+        messages=[],
+        cwd=str(tmp_path),
+        permissions=PermissionManager(str(tmp_path)),
+    )
+    state = ScreenState(
+        history=["first prompt"],
+        cost_tracker=CostTracker(),
+    )
+
+    for command in ("/history", "/cost", "/tasks", "/debug"):
+        state.input = command
+        assert input_handler_module._handle_input(args, state, lambda: None) is False
+        assert state.transcript[-1].kind == "assistant"
+
+    state.input = "/clear"
+    assert input_handler_module._handle_input(args, state, lambda: None) is False
+    assert state.transcript == []
+
+
+def test_runtime_stop_keeps_metadata_but_deduplicates_final_answer(tmp_path, monkeypatch) -> None:
+    def fake_run_agent_turn(**kwargs):
+        kwargs["on_runtime_event"](
+            RuntimeEvent(
+                category="stop",
+                message="The final answer",
+                step=3,
+                stop_reason="done",
+            )
+        )
+        kwargs["on_assistant_message"]("The final answer")
+        return [*kwargs["messages"], {"role": "assistant", "content": "The final answer"}]
+
+    monkeypatch.setattr(input_handler_module, "run_agent_turn", fake_run_agent_turn)
+    monkeypatch.setattr(input_handler_module, "save_history_entries", lambda _history: None)
+    state = ScreenState(input="finish the task", cursor_offset=16)
+    args = TtyAppArgs(
+        runtime={"model": "default"},
+        tools=ToolRegistry([]),
+        model=object(),
+        messages=[{"role": "system", "content": "sys"}],
+        cwd=str(tmp_path),
+        permissions=PermissionManager(str(tmp_path)),
+    )
+
+    assert input_handler_module._handle_input(args, state, lambda: None) is False
+    state.agent_thread.join(timeout=5)
+    input_handler_module.drain_ui_events(args, state, lambda: None)
+
+    stop_entries = [entry for entry in state.transcript if entry.runtimeKind == "stop"]
+    assistant_entries = [entry for entry in state.transcript if entry.kind == "assistant"]
+    assert len(stop_entries) == 1
+    assert stop_entries[0].body == "Task stopped: done"
+    assert stop_entries[0].runtimeStopReason == "done"
+    assert [entry.body for entry in assistant_entries] == ["The final answer"]
+
+
+def test_ui_error_is_visible_and_redacts_common_secret_forms() -> None:
+    state = ScreenState(is_busy=True, active_tool="run_command")
+    rerenders: list[bool] = []
+
+    _present_ui_error(
+        state,
+        RuntimeError("apiKey=sk-1234567890abcdef leaked"),
+        lambda: rerenders.append(True),
+        reason="agent_error",
+    )
+
+    assert rerenders == [True]
+    assert state.is_busy is False
+    assert state.active_tool is None
+    assert state.status is None
+    assert len(state.transcript) == 1
+    assert "Error" in state.transcript[0].body
+    assert "sk-1234567890abcdef" not in state.transcript[0].body
+
+
+def test_windows_resize_poll_invalidates_frame_once_on_change(monkeypatch) -> None:
+    sizes = iter([(100, 30)])
+    invalidations: list[str] = []
+    globals_dict = _poll_windows_resize.__globals__
+    monkeypatch.setitem(globals_dict, "_get_terminal_size", lambda: next(sizes))
+    monkeypatch.setitem(globals_dict, "invalidate_terminal_size_cache", lambda: None)
+    monkeypatch.setitem(globals_dict, "invalidate_frame_cache", lambda: invalidations.append("frame"))
+
+    current, changed = _poll_windows_resize((80, 24))
+
+    assert current == (100, 30)
+    assert changed is True
+    assert invalidations == ["frame"]
+
+
+def test_windows_resize_poll_does_not_invalidate_when_size_is_unchanged(monkeypatch) -> None:
+    invalidations: list[str] = []
+    globals_dict = _poll_windows_resize.__globals__
+    monkeypatch.setitem(globals_dict, "_get_terminal_size", lambda: (80, 24))
+    monkeypatch.setitem(globals_dict, "invalidate_terminal_size_cache", lambda: None)
+    monkeypatch.setitem(globals_dict, "invalidate_frame_cache", lambda: invalidations.append("frame"))
+
+    current, changed = _poll_windows_resize((80, 24))
+
+    assert current == (80, 24)
+    assert changed is False
+    assert invalidations == []
 
 
 def test_tty_session_command_uses_live_session_snapshot(tmp_path) -> None:
@@ -594,7 +711,7 @@ def test_tty_session_command_uses_live_session_snapshot(tmp_path) -> None:
 def test_tty_sessions_command_lists_workspace_history(tmp_path, monkeypatch) -> None:
     workspace = str(tmp_path.resolve())
     monkeypatch.setattr(
-        "repoterm.cli_commands.list_sessions",
+        "repoterm.ui.commands.list_sessions",
         lambda: [
             SessionMetadata(
                 session_id="aaa111111111",
@@ -687,7 +804,7 @@ def test_tty_rewind_command_rewinds_active_session(tmp_path, monkeypatch) -> Non
         session_arg.update_metadata()
         return [checkpoint]
 
-    monkeypatch.setattr("repoterm.cli_commands.rewind_session_data", fake_rewind)
+    monkeypatch.setattr("repoterm.ui.commands.rewind_session_data", fake_rewind)
 
     state = ScreenState(
         input="/rewind",
@@ -729,7 +846,7 @@ def test_tty_session_rewind_command_rewinds_saved_session(tmp_path, monkeypatch)
     session.checkpoints = [checkpoint]
     session.update_metadata()
     monkeypatch.setattr(
-        "repoterm.cli_commands.get_latest_session",
+        "repoterm.ui.commands.get_latest_session",
         lambda workspace=None: session if workspace == str(tmp_path.resolve()) else None,
         raising=False,
     )
@@ -742,7 +859,7 @@ def test_tty_session_rewind_command_rewinds_saved_session(tmp_path, monkeypatch)
         session.update_metadata()
         return session, [checkpoint]
 
-    monkeypatch.setattr("repoterm.cli_commands.rewind_session", fake_rewind)
+    monkeypatch.setattr("repoterm.ui.commands.rewind_session", fake_rewind)
 
     state = ScreenState(input="/session-rewind latest", cursor_offset=len("/session-rewind latest"))
     args = TtyAppArgs(
@@ -765,7 +882,7 @@ def test_tty_session_rewind_command_rewinds_saved_session(tmp_path, monkeypatch)
 def test_tty_session_replay_command_lists_saved_timeline(tmp_path, monkeypatch) -> None:
     workspace = str(tmp_path.resolve())
     monkeypatch.setattr(
-        "repoterm.cli_commands.get_latest_session",
+        "repoterm.ui.commands.get_latest_session",
         lambda workspace=None: SessionData(
             session_id="aaa111111111",
             created_at=1.0,

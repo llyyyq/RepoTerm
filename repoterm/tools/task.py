@@ -14,9 +14,9 @@ from __future__ import annotations
 import time
 from typing import TypedDict, cast
 
-from repoterm.agent_loop import run_agent_turn
-from repoterm.tooling import ToolDefinition, ToolResult
-from repoterm.types import ChatMessage
+from repoterm.runtime.loop import run_agent_turn
+from repoterm.tools.registry import ToolDefinition, ToolResult
+from repoterm.contracts.types import ChatMessage
 
 
 # ---------------------------------------------------------------------------
@@ -99,8 +99,8 @@ def _run(input_data: dict, context) -> ToolResult:
     - A turn limit
     - Result summarized for the parent context
     """
-    from repoterm.model_registry import create_model_adapter
-    from repoterm.permissions import PermissionManager
+    from repoterm.providers.registry import create_model_adapter
+    from repoterm.safety.permissions import PermissionManager
     from repoterm.tools import create_default_tool_registry
     
     agent_type = input_data["agent_type"]
@@ -136,7 +136,7 @@ def _run(input_data: dict, context) -> ToolResult:
     
     if allowed is not None:
         filtered_tools = [t for t in full_tools.list() if t.name in allowed]
-        from repoterm.tooling import ToolRegistry
+        from repoterm.tools.registry import ToolRegistry
         tools = ToolRegistry(filtered_tools)
     else:
         tools = full_tools

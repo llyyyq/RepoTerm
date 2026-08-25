@@ -31,10 +31,10 @@ jobs:
         run: python -m compileall -q repoterm tests benchmarks Main Package
 
       - name: AGENTS structure compliance
-        run: python -m repoterm.structure_check --root . --hotspots 5 --max-dependency-upstream 4 --check-material-inventory --report .temp/structure-compliance.json
+        run: python -m repoterm.app.structure_check --root . --hotspots 5 --max-dependency-upstream 4 --check-material-inventory --report .temp/structure-compliance.json
 
       - name: Runtime readiness gate
-        run: python -m repoterm.readiness --json
+        run: python -m repoterm.app.readiness --json
 
       - name: Lint (ruff)
         run: |

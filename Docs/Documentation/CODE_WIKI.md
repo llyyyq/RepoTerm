@@ -122,7 +122,7 @@ Session ──▶ State ──▶ Memory
 | **运行时** | Python 3.10+ |
 | **包管理** | pip/pyproject.toml |
 | **安装** | `pip install -e .` |
-| **入口** | `repoterm/main.py` |
+| **入口** | `repoterm/app/interactive.py` |
 | **TUI 框架** | Rich / 自研终端渲染 |
 | **优势** | 开发效率高、AI/ML 生态丰富、易于原型开发 |
 
@@ -397,7 +397,7 @@ repoterm/
 - **回调机制**：`onToolStart`、`onToolResult`、`onAssistantMessage`、`onProgressMessage`
 - **错误计数**：跟踪工具错误次数，影响错误恢复策略
 
-**Python 版本**（[agent_loop.py](../../repoterm/agent_loop.py)）：
+**Python 版本**（[runtime/loop.py](../../repoterm/runtime/loop.py)）：
 
 - 与 TS 版本逻辑对等，使用 Python 异步编程模式
 - 额外支持：成本追踪、工作记忆集成、上下文压缩
@@ -592,7 +592,7 @@ description: 头脑风暴和创意生成
 
 **职责**：管理多种 LLM 后端，提供统一的调用接口。
 
-**模型注册表**（Python [model_registry.py](../../repoterm/model_registry.py)）：
+**模型注册表**（Python [providers/registry.py](../../repoterm/providers/registry.py)）：
 
 ```python
 ModelRegistry:
@@ -1134,7 +1134,7 @@ pip install -e .
 repoterm
 
 # 或直接运行
-python -m repoterm.main
+python -m repoterm.app.interactive
 ```
 
 **配置**：
@@ -1385,10 +1385,10 @@ interface ModelResponse {
 | 文件 | 路径 |
 |------|------|
 | 历史 TS 实现 | `ts-src/`（已完成归档删除，清单见 `engineering/material-burndown/ts-src.json`） |
-| Python 入口 | [repoterm/main.py](../../repoterm/main.py) |
-| Python Agent Loop | [repoterm/agent_loop.py](../../repoterm/agent_loop.py) |
+| Python 入口 | [repoterm/app/interactive.py](../../repoterm/app/interactive.py) |
+| Python Agent Loop | [repoterm/runtime/loop.py](../../repoterm/runtime/loop.py) |
 | Python 工具 | [repoterm/tools/](../../repoterm/tools/) |
-| Python TUI | [repoterm/tty_app.py](../../repoterm/tty_app.py) |
+| Python TUI | [repoterm/ui/tty.py](../../repoterm/ui/tty.py) |
 | MCP 配置 | [.mcp.json](../../.mcp.json) |
 
 ### E. 相关报告

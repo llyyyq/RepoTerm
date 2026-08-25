@@ -12,11 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from repoterm.agent_loop import run_agent_turn
-from repoterm.context_manager import ContextManager
-from repoterm.mock_model import MockModelAdapter
-from repoterm.permissions import PermissionManager
-from repoterm.tooling import ToolRegistry
+from repoterm.runtime.loop import run_agent_turn
+from repoterm.context.manager import ContextManager
+from repoterm.providers.mock import MockModelAdapter
+from repoterm.safety.permissions import PermissionManager
+from repoterm.tools.registry import ToolRegistry
 from repoterm.tools import create_default_tool_registry
 
 
@@ -125,7 +125,7 @@ class TestAgentFlowCybernetics:
         self, monkeypatch, mock_model, tools, messages, workspace, permissions
     ):
         """The agent loop should drive the unified orchestrator lifecycle."""
-        from repoterm.cybernetic_orchestrator import CyberneticOrchestrator
+        from repoterm.runtime.control.cybernetic_orchestrator import CyberneticOrchestrator
 
         calls: list[str] = []
 
@@ -141,12 +141,16 @@ class TestAgentFlowCybernetics:
         for method in (
             "wire_memory",
             "wire_healing",
-            "inject_memories",
             "step_start",
             "step_end",
-            "reflect_on_task",
         ):
             monkeypatch.setattr(CyberneticOrchestrator, method, wrap(method))
+
+        from repoterm.memory import create_memory_service
+        memory_service = create_memory_service(
+            workspace=workspace,
+            db_path=workspace / "memory.sqlite3",
+        )
 
         messages.append({"role": "user", "content": "/ls"})
         result = run_agent_turn(
@@ -156,6 +160,7 @@ class TestAgentFlowCybernetics:
             cwd=str(workspace),
             permissions=permissions,
             context_manager=ContextManager(model="claude-sonnet-4-20250514"),
+            memory_manager=memory_service,
             enable_work_chain=True,
             max_steps=3,
         )
@@ -164,33 +169,32 @@ class TestAgentFlowCybernetics:
         for method in (
             "wire_memory",
             "wire_healing",
-            "inject_memories",
             "step_start",
             "step_end",
-            "reflect_on_task",
         ):
             assert method in calls
 
 
-class TestAgentMemoryPipeline:
+class TestAgentMemoryIntegration:
     """Memory pipeline runs end-to-end within agent loop."""
 
-    def test_memory_pipeline_in_agent_loop(
+    def test_memory_in_agent_loop(
         self, mock_model, tools, messages, workspace, permissions
     ):
         """Memory pipeline (domain classify → BM25 → reranker → inject) must work."""
         # Create some memories first to have something to search
-        from repoterm.memory import MemoryManager, MemoryScope
-        mgr = MemoryManager(project_root=str(workspace))
-        mgr.add_entry(
-            scope=MemoryScope.PROJECT, category="pattern",
-            content="React forms use react-hook-form with zod validation",
-            tags=["react", "form", "validation"],
+        from repoterm.memory import create_memory_service
+        mgr = create_memory_service(
+            workspace=workspace,
+            db_path=workspace / "memory.sqlite3",
         )
-        mgr.add_entry(
-            scope=MemoryScope.PROJECT, category="convention",
-            content="Use functional components with hooks, avoid class components",
-            tags=["react", "component"],
+        mgr.remember_explicit(
+            "React forms use react-hook-form with zod validation",
+            key="react_forms_validation",
+        )
+        mgr.remember_explicit(
+            "Use functional components with hooks, avoid class components",
+            key="react_component_convention",
         )
 
         result = run_agent_turn(
@@ -200,6 +204,7 @@ class TestAgentMemoryPipeline:
             cwd=str(workspace),
             permissions=permissions,
             context_manager=ContextManager(model="claude-sonnet-4-20250514"),
+            memory_manager=mgr,
             enable_work_chain=True,
             max_steps=3,
         )

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from repoterm.tooling import ToolDefinition, ToolResult
+from repoterm.tools.registry import ToolDefinition, ToolResult
 
 
 def _validate(input_data: dict) -> dict:
@@ -21,4 +21,3 @@ ask_user_tool = ToolDefinition(
     validator=_validate,
     run=_run,
 )
-

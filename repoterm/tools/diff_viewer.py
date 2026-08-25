@@ -3,7 +3,7 @@ from __future__ import annotations
 import difflib
 from pathlib import Path
 from typing import Any
-from repoterm.tooling import ToolDefinition, ToolResult
+from repoterm.tools.registry import ToolDefinition, ToolResult
 
 
 # ---------------------------------------------------------------------------

@@ -9,9 +9,9 @@ from Main.RepoTermFrontline.Src.Application.Entry.RuntimeLifecycleSurface import
 
 def test_runtime_lifecycle_surface_declares_console_entries() -> None:
     assert lifecycle_script_targets() == {
-        "repoterm": "repoterm.main:main",
-        "repoterm-headless": "repoterm.headless:main",
-        "repoterm-readiness": "repoterm.readiness:main",
+        "repoterm": "repoterm.app.interactive:main",
+        "repoterm-headless": "repoterm.app.headless:main",
+        "repoterm-readiness": "repoterm.app.readiness:main",
     }
 
 

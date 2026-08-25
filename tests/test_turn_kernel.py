@@ -1,9 +1,11 @@
-from repoterm.task_object import TaskState
-from repoterm.turn_kernel import (
+from repoterm.runtime.planning.task_object import TaskState
+from repoterm.memory import EvidenceKind, EvidenceLevel
+from repoterm.runtime.turn_kernel import (
     TurnBudgetSignals,
     TurnRecurrentState,
     TurnVerificationState,
     build_stable_task_pack,
+    classify_tool_result,
     decide_assistant_turn,
     decide_tool_turn,
     derive_turn_step_policy,
@@ -206,6 +208,16 @@ def test_decide_assistant_turn_rejects_unsupported_final_in_verify_mode() -> Non
     )
     turn_state.step = 4
     turn_state.record_tool_result(True, summary="pytest: 5 passed")
+    turn_state.record_verification_evidence(
+        classify_tool_result(
+            tool_name="pytest",
+            tool_input={"cmd": "python -m pytest -q"},
+            ok=True,
+            result_output="5 passed",
+            source_session_id="session-1",
+            source_turn_id="turn-1",
+        )
+    )
 
     decision = decide_assistant_turn(
         turn_state=turn_state,
@@ -229,7 +241,66 @@ def test_decide_assistant_turn_rejects_unsupported_final_in_verify_mode() -> Non
 
     assert decision.kind == "progress"
     assert "verification guard" in (decision.assistant_content or "").lower()
-    assert "pytest: 5 passed" in (decision.user_content or "")
+    assert "5 passed" in (decision.user_content or "")
+
+
+def test_only_semantic_validation_commands_open_the_evidence_gate() -> None:
+    turn_state = TurnRecurrentState(max_steps=5)
+    read = classify_tool_result(
+        tool_name="read_file",
+        tool_input={"path": "README.md"},
+        ok=True,
+        result_output="contents omitted",
+        source_session_id="session-1",
+        source_turn_id="turn-1",
+    )
+    shell = classify_tool_result(
+        tool_name="run_command",
+        tool_input={"cmd": "python --version"},
+        ok=True,
+        result_output="Python 3.12",
+        source_session_id="session-1",
+        source_turn_id="turn-1",
+    )
+    pytest_result = classify_tool_result(
+        tool_name="run_command",
+        tool_input={"cmd": "python -m pytest -q"},
+        ok=True,
+        result_output="2 passed",
+        source_session_id="session-1",
+        source_turn_id="turn-1",
+    )
+
+    turn_state.record_tool_result(True, summary="read_file: observed")
+    assert read is None
+    turn_state.record_tool_result(True, summary="run_command: observed")
+    assert shell is None
+    assert turn_state.has_verification_evidence() is False
+
+    turn_state.record_tool_result(True, summary="pytest: 2 passed")
+    turn_state.record_verification_evidence(pytest_result)
+    assert pytest_result.level is EvidenceLevel.VALIDATION
+    assert pytest_result.kind is EvidenceKind.TEST
+    assert turn_state.has_verification_evidence() is True
+
+
+def test_observation_text_does_not_open_the_evidence_gate() -> None:
+    cases = (
+        ("read_file", {"path": "pytest.ini"}),
+        ("grep_files", {"query": "pytest"}),
+        ("run_command", {"cmd": "echo pytest"}),
+    )
+
+    for tool_name, tool_input in cases:
+        evidence = classify_tool_result(
+            tool_name=tool_name,
+            tool_input=tool_input,
+            ok=True,
+            result_output="pytest text was observed",
+            source_session_id="session-1",
+            source_turn_id="turn-1",
+        )
+        assert evidence is None
 
 
 def test_decide_tool_turn_keeps_await_user_typed() -> None:
