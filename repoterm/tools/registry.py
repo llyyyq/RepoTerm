@@ -254,7 +254,7 @@ class ToolDefinition:
 # Heuristic: tool names that are known to be read-only
 _READ_ONLY_TOOL_NAMES: frozenset[str] = frozenset({
     "read_file", "list_files", "grep_files", "file_tree",
-    "find_symbols", "find_references", "get_ast_info",
+    "find_symbols", "find_references", "get_ast_info", "repository_map",
     "code_review", "diff_viewer",
     "web_fetch", "web_search",
     "ask_user", "todo_write",

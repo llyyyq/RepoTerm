@@ -480,6 +480,36 @@ class PermissionManager:
             self.session_denied_edits.add(normalized_target)
         raise RuntimeError(f"Edit denied: {normalized_target}")
 
+    def ensure_delete(self, target_path: str, diff_preview: str) -> None:
+        """Require a fresh, single-file approval; edit grants never authorize deletion."""
+        normalized_target = _normalize_path(target_path)
+        if self.prompt is None:
+            raise RuntimeError(
+                f"Delete requires approval: {normalized_target}. "
+                "Start repoterm in TTY mode to review it."
+            )
+        result = self.prompt(
+            {
+                "kind": "edit",  # Reuse the existing scrollable diff approval UI.
+                "summary": "repoterm wants to DELETE one file (recoverable by rewind)",
+                "details": [f"delete target: {normalized_target}", "", diff_preview],
+                "scope": normalized_target,
+                "choices": [
+                    {"key": "1", "label": "delete this file once", "decision": "allow_once"},
+                    {"key": "5", "label": "reject deletion", "decision": "deny_once"},
+                    {"key": "6", "label": "reject and guide model", "decision": "deny_with_feedback"},
+                ],
+            }
+        )
+        if result.get("decision") == "allow_once":
+            log_permission_check("delete_file", normalized_target, granted=True)
+            return
+        log_permission_check("delete_file", normalized_target, granted=False)
+        guidance = str(result.get("feedback", "")).strip()
+        if guidance:
+            raise RuntimeError(f"Delete denied: {normalized_target}\nUser guidance: {guidance}")
+        raise RuntimeError(f"Delete denied: {normalized_target}")
+
 
 class PermissionGate:
     """Explicit permission gate for critical actions.

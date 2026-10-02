@@ -40,6 +40,160 @@ def test_turn_recurrent_state_maps_await_user_to_paused() -> None:
     assert turn_state.final_task_state() is TaskState.PAUSED
 
 
+def test_successful_test_steers_toward_final_without_auto_completing() -> None:
+    state = TurnRecurrentState(max_steps=30)
+    state.begin_step()
+    passed = classify_tool_result(
+        tool_name="test_runner",
+        tool_input={},
+        ok=True,
+        result_output="2 passed in 0.12s",
+        source_session_id=None,
+        source_turn_id=None,
+    )
+    assert passed is not None
+    assert "final answer" in state.post_tool_guidance(passed)
+    assert state.stop_reason is None
+
+    state.begin_step()
+    assert state.post_tool_guidance(None) == ""
+    state.begin_step()
+    assert "already passed" in state.post_tool_guidance(None)
+
+    changed = classify_tool_result(
+        tool_name="edit_file",
+        tool_input={"path": "sample.py"},
+        ok=True,
+        result_output="updated",
+        source_session_id=None,
+        source_turn_id=None,
+    )
+    assert changed is not None
+    assert state.post_tool_guidance(changed) == ""
+    assert state.successful_test_step is None
+
+
+def test_validation_before_latest_edit_is_not_completion_evidence() -> None:
+    state = TurnRecurrentState(max_steps=5)
+    passed = classify_tool_result(
+        tool_name="test_runner", tool_input={}, ok=True,
+        result_output="1 passed", source_session_id=None, source_turn_id=None,
+    )
+    changed = classify_tool_result(
+        tool_name="edit_file", tool_input={"path": "sample.py"}, ok=True,
+        result_output="updated", source_session_id=None, source_turn_id=None,
+    )
+    assert passed is not None and changed is not None
+    state.record_verification_evidence(passed)
+    assert state.has_verification_evidence()
+    state.record_verification_evidence(changed)
+    assert not state.has_verification_evidence()
+    assert state.verification_state.evidence_summary == ""
+    state.verification_state.requires_evidence = True
+    decision = decide_assistant_turn(
+        turn_state=state,
+        step_content="The tests passed, so the fix is complete.",
+        step_kind=None, stop_reason=None, block_types=None,
+        ignored_block_types=None, is_empty=False, treat_as_progress=False,
+        is_recoverable_thinking_stop=False, format_diagnostics=lambda *_: "",
+        nudge_continue="continue", nudge_after_tool_result="after tool",
+        resume_after_pause="resume pause", resume_after_max_tokens="resume tokens",
+        nudge_after_empty_response="empty after tool",
+        nudge_after_empty_no_tools="empty no tools",
+        step_policy=type("Policy", (), {"phase": "verify"})(),
+    )
+    assert decision.kind == "progress"
+    assert "no successful validation remains" in (decision.assistant_content or "")
+    state.record_verification_evidence(passed)
+    assert state.has_verification_evidence()
+
+
+def test_default_profile_blocks_final_after_code_change_without_validation() -> None:
+    state = TurnRecurrentState(max_steps=50)
+    changed = classify_tool_result(
+        tool_name="edit_file", tool_input={"path": "sample.py"}, ok=True,
+        result_output="updated", source_session_id=None, source_turn_id=None,
+    )
+    assert changed is not None
+    state.record_verification_evidence(changed, requires_validation=True)
+
+    decision = decide_assistant_turn(
+        turn_state=state,
+        step_content="The implementation is fixed.",
+        step_kind=None, stop_reason=None, block_types=None,
+        ignored_block_types=None, is_empty=False, treat_as_progress=False,
+        is_recoverable_thinking_stop=False, format_diagnostics=lambda *_: "",
+        nudge_continue="continue", nudge_after_tool_result="after tool",
+        resume_after_pause="resume pause", resume_after_max_tokens="resume tokens",
+        nudge_after_empty_response="empty after tool",
+        nudge_after_empty_no_tools="empty no tools",
+        step_policy=type("Policy", (), {"phase": "execute"})(),
+    )
+
+    assert decision.kind == "progress"
+    assert "no successful validation remains" in (decision.assistant_content or "")
+
+
+def test_document_change_can_finish_without_code_validation_gate() -> None:
+    state = TurnRecurrentState(max_steps=50)
+    changed = classify_tool_result(
+        tool_name="edit_file", tool_input={"path": "README.md"}, ok=True,
+        result_output="updated", source_session_id=None, source_turn_id=None,
+    )
+    assert changed is not None
+    state.record_verification_evidence(changed, requires_validation=False)
+
+    decision = decide_assistant_turn(
+        turn_state=state,
+        step_content="Updated the documentation.",
+        step_kind=None, stop_reason=None, block_types=None,
+        ignored_block_types=None, is_empty=False, treat_as_progress=False,
+        is_recoverable_thinking_stop=False, format_diagnostics=lambda *_: "",
+        nudge_continue="continue", nudge_after_tool_result="after tool",
+        resume_after_pause="resume pause", resume_after_max_tokens="resume tokens",
+        nudge_after_empty_response="empty after tool",
+        nudge_after_empty_no_tools="empty no tools",
+        step_policy=type("Policy", (), {"phase": "execute"})(),
+    )
+
+    assert decision.kind == "final"
+
+
+def test_verification_state_round_trip_preserves_unverified_code_change() -> None:
+    state = TurnVerificationState(strict=False)
+    changed = classify_tool_result(
+        tool_name="edit_file", tool_input={"path": "sample.py"}, ok=True,
+        result_output="updated", source_session_id="session", source_turn_id="turn",
+    )
+    assert changed is not None
+    state.record_evidence(changed, requires_validation=True)
+
+    restored = TurnVerificationState.from_state(state.to_state(), strict=False)
+
+    assert restored.latest_change_index == 0
+    assert restored.latest_change_requires_validation is True
+    assert restored.supporting_evidence() == ()
+
+
+def test_failed_test_feedback_reports_delta_without_inventing_success() -> None:
+    state = TurnRecurrentState(max_steps=10)
+    failed = classify_tool_result(
+        tool_name="test_runner", tool_input={}, ok=False,
+        result_output="FAILED tests/test_a.py::test_first - AssertionError\n1 failed, 1 passed",
+        source_session_id=None, source_turn_id=None,
+    )
+    assert failed is not None
+    guidance = state.post_tool_guidance(failed, result_output="FAILED tests/test_a.py::test_first - AssertionError")
+    assert "New: tests/test_a.py::test_first" in guidance
+    guidance = state.post_tool_guidance(failed, result_output="FAILED tests/test_a.py::test_first - AssertionError")
+    assert "No newly failing test IDs" in guidance
+
+    unittest_failure = "FAIL: test_works_in_mono_process_only_environment (tests.test_black.BlackTestCase)\nAssertionError: 1 != 0"
+    guidance = state.post_tool_guidance(failed, result_output=unittest_failure)
+    assert "test_works_in_mono_process_only_environment" in guidance
+    assert "failure-mechanism hypothesis" in guidance
+
+
 def test_build_stable_task_pack_includes_graph_and_protected_context() -> None:
     pack = build_stable_task_pack(
         task=DummyTask(),

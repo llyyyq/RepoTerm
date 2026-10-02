@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from math import ceil
 import re
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, Mapping
 
 from repoterm.context.layered import ContextBuilder, LayeredContext
 from repoterm.memory.models import EvidenceKind, EvidenceLevel, VerificationEvidence
@@ -92,6 +92,8 @@ def _validation_category(tool_name: str, tool_input: object) -> tuple[EvidenceLe
         if "list" in normalized_name or "glob" in normalized_name:
             return EvidenceLevel.OBSERVATION, EvidenceKind.LIST_FILES
         return EvidenceLevel.OBSERVATION, EvidenceKind.READ_FILE
+    if normalized_name == "delete_file":
+        return EvidenceLevel.CHANGE, EvidenceKind.EDIT_FILE
     if any(token in normalized_name for token in ("edit", "write", "patch")):
         return EvidenceLevel.CHANGE, EvidenceKind.EDIT_FILE
     if "diff" in normalized_name:
@@ -186,24 +188,95 @@ class TurnVerificationState:
     evidence_summary: str = ""
     last_verification_note: str = ""
     evidence_items: list[VerificationEvidence] = field(default_factory=list)
+    latest_change_index: int = -1
+    latest_change_requires_validation: bool = False
 
-    def record_evidence(self, evidence: VerificationEvidence) -> None:
+    STATE_VERSION = 1
+
+    def to_state(self) -> dict[str, Any]:
+        return {
+            "version": self.STATE_VERSION,
+            "strict": self.strict,
+            "requires_explicit_final": self.requires_explicit_final,
+            "requires_evidence": self.requires_evidence,
+            "evidence_summary": self.evidence_summary,
+            "last_verification_note": self.last_verification_note,
+            "evidence_items": [item.to_dict() for item in self.evidence_items[-24:]],
+            "latest_change_index": self.latest_change_index,
+            "latest_change_requires_validation": self.latest_change_requires_validation,
+        }
+
+    @classmethod
+    def from_state(
+        cls,
+        raw: object,
+        *,
+        strict: bool = False,
+    ) -> "TurnVerificationState":
+        if not isinstance(raw, Mapping) or raw.get("version") != cls.STATE_VERSION:
+            return cls(strict=strict, requires_explicit_final=strict)
+        try:
+            evidence_items = [
+                VerificationEvidence.from_dict(item)
+                for item in list(raw.get("evidence_items", []))[-24:]
+                if isinstance(item, Mapping)
+            ]
+            latest_change_index = int(raw.get("latest_change_index", -1))
+            if latest_change_index < -1 or latest_change_index >= len(evidence_items):
+                latest_change_index = -1
+            state = cls(
+                strict=strict,
+                requires_explicit_final=bool(raw.get("requires_explicit_final", strict)),
+                requires_evidence=bool(raw.get("requires_evidence", False)),
+                evidence_summary=str(raw.get("evidence_summary", ""))[:280],
+                last_verification_note=str(raw.get("last_verification_note", ""))[:280],
+                evidence_items=evidence_items,
+                latest_change_index=latest_change_index,
+                latest_change_requires_validation=(
+                    bool(raw.get("latest_change_requires_validation", False))
+                    and latest_change_index >= 0
+                ),
+            )
+            supporting = state.supporting_evidence()
+            state.evidence_ready = bool(supporting)
+            state.evidence_summary = supporting[-1].summary if supporting else ""
+            return state
+        except (TypeError, ValueError):
+            return cls(strict=strict, requires_explicit_final=strict)
+
+    def record_evidence(
+        self,
+        evidence: VerificationEvidence,
+        *,
+        requires_validation: bool | None = None,
+    ) -> None:
         """记录分类后的证据；只有支持经验的等级才能打开当前 Turn 门禁。"""
 
         self.evidence_items.append(evidence)
+        if evidence.ok and evidence.level == EvidenceLevel.CHANGE:
+            self.latest_change_index = len(self.evidence_items) - 1
+            self.latest_change_requires_validation = (
+                True if requires_validation is None else requires_validation
+            )
         # Keep per-turn state bounded while retaining the most recent outcome
         # history for recovery-aware reflection.  Experience persistence has a
         # stricter three-digest cap below.
         if len(self.evidence_items) > 24:
-            del self.evidence_items[:-24]
+            removed = len(self.evidence_items) - 24
+            del self.evidence_items[:removed]
+            self.latest_change_index = max(-1, self.latest_change_index - removed)
+            if self.latest_change_index < 0:
+                self.latest_change_requires_validation = False
         supporting = self.supporting_evidence()
         self.evidence_ready = bool(supporting)
-        if supporting:
-            self.evidence_summary = supporting[-1].summary
+        self.evidence_summary = supporting[-1].summary if supporting else ""
 
     def supporting_evidence(self) -> tuple[VerificationEvidence, ...]:
         """返回当前 Turn 中所有成功的 VALIDATION/CONFIRMATION 证据。"""
-        return tuple(item for item in self.evidence_items if item.supports_experience)
+        return tuple(
+            item for index, item in enumerate(self.evidence_items)
+            if index > self.latest_change_index and item.supports_experience
+        )
 
     def evidence_for_experience(self) -> tuple[VerificationEvidence, ...]:
         """返回最多三条可写入经验、且带稳定来源引用的成功证据摘要。"""
@@ -314,6 +387,9 @@ class TurnRecurrentState:
     tool_error_count: int = 0
     tool_observation_count: int = 0
     successful_tool_observation_count: int = 0
+    successful_test_step: int | None = None
+    last_failed_tests: tuple[str, ...] = ()
+    post_test_observation_count: int = 0
     step: int = 0
     widening_active: bool = False
     widening_transition_count: int = 0
@@ -369,8 +445,79 @@ class TurnRecurrentState:
             self.latest_tool_result_summary = normalized[:280]
         self._refresh_budget_signals()
 
-    def record_verification_evidence(self, evidence: VerificationEvidence) -> None:
-        self.verification_state.record_evidence(evidence)
+    def record_verification_evidence(
+        self,
+        evidence: VerificationEvidence,
+        *,
+        requires_validation: bool | None = None,
+    ) -> None:
+        self.verification_state.record_evidence(
+            evidence,
+            requires_validation=requires_validation,
+        )
+
+    def post_tool_guidance(
+        self,
+        evidence: VerificationEvidence | None,
+        *,
+        tool_name: str = "",
+        tool_input: object = None,
+        ok: bool = True,
+        result_output: str = "",
+    ) -> str:
+        """Steer a verified turn toward closure without claiming task completion."""
+
+        if evidence is not None and evidence.level == EvidenceLevel.CHANGE and evidence.ok:
+            self.successful_test_step = None
+            self.post_test_observation_count = 0
+            if evidence.ok and self.budget_signals.remaining_steps is not None and self.budget_signals.remaining_steps <= 2:
+                return "The code changed near the step limit. Run a focused validation on this version before claiming completion; otherwise report verification as incomplete."
+            return ""
+        if evidence is not None and evidence.kind == EvidenceKind.TEST:
+            self.successful_test_step = self.step if evidence.ok else None
+            self.post_test_observation_count = 0
+            if evidence.ok:
+                self.last_failed_tests = ()
+                return (
+                    "Validation passed. If the requested change and any other requirements "
+                    "are satisfied, give a concise final answer citing this result. "
+                    "Otherwise state the specific remaining requirement before using more tools."
+                )
+            failures = tuple(
+                name[:120]
+                for name in dict.fromkeys(re.findall(
+                    r"(?m)^(?:FAILED\s+|(?:FAIL|ERROR):\s+)([^\s]+)",
+                    result_output,
+                ))
+            )[:8]
+            previous = set(self.last_failed_tests)
+            self.last_failed_tests = failures
+            assertion = next(
+                (
+                    line.strip()[:180]
+                    for line in result_output.splitlines()
+                    if re.match(r"^\s*(?:E\s+assert|>\s+assert|AssertionError:)", line)
+                ),
+                "",
+            )
+            assertion_note = f" First assertion: {assertion}." if assertion else ""
+            if failures:
+                new = [name for name in failures if name not in previous]
+                resolved = [name for name in previous if name not in failures]
+                delta = (
+                    f" New: {', '.join(new[:3])}." if new else " No newly failing test IDs."
+                ) + (f" No longer failing: {', '.join(resolved[:3])}." if resolved else "")
+                return f"Focused test failed ({len(failures)} failing test ID(s)).{delta}{assertion_note} State a concrete failure-mechanism hypothesis, the candidate production function, and one check that could disprove it. Then revise the relevant implementation and rerun the focused test."
+            return f"Focused test failed.{assertion_note} Inspect the failing assertion or fixture, then state a concrete failure-mechanism hypothesis, candidate production function, and one discriminating check before editing. Rerun a focused test on the new file version."
+        if evidence is None and ok and self.successful_test_step is not None:
+            self.post_test_observation_count += 1
+            if self.post_test_observation_count >= 2:
+                return (
+                    "The test already passed and further reads/searches have not changed the code. "
+                    "Finish with the verification evidence if requirements are met; otherwise "
+                    "identify a concrete unmet requirement and the next necessary action."
+                )
+        return ""
 
     def set_progress_summary(self, summary: str) -> None:
         self.progress_state["summary"] = summary[:280]
@@ -609,9 +756,15 @@ def derive_turn_step_policy(turn_state: TurnRecurrentState) -> TurnStepPolicy:
     turn_state.widening_trigger_evidence = widening_evidence_summary
     turn_state.verification_state.requires_explicit_final = phase == "verify"
     turn_state.verification_state.requires_evidence = (
-        phase == "verify"
-        and turn_state.verification_state.strict
-        and turn_state.saw_tool_result
+        (
+            phase == "verify"
+            and turn_state.verification_state.strict
+            and turn_state.saw_tool_result
+        )
+        or (
+            turn_state.verification_state.latest_change_requires_validation
+            and not evidence_ready
+        )
     )
     turn_state.verification_state.evidence_ready = evidence_ready
     if evidence_ready and not turn_state.verification_state.evidence_summary:
@@ -1018,6 +1171,18 @@ def decide_assistant_turn(
             kind="fallback",
             assistant_content=fallback,
             stop_reason=typed_stop_reason,
+        )
+
+    if (
+        turn_state.verification_state.latest_change_requires_validation
+        and turn_state.verification_state.latest_change_index >= 0
+        and not turn_state.has_verification_evidence()
+    ):
+        return AssistantTurnDecision(
+            kind="progress",
+            assistant_content="Verification guard: no successful validation remains after the latest code change.",
+            user_content="Run a focused check on the current code/configuration version. If verification cannot run, state the blocker and do not claim the task is verified.",
+            runtime_event_category="guard",
         )
 
     if (

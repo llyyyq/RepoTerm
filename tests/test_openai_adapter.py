@@ -28,6 +28,10 @@ class _FakeResponse:
         return self._body
 
 
+class _FakeStreamResponse(io.BytesIO):
+    status = 200
+
+
 def _runtime() -> dict[str, str]:
     return {
         "model": "gpt5.5",
@@ -50,6 +54,33 @@ def test_openai_adapter_sets_compatible_user_agent(monkeypatch: pytest.MonkeyPat
 
     assert step.content == "OK"
     assert captured["user_agent"] == DEFAULT_OPENAI_USER_AGENT
+
+
+def test_openai_adapter_accepts_null_tool_calls_in_stream(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events = [
+        {"choices": [{"delta": {"content": None, "tool_calls": None, "reasoning_content": "thinking"}, "finish_reason": None}]},
+        {"choices": [{"delta": {"content": "OK", "tool_calls": None}, "finish_reason": "stop"}]},
+        {"choices": [], "usage": {"prompt_tokens": 1, "completion_tokens": 1}},
+    ]
+    payload = b"".join(
+        b"data: " + json.dumps(event).encode("utf-8") + b"\n"
+        for event in events
+    ) + b"data: [DONE]\n"
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda request, timeout=0: _FakeStreamResponse(payload),
+    )
+    chunks: list[str] = []
+
+    step = OpenAIModelAdapter(_runtime(), _DummyTools()).next(
+        [{"role": "user", "content": "Reply with exactly OK."}],
+        on_stream_chunk=chunks.append,
+    )
+
+    assert step.content == "OK"
+    assert chunks == ["OK"]
 
 
 @pytest.mark.parametrize(

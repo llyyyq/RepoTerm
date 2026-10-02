@@ -8,6 +8,8 @@ import pytest
 
 import repoterm.tools.test_runner as test_runner_module
 import repoterm.tools.run_command as run_command_module
+import repoterm.tools.read_file as read_file_module
+import repoterm.tools.grep_files as grep_files_module
 import repoterm.session.service as session_module
 from repoterm.safety.permissions import PermissionManager
 from repoterm.session import create_new_session, load_session
@@ -23,6 +25,45 @@ from repoterm.tools.test_runner import test_runner_tool
 from repoterm.tools.write_file import write_file_tool
 from repoterm.tools.registry import ToolContext
 from repoterm.tools import create_default_tool_registry
+
+
+def test_read_file_supports_source_line_numbers_without_changing_character_offsets(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "sample.py").write_text("first\nsecond\nthird\n", encoding="utf-8")
+    context = ToolContext(cwd=str(tmp_path), permissions=None)
+
+    by_line = read_file_module.read_file_tool.run(
+        read_file_module._validate({"path": "sample.py", "start_line": 2, "line_count": 1}),
+        context,
+    )
+    by_char = read_file_module.read_file_tool.run(
+        read_file_module._validate({"path": "sample.py", "offset": 6, "limit": 6}),
+        context,
+    )
+
+    assert by_line.ok and "2: second" in by_line.output
+    assert "START_LINE: 2" in by_line.output
+    assert by_char.ok and by_char.output.endswith("second")
+    with pytest.raises(ValueError, match="cannot be combined"):
+        read_file_module._validate({"path": "sample.py", "start_line": 2, "offset": 2})
+
+
+def test_grep_files_searches_a_single_file_and_preserves_line_numbers(tmp_path: Path) -> None:
+    (tmp_path / "sample.py").write_text("first\nneedle\nthird\n", encoding="utf-8")
+    context = ToolContext(cwd=str(tmp_path), permissions=None)
+
+    result = grep_files_module.grep_files_tool.run(
+        grep_files_module._validate(
+            {"path": "sample.py", "pattern": "needle", "context_lines": 10}
+        ),
+        context,
+    )
+
+    assert result.ok and "sample.py:2: needle" in result.output
+    assert "sample.py:1:" in result.output
+    assert "sample.py:3:" in result.output
+    assert "1 match(es) in 1 file(s)" in result.output
 
 
 def test_split_command_line_supports_quotes() -> None:

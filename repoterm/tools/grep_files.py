@@ -216,13 +216,16 @@ def _validate(input_data: dict) -> dict:
         "path": input_data.get("path", "."),
         "include": include,
         "exclude": exclude,
-        "context_lines": min(int(input_data.get("context_lines", 0)), 5),
+        "context_lines": min(max(int(input_data.get("context_lines", 0)), 0), 20),
         "case_sensitive": bool(input_data.get("case_sensitive", False)),
     }
 
 
 def _run(input_data: dict, context) -> ToolResult:
     root = resolve_tool_path(context, input_data["path"], "search")
+    if not root.exists():
+        return ToolResult(ok=False, output=f"Search path does not exist: {input_data['path']}")
+    search_root = root.parent if root.is_file() else root
     
     # Compile regex
     flags = 0 if input_data.get("case_sensitive", False) else re.IGNORECASE
@@ -237,7 +240,7 @@ def _run(input_data: dict, context) -> ToolResult:
     
     # Collect files
     try:
-        all_files = sorted(root.rglob("*"))
+        all_files = [root] if root.is_file() else sorted(root.rglob("*"))
     except PermissionError:
         return ToolResult(ok=False, output=f"Permission denied: {root}")
     except OSError as e:
@@ -255,7 +258,7 @@ def _run(input_data: dict, context) -> ToolResult:
             continue
         
         # Skip hidden and common large directories
-        if any(part in SKIP_DIRS or part.startswith('.') for part in file_path.relative_to(root).parts):
+        if any(part in SKIP_DIRS or part.startswith('.') for part in file_path.relative_to(search_root).parts):
             skipped += 1
             continue
         
@@ -264,7 +267,7 @@ def _run(input_data: dict, context) -> ToolResult:
             break
         
         # Glob filtering
-        rel_path = file_path.relative_to(root)
+        rel_path = file_path.relative_to(search_root)
         if not _matches_glob(rel_path, include_globs, exclude_globs if exclude_globs else None):
             skipped += 1
             continue
@@ -272,7 +275,7 @@ def _run(input_data: dict, context) -> ToolResult:
         file_count += 1
         
         # Search file
-        matches = _search_file(file_path, regex, context_lines, root)
+        matches = _search_file(file_path, regex, context_lines, search_root)
         if matches:
             results.append((file_path, matches))
             total_matches += len(matches)
@@ -283,7 +286,7 @@ def _run(input_data: dict, context) -> ToolResult:
     if not results:
         return ToolResult(ok=True, output="No matches found.")
     
-    output = _format_results(results, root)
+    output = _format_results(results, search_root)
     
     # Truncate if too large
     if len(output) > MAX_RESULT_SIZE:
@@ -302,7 +305,7 @@ def _run(input_data: dict, context) -> ToolResult:
 grep_files_tool = ToolDefinition(
     name="grep_files",
     description=(
-        "Search UTF-8 text files under a directory using a regex pattern. "
+        "Search a UTF-8 file or files under a directory using a regex pattern. "
         "Supports glob-based include/exclude filtering and context lines. "
         "Results are formatted as path:line:content with optional surrounding context."
     ),
@@ -315,7 +318,7 @@ grep_files_tool = ToolDefinition(
             },
             "path": {
                 "type": "string",
-                "description": "Directory to search in (default: current directory)",
+                "description": "Workspace-relative file or directory to search (default: current directory)",
             },
             "include": {
                 "oneOf": [
@@ -333,9 +336,9 @@ grep_files_tool = ToolDefinition(
             },
             "context_lines": {
                 "type": "integer",
-                "description": "Number of context lines before and after each match (0-5, default: 0)",
+                "description": "Number of context lines before and after each match (0-20, default: 0)",
                 "minimum": 0,
-                "maximum": 5,
+                "maximum": 20,
             },
             "case_sensitive": {
                 "type": "boolean",

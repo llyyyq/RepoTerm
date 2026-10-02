@@ -429,7 +429,7 @@ class OpenAIModelAdapter:
                 on_stream_chunk(content)
             
             # Tool calls (incremental)
-            tc_deltas = delta.get("tool_calls", [])
+            tc_deltas = delta.get("tool_calls") or []
             for tc_delta in tc_deltas:
                 idx = tc_delta.get("index", 0)
                 if idx not in active_tool_calls:

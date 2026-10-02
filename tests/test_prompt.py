@@ -3,6 +3,14 @@ from pathlib import Path
 from repoterm.runtime.planning.prompt import build_system_prompt
 
 
+def test_code_search_guidance_is_conditional(tmp_path: Path) -> None:
+    prompt = build_system_prompt(str(tmp_path))
+    assert "consider repository_map once" in prompt
+    assert "read_file directly" in prompt
+    assert "Do not run repository_map automatically for every task" in prompt
+    assert "do not repeat repository_map" in prompt
+
+
 def test_build_system_prompt_includes_skills_and_mcp(tmp_path: Path) -> None:
     prompt = build_system_prompt(
         str(tmp_path),

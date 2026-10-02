@@ -8,8 +8,10 @@ if TYPE_CHECKING:
 
 def _load_core_tools():
     from repoterm.tools.ask_user import ask_user_tool
-    from repoterm.tools.batch_ops import batch_copy_tool, batch_move_tool, batch_delete_tool
+    from repoterm.tools.batch_ops import batch_copy_tool, batch_move_tool
+    from repoterm.tools.delete_file import delete_file_tool
     from repoterm.tools.code_nav import find_symbols_tool, find_references_tool, get_ast_info_tool
+    from repoterm.tools.repository_map import repository_map_tool
     from repoterm.tools.code_review import code_review_tool
     from repoterm.tools.diff_viewer import diff_viewer_tool
     from repoterm.tools.edit_file import edit_file_tool
@@ -41,7 +43,7 @@ def _load_core_tools():
         # Batch operations
         batch_copy_tool,
         batch_move_tool,
-        batch_delete_tool,
+        delete_file_tool,
         # Command execution
         run_command_tool,
         # Web tools
@@ -54,6 +56,7 @@ def _load_core_tools():
         # Git workflow
         git_tool,
         # Code intelligence
+        repository_map_tool,
         find_symbols_tool,
         find_references_tool,
         get_ast_info_tool,

@@ -1,16 +1,12 @@
 """Tests for session persistence and resume functionality."""
 
 import json
-import os
-import tempfile
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from repoterm.session import (
     AutosaveManager,
-    SessionData,
     SessionMetadata,
     cleanup_old_sessions,
     create_file_checkpoint,
@@ -226,6 +222,27 @@ def test_autosave_manager(temp_session_dir):
     # Verify saved
     loaded = load_session(session.session_id)
     assert loaded is not None
+
+
+def test_autosave_detects_runtime_governance_changes(temp_session_dir):
+    """Runtime checkpoints are saved without a separate UI dirty signal."""
+    session = create_new_session(workspace="/tmp/test")
+    manager = AutosaveManager(session, interval=1)
+    manager.force_save()
+
+    session.progress_governance = {
+        "version": 1,
+        "message_count": 1,
+        "state": {"version": 1, "stage": "replan"},
+    }
+    manager._last_save_time -= 2
+
+    assert manager.should_save()
+    assert manager.save_if_needed()
+
+    loaded = load_session(session.session_id)
+    assert loaded is not None
+    assert loaded.progress_governance == session.progress_governance
 
 
 def test_format_session_list(temp_session_dir):
@@ -942,6 +959,44 @@ def test_delta_save_idempotent_when_nothing_changed(temp_session_dir):
     save_session(session, force_full=False)  # nothing new
     save_session(session, force_full=False)  # nothing new
     assert session._delta_save_count == count_after_full  # no new deltas recorded
+
+
+def test_progress_governance_round_trips_through_full_and_delta_saves(temp_session_dir):
+    session = create_new_session("/workspace")
+    session.progress_governance = {
+        "version": 1,
+        "task_key": "task-a",
+        "message_count": 1,
+        "state": {"version": 1, "stage": "nudge", "stagnant_actions": 4},
+    }
+    save_session(session, force_full=True)
+    first = load_session(session.session_id)
+    assert first is not None
+    assert first.progress_governance == session.progress_governance
+
+    session.progress_governance = {
+        **session.progress_governance,
+        "state": {"version": 1, "stage": "require_replan", "stagnant_actions": 6},
+    }
+    assert session.has_delta
+    save_session(session, force_full=False)
+    restored = load_session(session.session_id)
+    assert restored is not None
+    assert restored.progress_governance["state"]["stage"] == "require_replan"
+    assert restored.progress_governance["state"]["stagnant_actions"] == 6
+
+
+def test_legacy_session_without_progress_governance_loads_empty(temp_session_dir):
+    session = create_new_session("/workspace")
+    save_session(session, force_full=True)
+    path = temp_session_dir / f"{session.session_id}.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("progress_governance", None)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    restored = load_session(session.session_id)
+    assert restored is not None
+    assert restored.progress_governance == {}
 
 
 def test_save_load_preserves_checkpoints(temp_session_dir, tmp_path):
