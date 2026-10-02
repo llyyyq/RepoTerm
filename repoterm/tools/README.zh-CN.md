@@ -27,7 +27,7 @@ flowchart LR
 | --- | --- |
 | `registry.py` | `ToolCapability`、`ToolMetadata`、`ToolDefinition`、`ToolContext`、`ToolResult`、注册/执行/释放 |
 | 文件读取/检索 | `read_file.py`、`list_files.py`、`grep_files.py`、`file_tree.py` |
-| 编辑与批量 | `write_file.py`、`edit_file.py`、`patch_file.py`、`batch_ops.py`、`diff_viewer.py` |
+| 编辑与批量 | `write_file.py`、`edit_file.py`、`patch_file.py`、`delete_file.py`、`batch_ops.py`、`diff_viewer.py` |
 | 命令/测试/Git | `run_command.py`、`test_runner.py`、`git.py`、`code_review.py` |
 | Web/数据辅助 | `web_fetch.py`、`web_search.py`、`http_utils.py`、JSON/CSV/编码/压缩/加密/文本工具 |
 | 任务与交互 | `ask_user.py`、`todo_write.py`、`task.py`、`background.py`、`load_skill.py` |
@@ -44,6 +44,7 @@ flowchart LR
 - JSON Schema 和 Python validator 分别约束模型参数形状与运行时规则。
 - 未知工具、参数错误、超时、非零退出和普通异常进入结构化错误；`KeyboardInterrupt`/`SystemExit` 等控制异常不应被普通错误吞掉。
 - 写文件/执行命令的工具从 `ToolContext` 获取 workspace、Permission 和 Session，不创建旁路权限。
+- 默认 `delete_file` 仅处理工作区内单个 UTF-8 普通文件，必须获得独立的单次删除确认并持久化可回退 Checkpoint；不复用编辑授权。旧 `batch_delete` 不在默认工具集。
 - 默认 core profile 保持较小工具面；full/utility profile 是可选路径，不应把全部辅助工具默认注入每个模型上下文。
 
 ## 6. 失败处理与已知边界

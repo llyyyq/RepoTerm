@@ -1,5 +1,12 @@
 from copy import deepcopy
-from repoterm.runtime.loop import STABLE_TASK_STATE_MARKER, run_agent_turn
+from repoterm.runtime.loop import (
+    STABLE_TASK_STATE_MARKER,
+    _change_requires_validation,
+    _latest_user_task_key,
+    run_agent_turn,
+)
+from repoterm.runtime.progress_governor import ProgressGovernor
+from repoterm.runtime.turn_kernel import TurnVerificationState, classify_tool_result
 from repoterm.providers.switching import ModelSwitcher
 from repoterm.contracts.state import create_app_store
 from repoterm.tools.registry import ToolDefinition, ToolRegistry, ToolResult
@@ -33,6 +40,13 @@ class StoreCapturingModel(ModelAdapter):
     def next(self, messages: list[ChatMessage], on_stream_chunk=None, store=None) -> AgentStep:
         self.received_store = store
         return AgentStep(type="assistant", content="done")
+
+
+def test_change_validation_scope_exempts_only_document_assets() -> None:
+    assert _change_requires_validation({"path": "src/app.py"}) is True
+    assert _change_requires_validation({"path": "config/settings.toml"}) is True
+    assert _change_requires_validation({"path": "README.md"}) is False
+    assert _change_requires_validation({"items": [{"path": "README.md"}, {"path": "app.ts"}]}) is True
 
 
 class ProviderUnavailableModel(ModelAdapter):
@@ -517,6 +531,149 @@ def test_single_deep_verify_phase_blocks_unsupported_final_until_evidence_is_cit
         message["role"] == "user" and "strict verification mode" in message["content"]
         for message in messages
     )
+
+
+def test_default_profile_requires_validation_after_code_edit() -> None:
+    registry = ToolRegistry([
+        ToolDefinition(
+            name="edit_file", description="edit", input_schema={"type": "object"},
+            validator=lambda value: value,
+            run=lambda _value, _context: ToolResult(ok=True, output="updated src/app.py"),
+        ),
+        ToolDefinition(
+            name="test_runner", description="test", input_schema={"type": "object"},
+            validator=lambda value: value,
+            run=lambda _value, _context: ToolResult(ok=True, output="1 passed"),
+        ),
+    ])
+    model = ScriptedModel([
+        AgentStep(type="tool_calls", calls=[{
+            "id": "edit", "toolName": "edit_file", "input": {"path": "src/app.py"},
+        }]),
+        AgentStep(type="assistant", content="The fix is complete."),
+        AgentStep(type="tool_calls", calls=[{
+            "id": "test", "toolName": "test_runner", "input": {},
+        }]),
+        AgentStep(type="assistant", content="Verified with 1 passing test."),
+    ])
+
+    messages = run_agent_turn(
+        model=model, tools=registry,
+        messages=[{"role": "system", "content": "sys"}, {"role": "user", "content": "fix it"}],
+        cwd=".", max_steps=6, runtime={"runtimeProfile": "single"},
+    )
+
+    assert model.calls == 4
+    assert messages[-1]["content"] == "Verified with 1 passing test."
+    assert any(
+        message["role"] == "assistant_progress"
+        and "Verification guard" in message["content"]
+        for message in messages
+    )
+
+
+def test_resume_restores_unverified_code_change_gate() -> None:
+    initial_messages = [
+        {"role": "system", "content": "sys"},
+        {"role": "user", "content": "fix it"},
+    ]
+    verification = TurnVerificationState()
+    changed = classify_tool_result(
+        tool_name="edit_file",
+        tool_input={"path": "src/app.py"},
+        ok=True,
+        result_output="updated src/app.py",
+        source_session_id="session-1",
+        source_turn_id="turn-1",
+    )
+    assert changed is not None
+    verification.record_evidence(changed, requires_validation=True)
+    session = SimpleNamespace(
+        messages=list(initial_messages),
+        progress_governance={
+            "version": 1,
+            "task_key": _latest_user_task_key(initial_messages),
+            "message_count": len(initial_messages),
+            "state": ProgressGovernor().to_state(),
+            "verification": verification.to_state(),
+        },
+    )
+    registry = ToolRegistry([
+        ToolDefinition(
+            name="test_runner", description="test", input_schema={"type": "object"},
+            validator=lambda value: value,
+            run=lambda _value, _context: ToolResult(ok=True, output="1 passed"),
+        ),
+    ])
+    model = ScriptedModel([
+        AgentStep(type="assistant", content="The fix is complete."),
+        AgentStep(type="tool_calls", calls=[{
+            "id": "test", "toolName": "test_runner", "input": {},
+        }]),
+        AgentStep(type="assistant", content="Verified with 1 passing test."),
+    ])
+
+    messages = run_agent_turn(
+        model=model,
+        tools=registry,
+        messages=initial_messages,
+        cwd=".",
+        max_steps=5,
+        runtime={"runtimeProfile": "single"},
+        session=session,
+    )
+
+    assert model.calls == 3
+    assert messages[-1]["content"] == "Verified with 1 passing test."
+    assert any(
+        message["role"] == "assistant_progress"
+        and "Verification guard" in message["content"]
+        for message in messages
+    )
+    assert session.progress_governance == {}
+
+
+def test_resume_does_not_restore_governance_for_different_task() -> None:
+    messages = [
+        {"role": "system", "content": "sys"},
+        {"role": "user", "content": "explain the architecture"},
+    ]
+    stale_verification = TurnVerificationState()
+    changed = classify_tool_result(
+        tool_name="edit_file",
+        tool_input={"path": "src/app.py"},
+        ok=True,
+        result_output="updated src/app.py",
+        source_session_id="session-1",
+        source_turn_id="turn-1",
+    )
+    assert changed is not None
+    stale_verification.record_evidence(changed, requires_validation=True)
+    session = SimpleNamespace(
+        messages=list(messages),
+        progress_governance={
+            "version": 1,
+            "task_key": "different-task",
+            "message_count": len(messages),
+            "state": ProgressGovernor().to_state(),
+            "verification": stale_verification.to_state(),
+        },
+    )
+    model = ScriptedModel([
+        AgentStep(type="assistant", content="Architecture explanation complete."),
+    ])
+
+    result = run_agent_turn(
+        model=model,
+        tools=ToolRegistry([]),
+        messages=messages,
+        cwd=".",
+        runtime={"runtimeProfile": "single"},
+        session=session,
+    )
+
+    assert model.calls == 1
+    assert result[-1]["content"] == "Architecture explanation complete."
 
 
 def test_agent_turn_switches_to_fallback_model_on_provider_channel_error(monkeypatch) -> None:

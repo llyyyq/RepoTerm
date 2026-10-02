@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import hashlib
 import inspect
 import re
 import time
@@ -39,6 +40,7 @@ from repoterm.runtime.planning.capability_registry import get_registry, Capabili
 from repoterm.context.layered import ContextBuilder, LayeredContext
 from repoterm.observability.decision_audit import get_auditor, DecisionOutcome
 from repoterm.runtime.runtime_profiles import resolve_runtime_profile
+from repoterm.runtime.progress_governor import ProgressGovernor
 
 # 工程控制论集成
 from repoterm.runtime.control.cybernetic_orchestrator import CyberneticOrchestrator
@@ -91,6 +93,11 @@ from repoterm.runtime.turn_kernel import (
 
 logger = get_logger("agent_loop")
 
+_DOCUMENT_ONLY_SUFFIXES = frozenset({
+    ".md", ".mdx", ".rst", ".txt", ".adoc", ".png", ".jpg", ".jpeg",
+    ".gif", ".svg", ".webp",
+})
+
 
 def _bounded_runtime_tool_summary(tool_name: str, output: object) -> str:
     """生成仅供本回合状态使用的短摘要，与持久化证据严格分离。"""
@@ -101,6 +108,63 @@ def _bounded_runtime_tool_summary(tool_name: str, output: object) -> str:
     return sanitize_evidence_summary(
         f"{str(tool_name or 'tool').strip()}: {normalized[:240]}"
     )[:280]
+
+
+def _latest_user_task_key(messages: list[ChatMessage]) -> str:
+    """Hash the user task so a resumed Session cannot inherit another task's loop."""
+
+    for message in reversed(messages):
+        if message.get("role") == "user":
+            content = " ".join(str(message.get("content", "")).split())
+            return hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest()
+    return ""
+
+
+def _change_requires_validation(tool_input: object) -> bool:
+    """Require validation for code/config edits; exempt clearly documentary assets."""
+
+    paths: list[str] = []
+
+    def collect(value: object, key: str = "") -> None:
+        if isinstance(value, dict):
+            for child_key, child in value.items():
+                collect(child, str(child_key).casefold())
+        elif isinstance(value, list):
+            for child in value:
+                collect(child, key)
+        elif isinstance(value, str) and key in {
+            "path", "file_path", "source", "destination", "src", "dst",
+        }:
+            paths.append(value)
+
+    collect(tool_input)
+    if not paths:
+        # Unknown mutation shapes are guarded rather than silently accepted.
+        return True
+    return any(Path(path).suffix.casefold() not in _DOCUMENT_ONLY_SUFFIXES for path in paths)
+
+
+def _edit_retry_signature(call: dict, cwd: Path) -> tuple[str, str, str] | None:
+    """Fingerprint an in-workspace edit against the current file contents."""
+    if call.get("toolName") != "edit_file":
+        return None
+    args = call.get("input")
+    if not isinstance(args, dict) or not all(isinstance(args.get(k), str) for k in ("path", "old", "new")):
+        return None
+    try:
+        root = Path(cwd).resolve()
+        target = (root / args["path"]).resolve()
+        target.relative_to(root)
+        if not target.is_file():
+            return None
+        digest = hashlib.sha256()
+        with target.open("rb") as source:
+            for chunk in iter(lambda: source.read(65536), b""):
+                digest.update(chunk)
+        request = repr((args["old"], args["new"], args.get("replace_all"), args.get("fuzzy")))
+        return str(target), hashlib.sha256(request.encode("utf-8")).hexdigest(), digest.hexdigest()
+    except (OSError, ValueError):
+        return None
 
 
 def _record_implicit_preference_signal(
@@ -153,7 +217,9 @@ NUDGE_AFTER_EMPTY_RESPONSE = (
 
 NUDGE_AFTER_EMPTY_NO_TOOLS = (
     "Your last response was empty but you have not used any tools yet. Start by "
-    "inspecting the relevant files (read_file, grep_files, list_files) to understand "
+    "inspecting the relevant files (read_file for a known exact location; "
+    "repository_map for a traceback or named symbol with an uncertain location; "
+    "otherwise grep_files or list_files) to understand "
     "the codebase before making changes."
 )
 
@@ -818,18 +884,58 @@ def run_agent_turn(
     if configured_runtime_model:
         runtime.setdefault("configuredModel", configured_runtime_model)
     runtime_profile = resolve_runtime_profile(runtime, fallback_max_steps=max_steps)
+    governance_task_key = _latest_user_task_key(current_messages)
+    stored_governance = getattr(session, "progress_governance", None)
+    governance_record = stored_governance if isinstance(stored_governance, dict) else {}
+    resume_governance = (
+        governance_record.get("message_count") == len(current_messages)
+        and governance_record.get("task_key") == governance_task_key
+    )
     turn_state = TurnRecurrentState(
         max_steps=runtime_profile.max_steps,
         profile_name=runtime_profile.name,
         widen_after_step=runtime_profile.widen_after_step,
         empty_response_retry_limit=runtime_profile.empty_response_retry_limit,
         recoverable_thinking_retry_limit=runtime_profile.recoverable_thinking_retry_limit,
-        verification_state=TurnVerificationState(
-            strict=runtime_profile.strict_step_verification,
-            requires_explicit_final=runtime_profile.strict_step_verification,
+        verification_state=(
+            TurnVerificationState.from_state(
+                governance_record.get("verification"),
+                strict=runtime_profile.strict_step_verification,
+            )
+            if resume_governance
+            else TurnVerificationState(
+                strict=runtime_profile.strict_step_verification,
+                requires_explicit_final=runtime_profile.strict_step_verification,
+            )
         ),
     )
     max_steps = runtime_profile.max_steps
+    failed_edits_on_version: set[tuple[str, str, str]] = set()
+    progress_governor = (
+        ProgressGovernor.from_state(governance_record.get("state"))
+        if resume_governance
+        else ProgressGovernor()
+    )
+
+    def persist_progress_governance(*, clear: bool = False) -> None:
+        if session is None or not hasattr(session, "progress_governance"):
+            return
+        # Keep the Session's append-only message stream current so the saved
+        # governor checkpoint refers to the same resumable trajectory.
+        session.messages = list(current_messages)
+        session.progress_governance = (
+            {}
+            if clear
+            else {
+                "version": 1,
+                "task_key": governance_task_key,
+                "message_count": len(current_messages),
+                "state": progress_governor.to_state(),
+                "verification": turn_state.verification_state.to_state(),
+            }
+        )
+
+    persist_progress_governance()
 
     def emit_runtime_event(
         *,
@@ -1560,6 +1666,57 @@ def run_agent_turn(
                 )
 
                 if assistant_decision.kind == "progress":
+                    if (
+                        assistant_decision.assistant_content
+                        and assistant_decision.runtime_event_category is None
+                    ):
+                        governance_decision = progress_governor.observe_progress_message(
+                            event_id=f"assistant-progress-{step}",
+                            content=assistant_decision.assistant_content,
+                        )
+                        persist_progress_governance()
+                        if governance_decision.recovery_outcome:
+                            emit_runtime_event(
+                                category="guard",
+                                message=(
+                                    "progress-governance:recovery-outcome"
+                                    f" outcome={governance_decision.recovery_outcome}"
+                                    f" intervention={governance_decision.intervention_event_id}"
+                                ),
+                                emit_progress=False,
+                            )
+                        if governance_decision.action == "stop_stuck":
+                            stop_message = (
+                                "连续的进度说明没有产生新的可观察证据，且恢复机会已用尽；"
+                                "任务未被证明完成。"
+                            )
+                            turn_state.set_stop_reason("blocked")
+                            emit_runtime_event(
+                                category="stop",
+                                message=stop_message,
+                                emit_progress=False,
+                                stop_reason="blocked",
+                            )
+                            if on_assistant_message:
+                                on_assistant_message(stop_message)
+                            current_messages.append(
+                                {"role": "assistant", "content": stop_message}
+                            )
+                            return current_messages
+                        if governance_decision.guidance:
+                            emit_runtime_event(
+                                category="guard",
+                                message=(
+                                    f"progress-governance:{governance_decision.action}"
+                                    f" reason={governance_decision.reason}"
+                                ),
+                                emit_progress=False,
+                            )
+                            assistant_decision.user_content = (
+                                (assistant_decision.user_content or "")
+                                + "\n"
+                                + governance_decision.guidance
+                            )
                     if assistant_decision.assistant_content:
                         turn_state.set_progress_summary(assistant_decision.assistant_content)
                         if assistant_decision.runtime_event_category is not None:
@@ -1735,13 +1892,71 @@ def run_agent_turn(
             # Classify calls into concurrent-safe (read-only) vs serial (writes/commands)
             calls = next_step.calls
             _results: list[tuple[dict, ToolResult]] = []
+            deferred_calls: dict[str, str] = {}
+            executable_calls: list[dict] = []
+            exhausted_recovery = False
+            for call in calls:
+                definition = tools.find(call["toolName"])
+                preflight = progress_governor.before_action(
+                    event_id=str(call["id"]),
+                    tool_name=call["toolName"],
+                    tool_input=call.get("input", {}),
+                    read_only=bool(definition and definition.is_read_only),
+                )
+                persist_progress_governance()
+                if preflight.action == "stop_stuck":
+                    exhausted_recovery = True
+                if preflight.action in {"defer", "stop_stuck"}:
+                    deferred_calls[str(call["id"])] = preflight.guidance
+                    emit_runtime_event(
+                        category="guard",
+                        message=(
+                            f"progress-governance:{preflight.action}"
+                            f" reason={preflight.reason} event={preflight.event_id}"
+                        ),
+                        emit_progress=False,
+                    )
+                else:
+                    executable_calls.append(call)
 
-            if len(calls) <= 1:
+            # A redundant call cannot prevent another call in the same batch
+            # from producing evidence or making a legitimate change.
+            if exhausted_recovery and not executable_calls:
+                progress_governor.stage = "stop_stuck"
+
+            for call in calls:
+                guidance = deferred_calls.get(str(call["id"]))
+                if guidance is not None:
+                    _results.append((call, ToolResult(ok=False, output=guidance)))
+
+            def execute_with_edit_retry_guard(call: dict, *args, **kwargs) -> ToolResult:
+                edit_signature = _edit_retry_signature(call, cwd)
+                if edit_signature is not None and edit_signature in failed_edits_on_version:
+                    return ToolResult(
+                        ok=False,
+                        output=(
+                            "Identical edit_file replacement already failed on this exact file version. "
+                            "Read the current target range or inspect the diff, then change the search "
+                            "string or approach before editing again."
+                        ),
+                    )
+                result = _execute_single_tool(call, *args, **kwargs)
+                if (
+                    edit_signature is not None
+                    and not result.ok
+                    and result.output.startswith("Search string not found in file.")
+                ):
+                    failed_edits_on_version.add(edit_signature)
+                    if len(failed_edits_on_version) > 64:
+                        failed_edits_on_version.clear()
+                return result
+
+            if len(executable_calls) == 1:
                 # Single call — no benefit from concurrency, run directly
-                call = calls[0]
+                call = executable_calls[0]
                 if metrics_collector:
                     metrics_collector.start_tool(call["toolName"])
-                result = _execute_single_tool(
+                result = execute_with_edit_retry_guard(
                     call, tools, cwd, permissions, session, runtime, store, step,
                     on_tool_start, on_tool_result, tool_scheduler,
                 )
@@ -1751,11 +1966,9 @@ def run_agent_turn(
                         error=result.output if not result.ok else "",
                     )
                 _results.append((call, result))
-            else:
+            elif len(executable_calls) > 1:
                 # Multiple calls — use ToolScheduler for intelligent partitioning
-                concurrent_calls, serial_calls = tool_scheduler.schedule_calls(calls, tools)
-
-                _results.clear()  # Reuse outer declaration
+                concurrent_calls, serial_calls = tool_scheduler.schedule_calls(executable_calls, tools)
 
                 # Phase 1: Run all concurrent-safe tools in parallel
                 if concurrent_calls:
@@ -1783,7 +1996,7 @@ def run_agent_turn(
                     ) as pool:
                         future_to_call = {
                             pool.submit(
-                                _execute_single_tool,
+                                execute_with_edit_retry_guard,
                                 call, tools, cwd, permissions, session, runtime, None, step,
                                 None, None, tool_scheduler,  # No UI callbacks during concurrent phase
                             ): call
@@ -1802,7 +2015,7 @@ def run_agent_turn(
                     for call in serial_calls:
                         if metrics_collector:
                             metrics_collector.start_tool(call["toolName"])
-                        result = _execute_single_tool(
+                        result = execute_with_edit_retry_guard(
                             call, tools, cwd, permissions, session, runtime, store, step,
                             on_tool_start, on_tool_result, tool_scheduler,
                         )
@@ -1822,9 +2035,28 @@ def run_agent_turn(
             _results.sort(key=lambda pair: call_order.get(pair[0]["id"], 999))
             
             for call, result in _results:
+                if str(call["id"]) in deferred_calls:
+                    current_messages.append(
+                        {
+                            "role": "assistant_tool_call",
+                            "toolUseId": call["id"],
+                            "toolName": call["toolName"],
+                            "input": call["input"],
+                        }
+                    )
+                    current_messages.append(
+                        {
+                            "role": "tool_result",
+                            "toolUseId": call["id"],
+                            "toolName": call["toolName"],
+                            "content": result.output,
+                            "isError": True,
+                        }
+                    )
+                    continue
                 # Fire hooks and UI callbacks for concurrent calls (deferred)
                 tool_def = tools.find(call["toolName"])
-                is_concurrent = tool_def and tool_def.is_concurrency_safe and len(calls) > 1
+                is_concurrent = tool_def and tool_def.is_concurrency_safe and len(executable_calls) > 1
                 
                 if is_concurrent:
                     # Deferred UI callbacks for concurrent tools
@@ -1873,7 +2105,54 @@ def run_agent_turn(
                     ),
                 )
                 if evidence is not None:
-                    turn_state.record_verification_evidence(evidence)
+                    turn_state.record_verification_evidence(
+                        evidence,
+                        requires_validation=(
+                            _change_requires_validation(call.get("input", {}))
+                            if evidence.level.value == "change"
+                            else None
+                        ),
+                    )
+                progress_governor.note_task_state(
+                    changed=turn_state.verification_state.latest_change_index >= 0,
+                    verified=bool(turn_state.verification_state.supporting_evidence()),
+                )
+                post_tool_guidance = turn_state.post_tool_guidance(
+                    evidence,
+                    tool_name=call["toolName"],
+                    tool_input=call.get("input", {}),
+                    ok=result.ok,
+                    result_output=result.output,
+                )
+                governance_decision = progress_governor.observe(
+                    event_id=str(call["id"]),
+                    tool_name=call["toolName"],
+                    tool_input=call.get("input", {}),
+                    output=result.output,
+                    ok=result.ok,
+                    evidence=evidence,
+                )
+                persist_progress_governance()
+                if governance_decision.recovery_outcome:
+                    emit_runtime_event(
+                        category="guard",
+                        message=(
+                            "progress-governance:recovery-outcome"
+                            f" outcome={governance_decision.recovery_outcome}"
+                            f" intervention={governance_decision.intervention_event_id}"
+                        ),
+                        emit_progress=False,
+                    )
+                if governance_decision.action != "allow":
+                    emit_runtime_event(
+                        category="guard",
+                        message=(
+                            f"progress-governance:{governance_decision.action}"
+                            f" reason={governance_decision.reason}"
+                            f" stagnant={governance_decision.stagnant_actions}"
+                        ),
+                        emit_progress=False,
+                    )
                 tool_decision = decide_tool_turn(
                     tool_name=call["toolName"],
                     result_output=result.output,
@@ -1897,6 +2176,10 @@ def run_agent_turn(
                             "incremental steps and verify each result before proceeding."
                         )
                         result_output = result.output + "\n\n[System note: " + success_nudge + "]"
+                if post_tool_guidance:
+                    result_output += "\n\n[System note: " + post_tool_guidance + "]"
+                if governance_decision.guidance:
+                    result_output += "\n\n[System note: " + governance_decision.guidance + "]"
 
                 # Record conflicts between concurrent tools if both failed
                 if not result.ok and len(calls) > 1:
@@ -1958,6 +2241,22 @@ def run_agent_turn(
                     if metrics_collector:
                         metrics_collector.end_turn(total_tokens=0)
                     return current_messages
+
+            if progress_governor.stage == "stop_stuck":
+                stop_message = (
+                    "连续动作没有提供新的可观察证据，且有限恢复机会已用尽；"
+                    "任务未被证明完成。请检查当前假设和已有结果后重新指定方向。"
+                )
+                turn_state.set_stop_reason("blocked")
+                emit_runtime_event(
+                    category="stop", message=stop_message, emit_progress=False,
+                    stop_reason="blocked",
+                    evidence_summary=turn_state.latest_tool_result_summary,
+                )
+                if on_assistant_message:
+                    on_assistant_message(stop_message)
+                current_messages.append({"role": "assistant", "content": stop_message})
+                return current_messages
 
             # 工具执行完成后的控制论反馈
             if enable_work_chain:
@@ -2053,6 +2352,7 @@ def run_agent_turn(
         current_messages.append({"role": "assistant", "content": fallback})
         return current_messages
     finally:
+        persist_progress_governance(clear=turn_state.stop_reason == "done")
         # Coda: finalize metrics, work-chain bookkeeping, and control summaries.
         fire_hook_sync(
             HookEvent.AGENT_STOP,

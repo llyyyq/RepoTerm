@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "note": "Synthetic governance contract examples, not production runtime outcomes or model benchmark results.",
+  "cases": [
+    {
+      "name": "broad_search_discovers_new_evidence",
+      "expected": "allow",
+      "events": [
+        {"action": "search:a", "observation": "file:a", "evidence": ["candidate:a"]},
+        {"action": "search:b", "observation": "file:b", "evidence": ["candidate:b"]},
+        {"action": "read:b", "observation": "symbol:b", "evidence": ["relationship:b"]}
+      ]
+    },
+    {
+      "name": "exact_action_observation_loop",
+      "expected": "nudge",
+      "events": [
+        {"action": "read:a", "observation": "same"},
+        {"action": "read:a", "observation": "same"},
+        {"action": "read:a", "observation": "same"},
+        {"action": "read:a", "observation": "same"}
+      ]
+    },
+    {
+      "name": "alternating_actions_without_new_evidence",
+      "expected": "require_replan",
+      "events": [
+        {"action": "search:a", "observation": "same:a"},
+        {"action": "read:a", "observation": "same:b"},
+        {"action": "search:a", "observation": "same:a"},
+        {"action": "read:a", "observation": "same:b"},
+        {"action": "search:a", "observation": "same:a"},
+        {"action": "read:a", "observation": "same:b"},
+        {"action": "search:a", "observation": "same:a"},
+        {"action": "read:a", "observation": "same:b"}
+      ]
+    },
+    {
+      "name": "different_queries_same_evidence",
+      "expected": "nudge",
+      "events": [
+        {"action": "search:a", "observation": "same-location"},
+        {"action": "search:b", "observation": "same-location"},
+        {"action": "search:c", "observation": "same-location"},
+        {"action": "search:d", "observation": "same-location"},
+        {"action": "search:e", "observation": "same-location"}
+      ]
+    },
+    {
+      "name": "authorized_bounded_polling",
+      "expected": "allow",
+      "events": [
+        {"action": "poll:job", "observation": "running", "poll_remaining": 5},
+        {"action": "poll:job", "observation": "running", "poll_remaining": 4},
+        {"action": "poll:job", "observation": "running", "poll_remaining": 3},
+        {"action": "poll:job", "observation": "running", "poll_remaining": 2},
+        {"action": "poll:job", "observation": "running", "poll_remaining": 1}
+      ]
+    },
+    {
+      "name": "workspace_versions_oscillate",
+      "expected": "nudge",
+      "events": [
+        {"action": "edit:a", "observation": "changed", "workspace_version": "v1"},
+        {"action": "edit:b", "observation": "reverted", "workspace_version": "v0"},
+        {"action": "edit:a", "observation": "changed", "workspace_version": "v1"},
+        {"action": "edit:b", "observation": "reverted", "workspace_version": "v0"},
+        {"action": "edit:a", "observation": "changed", "workspace_version": "v1"},
+        {"action": "edit:b", "observation": "reverted", "workspace_version": "v0"}
+      ]
+    },
+    {
+      "name": "repeated_test_without_edit",
+      "expected": "nudge",
+      "events": [
+        {"action": "test:focused", "observation": "fail:same", "evidence": ["failure:assert-1"]},
+        {"action": "test:focused", "observation": "fail:same"},
+        {"action": "test:focused", "observation": "fail:same"},
+        {"action": "test:focused", "observation": "fail:same"},
+        {"action": "test:focused", "observation": "fail:same"}
+      ]
+    },
+    {
+      "name": "new_edit_then_focused_validation",
+      "expected": "allow",
+      "events": [
+        {"action": "edit:fix", "observation": "changed", "workspace_version": "v1"},
+        {"action": "test:focused", "observation": "pass", "validation_version": "v1", "evidence": ["focused-pass:v1"]}
+      ]
+    },
+    {
+      "name": "finish_with_stale_validation",
+      "expected": "require_verification",
+      "events": [
+        {"action": "test:focused", "observation": "pass", "validation_version": "v0", "evidence": ["focused-pass:v0"]},
+        {"action": "edit:later", "observation": "changed", "workspace_version": "v1"},
+        {"action": "finish", "observation": "claimed"}
+      ]
+    },
+    {
+      "name": "finish_with_stale_validation_and_no_budget",
+      "expected": "stop_unverified",
+      "remaining_steps": 0,
+      "events": [
+        {"action": "test:focused", "observation": "pass", "validation_version": "v0", "evidence": ["focused-pass:v0"]},
+        {"action": "edit:later", "observation": "changed", "workspace_version": "v1"},
+        {"action": "finish", "observation": "claimed"}
+      ]
+    },
+    {
+      "name": "unproductive_recovery_window_exhausted",
+      "expected": "stop_stuck",
+      "events": [
+        {"action": "read:a", "observation": "same"},
+        {"action": "read:b", "observation": "same"},
+        {"action": "read:c", "observation": "same"},
+        {"action": "read:d", "observation": "same"},
+        {"action": "read:e", "observation": "same"},
+        {"action": "read:f", "observation": "same"},
+        {"action": "read:g", "observation": "same"},
+        {"action": "read:h", "observation": "same"},
+        {"action": "read:i", "observation": "same"}
+      ]
+    }
+  ]
+}

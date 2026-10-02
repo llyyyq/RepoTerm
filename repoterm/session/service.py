@@ -92,6 +92,7 @@ class SessionData:
     delegation_status: dict[str, Any] = field(default_factory=dict)
     extension_manifests: list[dict[str, Any]] = field(default_factory=list)
     readiness_report: dict[str, Any] = field(default_factory=dict)
+    progress_governance: dict[str, Any] = field(default_factory=dict)
     checkpoints: list[FileCheckpoint] = field(default_factory=list)
     metadata: SessionMetadata = field(default=None)
     
@@ -99,6 +100,7 @@ class SessionData:
     _last_saved_msg_count: int = field(default=0, repr=False)
     _last_saved_transcript_count: int = field(default=0, repr=False)
     _last_saved_checkpoint_count: int = field(default=0, repr=False)
+    _last_saved_governance_hash: str = field(default="", repr=False)
     _delta_save_count: int = field(default=0, repr=False)
     _last_full_save_hash: str = field(default="", repr=False)
 
@@ -167,7 +169,20 @@ class SessionData:
             len(self.messages) != self._last_saved_msg_count
             or len(self.transcript_entries) != self._last_saved_transcript_count
             or len(self.checkpoints) != self._last_saved_checkpoint_count
+            or self._governance_hash() != self._last_saved_governance_hash
         )
+
+    def _governance_hash(self) -> str:
+        try:
+            payload = json.dumps(
+                self.progress_governance,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        except (TypeError, ValueError):
+            payload = "{}"
+        return hashlib.sha256(payload.encode("utf-8", errors="replace")).hexdigest()
     
     def _compute_content_hash(self) -> str:
         """Compute a quick hash of message content for change detection."""
@@ -405,8 +420,11 @@ def _save_delta(session: SessionData) -> None:
     new_messages = session.messages[session._last_saved_msg_count:]
     new_transcripts = session.transcript_entries[session._last_saved_transcript_count:]
     new_checkpoints = session.checkpoints[session._last_saved_checkpoint_count:]
+    governance_changed = (
+        session._governance_hash() != session._last_saved_governance_hash
+    )
     
-    if not new_messages and not new_transcripts and not new_checkpoints:
+    if not new_messages and not new_transcripts and not new_checkpoints and not governance_changed:
         return
     
     # Create delta entry
@@ -422,6 +440,8 @@ def _save_delta(session: SessionData) -> None:
     if new_checkpoints:
         delta_data["checkpoint_offset"] = session._last_saved_checkpoint_count
         delta_data["checkpoints"] = [_serialize_checkpoint(cp) for cp in new_checkpoints]
+    if governance_changed:
+        delta_data["progress_governance"] = session.progress_governance
     
     # Write delta file with sequential numbering
     delta_num = session._delta_save_count
@@ -435,6 +455,7 @@ def _save_delta(session: SessionData) -> None:
     session._last_saved_msg_count = len(session.messages)
     session._last_saved_transcript_count = len(session.transcript_entries)
     session._last_saved_checkpoint_count = len(session.checkpoints)
+    session._last_saved_governance_hash = session._governance_hash()
     session._delta_save_count += 1
 
 
@@ -512,6 +533,7 @@ def save_session(session: SessionData, force_full: bool = False) -> None:
             "delegation_status": session.delegation_status,
             "extension_manifests": session.extension_manifests,
             "readiness_report": session.readiness_report,
+            "progress_governance": session.progress_governance,
             "checkpoints": [_serialize_checkpoint(cp) for cp in session.checkpoints],
             "metadata": {
                 "session_id": session.metadata.session_id,
@@ -539,6 +561,7 @@ def save_session(session: SessionData, force_full: bool = False) -> None:
         session._last_saved_msg_count = len(session.messages)
         session._last_saved_transcript_count = len(session.transcript_entries)
         session._last_saved_checkpoint_count = len(session.checkpoints)
+        session._last_saved_governance_hash = session._governance_hash()
         session._last_full_save_hash = session._compute_content_hash()
         
         # Consolidate and clean up delta files
@@ -588,6 +611,7 @@ def load_session(session_id: str) -> SessionData | None:
             delegation_status=data.get("delegation_status", {}),
             extension_manifests=data.get("extension_manifests", []),
             readiness_report=data.get("readiness_report", {}),
+            progress_governance=data.get("progress_governance", {}),
             checkpoints=[
                 _deserialize_checkpoint(item)
                 for item in data.get("checkpoints", [])
@@ -637,6 +661,8 @@ def load_session(session_id: str) -> SessionData | None:
                         elif c_offset + len(parsed) > len(session.checkpoints):
                             overlap = len(session.checkpoints) - c_offset
                             session.checkpoints.extend(parsed[overlap:])
+                    if isinstance(delta.get("progress_governance"), dict):
+                        session.progress_governance = delta["progress_governance"]
                     
                     session._delta_save_count += 1
                 except (json.JSONDecodeError, KeyError, TypeError):
@@ -647,6 +673,7 @@ def load_session(session_id: str) -> SessionData | None:
         session._last_saved_msg_count = len(session.messages)
         session._last_saved_transcript_count = len(session.transcript_entries)
         session._last_saved_checkpoint_count = len(session.checkpoints)
+        session._last_saved_governance_hash = session._governance_hash()
         session._last_full_save_hash = session._compute_content_hash()
         
         return session
@@ -737,6 +764,7 @@ def create_file_checkpoint(
     file_path: str,
     existed: bool,
     previous_content: str,
+    kind: str = "edit",
 ) -> FileCheckpoint | None:
     """Record a durable rewind snapshot before a file mutation."""
     if session is None:
@@ -748,6 +776,7 @@ def create_file_checkpoint(
         file_path=file_path,
         existed=existed,
         previous_content=previous_content,
+        kind=kind,
     )
     session.checkpoints.append(checkpoint)
     save_session(session, force_full=False)
@@ -826,7 +855,12 @@ def rewind_session_data(
         target = Path(checkpoint.file_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         if checkpoint.existed:
-            target.write_text(checkpoint.previous_content, encoding="utf-8")
+            if checkpoint.kind == "delete":
+                # Deletion snapshots retain the original UTF-8 bytes, including
+                # newline style; text-mode writes can change them on Windows.
+                target.write_bytes(checkpoint.previous_content.encode("utf-8"))
+            else:
+                target.write_text(checkpoint.previous_content, encoding="utf-8")
         elif target.exists():
             target.unlink()
 
@@ -928,7 +962,11 @@ class AutosaveManager:
 
     def should_save(self) -> bool:
         """Check if autosave should trigger."""
-        if not self._dirty:
+        # Runtime-owned state (for example progress-governance checkpoints) can
+        # change while the UI is waiting for a model/tool result.  Those
+        # mutations do not pass through the input handler and therefore cannot
+        # rely exclusively on ``mark_dirty()``.
+        if not self._dirty and not self.session.has_delta:
             return False
         elapsed = time.time() - self._last_save_time
         return elapsed >= self.interval

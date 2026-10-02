@@ -38,7 +38,7 @@ flowchart LR
 
 ## 4. 保存与恢复流程
 
-创建/加载 Session 后，Runtime 和 UI 更新 `SessionData`。Autosave 根据间隔和脏字段写入 full snapshot 或 delta；delta 达到数量/周期边界时进行 consolidation。加载先恢复 full snapshot，再按顺序应用可用 delta，最后刷新 metadata。
+创建/加载 Session 后，Runtime 和 UI 更新 `SessionData`。Autosave 根据间隔、显式脏标记以及 Session delta 写入 full snapshot 或 delta；delta 达到数量/周期边界时进行 consolidation。加载先恢复 full snapshot，再按顺序应用可用 delta，最后刷新 metadata。
 
 受管文件变更前，Safety 的 `file_review` 请求 `create_file_checkpoint`。`rewind-preview` 计算可回退内容，`rewind` 在权限允许的范围内恢复文件与会话记录；`resume` 重新打开相同 Session 并保持幂等。
 
@@ -48,6 +48,7 @@ flowchart LR
 - Metadata 从当前消息、Transcript、checkpoint 和扩展摘要刷新，不作为独立真值。
 - Session service 处理损坏/缺失 delta 的有界降级，并保留能加载的基线状态。
 - checkpoint 记录文件旧内容和是否存在，使新文件创建、旧文件编辑两类回退都可区分。
+- `progress_governance` 保存有版本、受限大小的运行时治理与验证 checkpoint，使同一消息轨迹 resume 后不会遗忘已发生的停滞干预或未验证代码变更；它不保存原始工具输出，旧快照缺少该字段时按空状态加载。
 
 ## 6. 失败处理与已知边界
 

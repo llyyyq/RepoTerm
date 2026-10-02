@@ -130,6 +130,7 @@ def build_system_prompt_bundle(
         "If you need user clarification, call the ask_user tool with one concise question and wait for the user reply. Do not ask clarifying questions as plain assistant text.\n"
         "Do not choose subjective preferences such as colors, visual style, copy tone, or naming unless the user explicitly told you to decide yourself.\n"
         "When using read_file, pay attention to the header fields. If it says TRUNCATED: yes, continue reading with a larger offset before concluding that the file itself is cut off.\n"
+        "Code search: if a task supplies a traceback, function name, or uncertain code location, consider repository_map once to rank likely Python symbols, then read the candidate source. If the exact file and line are already known, read_file directly. Do not run repository_map automatically for every task. If grep_files is paused after repeated results, replan with repository_map, an unread source range, or a focused test; do not repeat repository_map or treat its ranking as verification evidence.\n"
         "If the user names a skill or clearly asks for a workflow that matches a listed skill, call load_skill before following it.\n"
         "\n"
         "## Sub-agent (task tool) usage guide\n"
